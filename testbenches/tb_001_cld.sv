@@ -5,15 +5,15 @@
 
 
 
-module tb_6502_functional_test;
-
+module tb_001_cld;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/6502_functional_test.tv";
+    parameter MEM_FILE = "./tests/001_cld.tv";
     logic clk;
     logic rst;
 
     devboard #(
-        .MEM_FILE(MEM_FILE)
+        .MEM_FILE(MEM_FILE),
+        .PC_START(16'h0400)
     )
     db_device
     (
@@ -22,14 +22,13 @@ module tb_6502_functional_test;
     );
 
     initial begin
-        $dumpfile("tb_6502_functional_test.vcd");
-        $dumpvars(0, tb_6502_functional_test);
-        #1; rst = 0; #(CYCLE_LEN * 2 + 1); rst = 1;
+        $dumpfile("tb_001_cld.vcd");
+        $dumpvars(0, tb_001_cld);
+        #1 rst = 0; #(CYCLE_LEN * 2); rst = 1;
     end
 
     initial begin
-        for (integer i = 0; i < 200; i++)
-        begin
+        for (integer i = 0; i < 20; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
         end

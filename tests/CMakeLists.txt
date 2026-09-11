@@ -5,6 +5,8 @@ file(GLOB ASM_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/asm/*.ca65"
 )
 
+set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502.cfg)
+
 foreach(SRC ${ASM_SOURCES})
     get_filename_component(NAME ${SRC} NAME_WE)
     set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
@@ -12,7 +14,7 @@ foreach(SRC ${ASM_SOURCES})
     set(BIN ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.bin)
     set(MAP ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.map)
     set(TV ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.tv)
-    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/${NAME}.cfg)
+    
 
     add_custom_command(OUTPUT ${OBJ}
         COMMAND ${CA65_EXECUTABLE} -o ${OBJ} -l ${LST} ${SRC}
