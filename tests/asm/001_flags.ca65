@@ -1,0 +1,9 @@
+
+        .CODE
+start:  cld
+        sed
+        clc
+        sec
+        cli
+        sei
+        clv

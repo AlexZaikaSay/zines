@@ -1,0 +1,8 @@
+
+        .CODE
+start:  lda #$00
+        lda #$f5
+        ldx #$00
+        ldx #$f3
+        ldy #$00
+        ldy #$f1

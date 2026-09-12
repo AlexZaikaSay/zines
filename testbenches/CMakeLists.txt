@@ -44,6 +44,7 @@ add_custom_target(sim_all ALL
 
 foreach(TB_FILE ${TESTBENCHS})
     get_filename_component(TB_NAME ${TB_FILE} NAME_WE)
+    string(REGEX REPLACE "^tb_" "" TEST_NAME ${TB_NAME})
 
     set(OUTPUT_FILE "${CMAKE_BINARY_DIR}/${TB_NAME}.out")
     set(VCD_FILE    "${CMAKE_BINARY_DIR}/${TB_NAME}.vcd")
@@ -76,8 +77,10 @@ foreach(TB_FILE ${TESTBENCHS})
     )
     add_dependencies(sim_${TB_NAME} copy_testvectors)
 
-    if(TARGET ${TB_NAME})
-        add_dependencies(sim_${TB_NAME} ${TB_NAME})
+    if(TARGET ${TEST_NAME})
+        # The test target produces the generated memory image consumed by the
+        # testbench at runtime (for example, tests/001_cld.tv).
+        add_dependencies(sim_${TB_NAME} ${TEST_NAME})
     endif()
 
     add_dependencies(sim_all sim_${TB_NAME})
