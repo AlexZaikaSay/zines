@@ -4,6 +4,7 @@ module alu (
     input  logic [7:0] a,
     input  logic [7:0] b,
     output logic [7:0] result,
+    output logic  v,
     output logic  n,
     output logic  c,
     output logic  z
@@ -46,6 +47,7 @@ module alu (
         endcase
     end
 
+    assign v = (a[7] ^ b_in[7]) & (a[7] ^ result[7]);
     assign z = (result == 8'b0);
     assign n = result[7];
 

@@ -1,0 +1,41 @@
+
+        .CODE
+        ; simple down
+start:  lda #1
+        beq eq_
+        lda #0
+        beq ne_
+        nop
+eq_:    nop
+ne_:    nop
+        jmp up
+eq_2:   jmp long
+
+up:     ; simple up
+        lda #1
+        beq eq_
+        lda #0
+        beq eq_2
+
+.repeat 220
+        nop
+.endrepeat
+
+long:   ; down page cross
+        lda #1
+        beq eq_long
+        lda #0
+        beq ne_long
+
+back:
+        beq back
+
+.repeat 20
+        nop
+.endrepeat
+
+eq_long:
+        nop
+ne_long:
+        beq back
+        

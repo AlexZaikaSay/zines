@@ -1,0 +1,41 @@
+
+        .CODE
+        ; simple down
+start:  lda #0
+        bmi nb_
+        lda #$ff
+        bmi b_
+        nop
+nb_:    nop
+b_:     nop
+        jmp up
+b_2_:   jmp long
+
+up:     ; simple up
+        lda #0
+        bmi nb_
+        lda #$ff
+        bmi b_2_
+
+.repeat 220
+        nop
+.endrepeat
+
+long:   ; down page cross
+        lda #0
+        bmi nb_long_
+        lda #$ff
+        bmi b_long_
+
+back:
+        bmi back
+
+.repeat 20
+        nop
+.endrepeat
+
+nb_long_:
+        nop
+b_long_:
+        bmi back
+        

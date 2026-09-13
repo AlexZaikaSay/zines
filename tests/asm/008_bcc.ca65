@@ -1,0 +1,41 @@
+
+        .CODE
+        ; simple down
+start:  sec
+        bcc nb_
+        clc
+        bcc b_
+        nop
+nb_:    nop
+b_:     nop
+        jmp up
+b_2_:   jmp long
+
+up:     ; simple up
+        sec
+        bcc nb_
+        clc
+        bcc b_2_
+
+.repeat 220
+        nop
+.endrepeat
+
+long:   ; down page cross
+        sec
+        bcc nb_long_
+        clc
+        bcc b_long_
+
+back:
+        bcc back
+
+.repeat 20
+        nop
+.endrepeat
+
+nb_long_:
+        nop
+b_long_:
+        bcc back
+        
