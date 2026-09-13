@@ -17,6 +17,7 @@ module main_fsm (
     output logic        w_n,
     output logic        w_next_pc,
     output logic        w_inst,
+    output logic        w_low_byte,
     output logic        w_a,
     output logic        w_x,
     output logic        w_y,
@@ -32,13 +33,17 @@ module main_fsm (
     output logic [2:0]  alu_op
 );
   typedef enum logic [3:0] {
-        Fetch,      // Fetch
-        StoreFlags, // CLC, SEC, CLI, SEI, CLV, CLD, SED
-        StoreImm   // LDA, LDX, LDY immediate
+        Fetch,          // Fetch
+        StoreFlags,     // StoreFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
+        StoreImm,       // StoreImm to register for LDA, LDX, LDY immediate
+        JmpLowByte,     // Handle low byte of JMP absolute
+        JmpHighByte,    // Handle high byte of JMP absolute
+        Nothing         // do nothing for NOP
     } state_t;
 
     state_t state, next_state;
 
+    parameter OP_NOP        = 8'hEA;
     parameter OP_CLC        = 8'h18;
     parameter OP_SEC        = 8'h38;
     parameter OP_CLI        = 8'h58;
@@ -49,6 +54,7 @@ module main_fsm (
     parameter OP_LDA_imm    = 8'hA9;
     parameter OP_LDX_imm    = 8'hA2;
     parameter OP_LDY_imm    = 8'hA0;
+    parameter OP_JMP_abs    = 8'h4C;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -69,20 +75,21 @@ module main_fsm (
                     OP_CLV,
                     OP_CLD,
                     OP_SED: 
-                        next_state = StoreFlags; 
+                        next_state = StoreFlags;
                     OP_LDA_imm,
                     OP_LDX_imm,
                     OP_LDY_imm: 
-                        next_state = StoreImm; 
+                        next_state = StoreImm;
+                    OP_NOP: 
+                        next_state = Nothing;
+                    OP_JMP_abs:
+                        next_state = JmpLowByte;
                     default: 
                         next_state = Fetch;
                 endcase
             end
-            StoreFlags: begin
-                next_state = Fetch;
-            end
-            StoreImm: begin
-                next_state = Fetch;
+            JmpLowByte: begin
+                next_state = JmpHighByte;
             end
             default: begin
                 next_state = Fetch;
@@ -106,6 +113,7 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc = 1;      // write next PC
                 w_inst = 1;         // write instruction
+                w_low_byte = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -215,6 +223,7 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc = 0;
                 w_inst = 0;
+                w_low_byte = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -291,10 +300,69 @@ module main_fsm (
                 w_n = 1;            // write N flag from ALU
                 w_next_pc = 1;      // write next PC
                 w_inst = 0;
+                w_low_byte = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
+            end
+            JmpLowByte: begin
+                // Logic for handling low byte of JMP absolute
+                c = 0;
+                w_c = 0;
+                i = 0;
+                w_i = 0;
+                v = 0;
+                w_v = 0;
+                d = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc = 1;      // write next PC
+                w_inst = 0;
+                w_low_byte = 1;     // write low byte of JMP address
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                src_next_pc_h = 0;  // source next PC is PC+1
+                src_next_pc_l = 0;
+                src_addr_h = 0;     // source addr is PC
+                src_addr_l = 0;
+                src_a = 0;
+                src_x = 0;
+                src_y = 0;
+                src_alu_a = 0;
+                src_alu_b = 0;
+                alu_op = 3'b000;
+            end
+            JmpHighByte: begin
+                // Logic for handling high byte of JMP absolute
+                c = 0;
+                w_c = 0;
+                i = 0;
+                w_i = 0;
+                v = 0;
+                w_v = 0;
+                d = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc = 1;      // write next PC
+                w_inst = 0;
+                w_low_byte = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                src_next_pc_h = 1;  // source next PC is imm
+                src_next_pc_l = 1;  // source next PC is low_byte
+                src_addr_h = 0;     // source addr is PC
+                src_addr_l = 0;
+                src_a = 0;
+                src_x = 0;
+                src_y = 0;
+                src_alu_a = 0;
+                src_alu_b = 0;
+                alu_op = 3'b000;
             end
             default: begin
                 // Default state logic
@@ -310,6 +378,7 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc = 0;
                 w_inst = 0;
+                w_low_byte = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;

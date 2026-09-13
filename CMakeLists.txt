@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(RISC-V NONE)
+project(zines NONE)
 
 find_program(IVERILOG_EXECUTABLE iverilog REQUIRED)
 find_program(VVP_EXECUTABLE vvp REQUIRED)

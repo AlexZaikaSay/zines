@@ -1,0 +1,6 @@
+
+        .CODE
+start:  nop
+        jmp label
+        nop
+label:  nop

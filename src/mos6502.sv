@@ -24,6 +24,7 @@ module mos6502 #(
     logic [7:0] next_pc_h_a;
     logic [7:0] next_pc_l_a;
     logic [7:0] inst;
+    logic [7:0] low_byte;
     logic [7:0] flags;
     logic [7:0] alu_result;
     logic [7:0] alu_a;
@@ -53,6 +54,7 @@ module mos6502 #(
 
     logic w_next_pc;
     logic w_inst;
+    logic w_low_byte;
     logic w_a;
     logic w_x;
     logic w_y;
@@ -84,15 +86,15 @@ module mos6502 #(
     );
 
     mux2_1 next_pc_h_mux2_1(
-        .a(next_pc_h_a),        // TODO: set input signal a
-        .b(8'h00),              // TODO: set input signal b
+        .a(next_pc_h_a),
+        .b(data_in),
         .sel(src_next_pc_h),
         .y(next_pc_h)
     );
 
     mux2_1 next_pc_l_mux2_1(
-        .a(next_pc_l_a),         // TODO: set input signal a
-        .b(8'h00),              // TODO: set input signal b
+        .a(next_pc_l_a),
+        .b(low_byte),
         .sel(src_next_pc_l),
         .y(next_pc_l)
     );
@@ -137,6 +139,14 @@ module mos6502 #(
         .d(data_in),
         .en(w_inst),
         .q(inst)
+    );
+
+    ff low_byte_ff (
+        .clk(clk),
+        .rst(rst),
+        .d(data_in),
+        .en(w_low_byte),
+        .q(low_byte)
     );
 
     ff_status status_ff (
@@ -222,6 +232,7 @@ module mos6502 #(
         .w_y(w_y),
         .w_next_pc(w_next_pc),
         .w_inst(w_inst),
+        .w_low_byte(w_low_byte),
         .src_addr_h(src_addr_h),
         .src_addr_l(src_addr_l),
         .src_next_pc_h(src_next_pc_h),
