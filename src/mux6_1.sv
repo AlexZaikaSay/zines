@@ -7,7 +7,6 @@ module mux6_1
     input  logic [7:0] d,
     input  logic [7:0] e,
     input  logic [7:0] f,
-    input  logic [7:0] g,
     input  logic [2:0] sel,
     output logic [7:0] y
 );
@@ -18,6 +17,6 @@ module mux6_1
                (sel == 3) ? d :
                (sel == 4) ? e :
                (sel == 5) ? f :
-               (sel == 6) ? g : 8'h00;
+               8'h00;
 
 endmodule

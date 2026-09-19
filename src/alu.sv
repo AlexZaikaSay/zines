@@ -16,12 +16,13 @@ module alu (
     logic [7:0] b_in;
     logic [7:0] xor_out;
 
-    parameter ALU_ADD  = 3'b000;
-    parameter ALU_SUB  = 3'b001;
-    parameter ALU_PASS = 3'b010;
-    parameter ALU_AND  = 3'b011;
-    parameter ALU_OR   = 3'b100;
-    parameter ALU_EOR  = 3'b101;
+    parameter ALU_ADD  = 0;
+    parameter ALU_SUB  = 1;
+    parameter ALU_A    = 2;
+    parameter ALU_B    = 3;
+    parameter ALU_AND  = 4;
+    parameter ALU_OR   = 5;
+    parameter ALU_EOR  = 6;
 
     always @*
     begin
@@ -37,7 +38,8 @@ module alu (
         xor_out = a ^ b;
 
         casez (alu_op)
-            ALU_PASS: result = b;
+            ALU_A:    result = a;
+            ALU_B:    result = b;
             ALU_ADD:  result = add_out;
             ALU_SUB:  result = add_out;
             ALU_AND:  result = and_out;

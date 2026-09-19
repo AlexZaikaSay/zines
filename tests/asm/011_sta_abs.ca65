@@ -1,0 +1,12 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+        var:  .res    1,0 
+
+        .CODE
+        .org code_segment
+start:  lda #$15
+        sta var
+        nop
