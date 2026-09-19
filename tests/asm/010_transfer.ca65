@@ -1,0 +1,12 @@
+
+        .CODE
+start:  lda #$15
+        ldx #$16
+        ldy #$17
+        txs
+        tsx
+        tax
+        tay
+        tya
+        txa
+        nop

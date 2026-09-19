@@ -25,15 +25,13 @@ module main_fsm (
     output logic        w_a,
     output logic        w_x,
     output logic        w_y,
+    output logic        w_s,
     output logic [1:0]  src_next_pc_h,
     output logic [1:0]  src_next_pc_l,
     output logic        src_addr_h,
     output logic        src_addr_l,
-    output logic        src_a,
-    output logic        src_x,
-    output logic        src_y,
     output logic [1:0]  src_alu_a,
-    output logic [1:0]  src_alu_b,
+    output logic [2:0]  src_alu_b,
     output logic [2:0]  alu_op
 );
   typedef enum logic [3:0] {
@@ -46,6 +44,8 @@ module main_fsm (
         BranchTaken,    // Handle branch taken
         BranchCrossInc, // Handle branch taken with +1 page
         BranchCrossDec, // Handle branch taken with -1 page
+        Transfer,       // Handle transfer instructions (TSX, TAX, TXA, TAY, TYA)
+        TransferStack,  // Handle transfer instructions TXS
         Nothing         // do nothing for NOP
     } state_t;
 
@@ -58,25 +58,30 @@ module main_fsm (
     assign n_flag = flags[7];
     assign c_flag = flags[0];
 
-
-    parameter OP_NOP        = 8'hEA;
+    parameter OP_BPL        = 8'h10;
     parameter OP_CLC        = 8'h18;
+    parameter OP_BMI        = 8'h30;
     parameter OP_SEC        = 8'h38;
+    parameter OP_JMP_abs    = 8'h4C;
     parameter OP_CLI        = 8'h58;
     parameter OP_SEI        = 8'h78;
-    parameter OP_CLV        = 8'hB8;
-    parameter OP_CLD        = 8'hD8;
-    parameter OP_SED        = 8'hF8;
-    parameter OP_LDA_imm    = 8'hA9;
-    parameter OP_LDX_imm    = 8'hA2;
-    parameter OP_LDY_imm    = 8'hA0;
-    parameter OP_JMP_abs    = 8'h4C;
-    parameter OP_BNE        = 8'hD0;
-    parameter OP_BEQ        = 8'hF0;
-    parameter OP_BPL        = 8'h10;
-    parameter OP_BMI        = 8'h30;
+    parameter OP_TXA        = 8'h8A;
     parameter OP_BCC        = 8'h90;
+    parameter OP_TYA        = 8'h98;
+    parameter OP_TXS        = 8'h9A;
+    parameter OP_LDY_imm    = 8'hA0;
+    parameter OP_LDX_imm    = 8'hA2;
+    parameter OP_TAY        = 8'hA8;
+    parameter OP_LDA_imm    = 8'hA9;
+    parameter OP_TAX        = 8'hAA;
     parameter OP_BCS        = 8'hB0;
+    parameter OP_CLV        = 8'hB8;
+    parameter OP_TSX        = 8'hBA;
+    parameter OP_BNE        = 8'hD0;
+    parameter OP_CLD        = 8'hD8;
+    parameter OP_NOP        = 8'hEA;
+    parameter OP_BEQ        = 8'hF0;
+    parameter OP_SED        = 8'hF8;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -113,6 +118,14 @@ module main_fsm (
                     OP_BCC,
                     OP_BCS:
                         next_state = Branch;
+                    OP_TXS:
+                        next_state = TransferStack;
+                    OP_TSX,
+                    OP_TAX,
+                    OP_TXA,
+                    OP_TAY,
+                    OP_TYA: 
+                        next_state = Transfer;
                     default: 
                         next_state = Fetch;
                 endcase
@@ -216,13 +229,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
@@ -327,13 +338,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
@@ -343,11 +352,8 @@ module main_fsm (
                     OP_LDA_imm: begin
                         // Load Accumulator with Immediate
                         w_a = 1;        // write A register
-                        src_a = 0;      // source A is Alu output
                         w_x = 0;
-                        src_x = 0;
                         w_y = 0;
-                        src_y = 0;
                         src_alu_a = 0;  // source ALU A is A
                         src_alu_b = 0;  // source ALU B is imm
                         alu_op = 2;     // ALU operation is pass B
@@ -355,11 +361,8 @@ module main_fsm (
                     OP_LDX_imm: begin
                         // Load X register with Immediate
                         w_a = 0;
-                        src_a = 0;
                         w_x = 1;        // write X register
-                        src_x = 0;      // source X is Alu output
                         w_y = 0;
-                        src_y = 0;
                         src_alu_a = 0;  // source ALU A is A
                         src_alu_b = 0;  // source ALU B is imm
                         alu_op = 2;     // ALU operation is pass B
@@ -367,22 +370,16 @@ module main_fsm (
                     OP_LDY_imm: begin
                         // Load Y register with Immediate
                         w_a = 0;
-                        src_a = 0;                        
                         w_x = 0;
-                        src_x = 0;
                         w_y = 1;        // write Y register
-                        src_y = 0;      // source Y is Alu output
                         src_alu_a = 0;  // source ALU A is A
                         src_alu_b = 0;  // source ALU B is imm
                         alu_op = 2;     // ALU operation is pass B
                     end
                     default: begin
-                        w_a = 0;
-                        src_a = 0;                        
+                        w_a = 0;                  
                         w_x = 0;
-                        src_x = 0;
                         w_y = 0; 
-                        src_y = 0;
                         src_alu_a = 0;
                         src_alu_b = 0;
                         alu_op = 0; 
@@ -402,6 +399,7 @@ module main_fsm (
                 w_next_pc_l = 1;    // write next PC low byte
                 w_inst = 0;
                 w_low_byte = 0;
+                w_s = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
@@ -426,13 +424,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
@@ -456,13 +452,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 1;  // source next PC high byte is imm
                 src_next_pc_l = 1;  // source next PC low byte is low_byte
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
@@ -485,13 +479,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
@@ -515,13 +507,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 2;  // source next PC low byte is ALU result
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 1;      // source ALU A is PC low byte
                 src_alu_b = 1;      // source ALU B is low byte
                 alu_op = 0;         // ALU operation: ADD
@@ -545,13 +535,11 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 2;  // source next PC low byte is ALU result
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 2;      // source ALU A is PC hi byte
                 src_alu_b = 2;      // source ALU B is 1
                 alu_op = 0;         // ALU operation: ADD
@@ -575,16 +563,109 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
+                w_s = 0;
                 src_next_pc_h = 2;  // source next PC low byte is ALU result
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 2;      // source ALU A is PC hi byte
                 src_alu_b = 2;      // source ALU B is 1
                 alu_op = 1;         // ALU operation: SUB
+            end
+            Transfer: begin
+                // Transfer state logic
+                case (inst)
+                    OP_TXA: begin
+                        // Transfer X to A
+                        w_a = 1;        // save A
+                        w_y = 0;
+                        w_x = 0;
+                        src_alu_b = 4;  // source ALU B is X register
+                    end
+                    OP_TAY: begin
+                        // Transfer A to Y
+                        w_a = 0;
+                        w_y = 1;        // save Y
+                        w_x = 0;
+                        src_alu_b = 3;  // source ALU B is A register
+                    end
+                    OP_TYA: begin
+                        // Transfer Y to A
+                        w_a = 1;        // save A
+                        w_y = 0;
+                        w_x = 0;
+                        src_alu_b = 5;  // source ALU B is Y register
+                    end
+                    OP_TSX: begin
+                        // Transfer Stack Pointer to X
+                        w_a = 0;
+                        w_x = 1;        // save X
+                        w_y = 0;
+                        src_alu_b = 6;  // source ALU B is S register
+                    end
+                    OP_TAX: begin
+                        // Transfer A to X
+                        w_a = 0;
+                        w_x = 1;        // save X
+                        w_y = 0;
+                        src_alu_b = 3;  // source ALU B is A register
+                    end
+                    default: begin
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_b = 0;
+                    end
+                endcase
+                c = 0;
+                w_c = 0;
+                i = 0;
+                w_i = 0;
+                v = 0;
+                w_v = 0;
+                d = 0;
+                w_d = 0;
+                w_z = 1;            // write Z flag from ALU
+                w_n = 1;            // write N flag from ALU
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_low_byte = 0;
+                w_s = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 0;
+                src_addr_l = 0;
+                src_alu_a = 0;
+                alu_op = 2;         // ALU operation is pass B
+            end
+            TransferStack: begin
+                // TXS
+                c = 0;
+                w_c = 0;
+                i = 0;
+                w_i = 0;
+                v = 0;
+                w_v = 0;
+                d = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_low_byte = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 1;            // write S register from ALU
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 0;
+                src_addr_l = 0;
+                src_alu_a = 0;
+                src_alu_b = 4;      // source ALU B is X register
+                alu_op = 2;         // ALU operation is pass B
             end
             default: begin
                 // Default state logic
@@ -609,9 +690,6 @@ module main_fsm (
                 src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
-                src_a = 0;
-                src_x = 0;
-                src_y = 0;
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
