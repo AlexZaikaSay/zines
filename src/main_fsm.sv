@@ -39,10 +39,11 @@ module main_fsm (
   typedef enum logic [3:0] {
         Fetch,          // Fetch
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
-        LoadImm,        // Load immediate value into register for LDA, LDX, LDY immediate
-        FetchLoByte,    // Store absolute value for absolute
-        FetchHiByte,    // Store absolute value for absolute
-        Store,          // Store value for STA 
+        LoadImm,        // Load immediate value into A, X, or Y
+        FetchLoByte,    // Fetch low byte of absolute address
+        FetchHiByte,    // Fetch high byte of absolute address
+        Store,          // Store value of A to memory
+        Load,           // Load from memory to A, X, or Y
         JmpAbs,         // Handle high byte of JMP absolute
         Branch,         // Handle branch instructions (BNE, BEQ)
         BranchTaken,    // Handle branch taken
@@ -72,7 +73,9 @@ module main_fsm (
     parameter OP_SEI        = 8'h78;
     parameter OP_DEY        = 8'h88;
     parameter OP_TXA        = 8'h8A;
+    parameter OP_STY_abs    = 8'h8C;
     parameter OP_STA_abs    = 8'h8D;
+    parameter OP_STX_abs    = 8'h8E;
     parameter OP_BCC        = 8'h90;
     parameter OP_TYA        = 8'h98;
     parameter OP_TXS        = 8'h9A;
@@ -81,6 +84,9 @@ module main_fsm (
     parameter OP_TAY        = 8'hA8;
     parameter OP_LDA_imm    = 8'hA9;
     parameter OP_TAX        = 8'hAA;
+    parameter OP_LDY_abs    = 8'hAC;
+    parameter OP_LDX_abs    = 8'hAE;
+    parameter OP_LDA_abs    = 8'hAD;
     parameter OP_BCS        = 8'hB0;
     parameter OP_CLV        = 8'hB8;
     parameter OP_TSX        = 8'hBA;
@@ -136,7 +142,12 @@ module main_fsm (
                     OP_TAY,
                     OP_TYA: 
                         next_state = Transfer;
-                    OP_STA_abs: 
+                    OP_LDA_abs,
+                    OP_LDX_abs,
+                    OP_LDY_abs,
+                    OP_STA_abs,
+                    OP_STX_abs,
+                    OP_STY_abs: 
                         next_state = FetchLoByte;
                     OP_DEX,
                     OP_INX,
@@ -151,7 +162,12 @@ module main_fsm (
                 case (inst)
                     OP_JMP_abs:
                         next_state = JmpAbs;
-                    OP_STA_abs: 
+                    OP_LDA_abs,
+                    OP_LDX_abs,
+                    OP_LDY_abs,
+                    OP_STA_abs,
+                    OP_STX_abs,
+                    OP_STY_abs: 
                         next_state = FetchHiByte;
                     default:
                         next_state = Fetch;
@@ -159,7 +175,14 @@ module main_fsm (
             end
             FetchHiByte: begin
                 case (inst)
-                    OP_STA_abs:
+                    OP_LDA_abs,
+                    OP_LDX_abs,
+                    OP_LDY_abs: 
+                        next_state = Load;
+                    
+                    OP_STA_abs,
+                    OP_STX_abs,
+                    OP_STY_abs:
                         next_state = Store;
                     default:
                         next_state = Fetch;
@@ -506,6 +529,67 @@ module main_fsm (
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
             end
+            Load: begin
+                // Logic for handling load from memory
+                case (inst)
+                    OP_LDA_abs: begin
+                        // Load Accumulator with memory
+                        w_a = 1;        // write A register
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 0;  // source ALU A is A
+                        src_alu_b = 3;  // source ALU B is data_in
+                        alu_op = 3;     // ALU operation is pass B
+                    end
+                    OP_LDX_abs: begin
+                        // Load X register with Immediate
+                        w_a = 0;
+                        w_x = 1;        // write X register
+                        w_y = 0;
+                        src_alu_a = 0;  // source ALU A is A
+                        src_alu_b = 3;  // source ALU B is data_in
+                        alu_op = 3;     // ALU operation is pass B
+                    end
+                    OP_LDY_abs: begin
+                        // Load Y register with Immediate
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 1;        // write Y register
+                        src_alu_a = 0;  // source ALU A is A
+                        src_alu_b = 3;  // source ALU B is data_in
+                        alu_op = 3;     // ALU operation is pass B
+                    end
+                    default: begin
+                        w_a = 0;                  
+                        w_x = 0;
+                        w_y = 0; 
+                        src_alu_a = 0;
+                        src_alu_b = 0;
+                        alu_op = 0; 
+                    end
+                endcase
+                c = 0;
+                w_c = 0;
+                i = 0;
+                w_i = 0;
+                v = 0;
+                w_v = 0;
+                d = 0;
+                w_d = 0;
+                w_z = 1;            // write Z flag from ALU
+                w_n = 1;            // write N flag from ALU
+                w_next_pc_h = 0;    // write next PC high byte
+                w_next_pc_l = 0;    // write next PC low byte
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_next_pc_h = 0;  // source next PC is PC+1
+                src_next_pc_l = 0;  
+                src_addr_h = 1;     // source address high byte is from memory
+                src_addr_l = 1;     // source address low byte is from memory
+            end
             FetchLoByte: begin
                 // Logic for handling low byte of absolute
                 c = 0;
@@ -569,6 +653,23 @@ module main_fsm (
             end
             Store: begin
                 // Logic for handling store instruction
+                case (inst)
+                    OP_STA_abs: begin
+                        // Store A to memory
+                        src_alu_a = 0;  // source ALU A is A register
+                    end
+                    OP_STX_abs: begin
+                        // Store X to memory
+                        src_alu_a = 1;  // source ALU A is X register
+                    end
+                    OP_STY_abs: begin
+                        // Store Y to memory
+                        src_alu_a = 2;  // source ALU A is Y register
+                    end
+                    default: begin
+                        src_alu_a = 0;
+                    end
+                endcase
                 c = 0;
                 w_c = 0;
                 i = 0;
@@ -593,7 +694,6 @@ module main_fsm (
                 src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
-                src_alu_a = 0;      // source ALU A is A register
                 src_alu_b = 0;
                 alu_op = 2;         // ALU operation is pass A
             end

@@ -5,9 +5,9 @@
 
 
 
-module tb_011_sta_abs;
+module tb_013_ld_abs;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/011_sta_abs.tv";
+    parameter MEM_FILE = "./tests/013_ld_abs.tv";
     logic clk;
     logic rst;
 
@@ -22,8 +22,8 @@ module tb_011_sta_abs;
     );
 
     initial begin
-        $dumpfile("tb_011_sta_abs.vcd");
-        $dumpvars(0, tb_011_sta_abs);
+        $dumpfile("tb_013_ld_abs.vcd");
+        $dumpvars(0, tb_013_ld_abs);
         #1 rst = 0; #2; rst = 1;
     end
 
@@ -32,15 +32,20 @@ module tb_011_sta_abs;
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
             case (i)
-                2: begin
-                    // check LDA imm
-                    if (db_device.cpu.a !== 8'h15)
-                        $error("TEST FAILED: LDA IMM"); 
+                4: begin
+                    // check LDA abs
+                    if (db_device.cpu.a !== 8'h0c)
+                        $error("TEST FAILED: LDA ABS"); 
                 end
-                6: begin
-                    // check STA
-                    if (db_device.memory.data[16'h0200] !== 8'h15)
-                        $error("TEST FAILED: STA"); 
+                8: begin
+                    // check LDX abs
+                    if (db_device.cpu.x !== 8'h0d)
+                        $error("TEST FAILED: LDX ABS"); 
+                end
+                12: begin
+                    // check LDY abs
+                    if (db_device.cpu.y !== 8'h0e)
+                        $error("TEST FAILED: LDY ABS"); 
                 end
                 default: begin
                     // No specific check for this cycle

@@ -3,6 +3,7 @@
 `include "alu.sv"
 `include "mux2_1.sv"
 `include "mux3_1.sv"
+`include "mux4_1.sv"
 `include "mux6_1.sv"
 `include "ff.sv"
 `include "ff_status.sv"
@@ -261,10 +262,11 @@ module mos6502 #(
         .y(alu_a)
     );
 
-    mux3_1 src_alu_b_mux3_1(
+    mux4_1 src_alu_b_mux4_1(
         .a(data_in),
         .b(low_byte),
         .c(8'h01),
+        .d(data_in),
         .sel(src_alu_b),
         .y(alu_b)
     );

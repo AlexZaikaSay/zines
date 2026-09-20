@@ -9,4 +9,8 @@ code_segment = $400
         .org code_segment
 start:  lda #$15
         sta var
+        ldx #$16
+        stx var
+        ldy #$17
+        sty var
         nop
