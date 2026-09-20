@@ -5,9 +5,9 @@
 
 
 
-module tb_012_inc_dec_reg;
+module tb_014_inc_dec_reg;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/012_inc_dec_reg.tv";
+    parameter MEM_FILE = "./tests/014_inc_dec_reg.tv";
     logic clk;
     logic rst;
 
@@ -22,8 +22,8 @@ module tb_012_inc_dec_reg;
     );
 
     initial begin
-        $dumpfile("tb_012_inc_dec_reg.vcd");
-        $dumpvars(0, tb_012_inc_dec_reg);
+        $dumpfile("tb_014_inc_dec_reg.vcd");
+        $dumpvars(0, tb_014_inc_dec_reg);
         #1 rst = 0; #2; rst = 1;
     end
 

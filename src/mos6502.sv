@@ -39,9 +39,6 @@ module mos6502 #(
     logic [7:0] s;
 
     logic pc_adder_l_cout;
-    logic alu_v;
-    logic alu_c;
-
 
     logic c;
     logic z;
@@ -73,7 +70,7 @@ module mos6502 #(
     logic [2:0] src_alu_a;
     logic [1:0] src_alu_b;
 
-    logic [2:0] alu_op;
+    logic [3:0] alu_op;
 
     adder pc_h_adder(
         .a(pc_h),
@@ -220,12 +217,8 @@ module mos6502 #(
         .imm(data_in),
         .inst(inst),
         .flags(flags),
-        .alu_v(alu_v),
-        .alu_c(alu_c),
         .c(c),
-        .i(i),
         .v(v),
-        .d(d),
         .w_c(w_c),
         .w_z(w_z),
         .w_i(w_i),
@@ -265,8 +258,8 @@ module mos6502 #(
     mux4_1 src_alu_b_mux4_1(
         .a(data_in),
         .b(low_byte),
-        .c(8'h01),
-        .d(data_in),
+        .c(8'h00),
+        .d(8'h01),
         .sel(src_alu_b),
         .y(alu_b)
     );
@@ -276,10 +269,12 @@ module mos6502 #(
         .a(alu_a),
         .b(alu_b),
         .result(alu_result),
+        .i(i),
+        .d(d),
         .n(n),
         .z(z),
-        .v(alu_v),
-        .c(alu_c)
+        .v(v),
+        .c(c)
     );
 
     assign data_out = alu_result;

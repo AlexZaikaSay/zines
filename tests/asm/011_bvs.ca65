@@ -1,0 +1,49 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+        _ff:  .res    1,$ff 
+        _00:  .res    1,$00 
+
+        .CODE
+        .org code_segment
+
+start:  clv
+        bvs nb_
+        bit _ff
+        bvs b_
+        nop
+nb_:    nop
+b_:     nop
+        jmp up
+b_2_:   jmp long
+
+up:     ; simple up
+        clv
+        bvs nb_
+        bit _ff
+        bvs b_2_
+
+.repeat 220
+        nop
+.endrepeat
+
+long:   ; down page cross
+        clv
+        bvs nb_long_
+        bit _ff
+        bvs b_long_
+
+back:
+        bvs back
+
+.repeat 20
+        nop
+.endrepeat
+
+nb_long_:
+        nop
+b_long_:
+        bvs back
+        

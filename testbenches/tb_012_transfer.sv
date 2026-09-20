@@ -5,9 +5,9 @@
 
 
 
-module tb_010_transfer;
+module tb_012_transfer;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/010_transfer.tv";
+    parameter MEM_FILE = "./tests/012_transfer.tv";
     logic clk;
     logic rst;
 
@@ -22,8 +22,8 @@ module tb_010_transfer;
     );
 
     initial begin
-        $dumpfile("tb_010_transfer.vcd");
-        $dumpvars(0, tb_010_transfer);
+        $dumpfile("tb_012_transfer.vcd");
+        $dumpvars(0, tb_012_transfer);
         #1 rst = 0; #2; rst = 1;
     end
 

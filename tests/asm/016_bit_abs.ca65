@@ -1,0 +1,19 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+        _ff:  .res    1,$ff 
+        _00:  .res    1,$00 
+
+        .CODE
+        .org code_segment
+start:  lda #$00
+        bit _ff
+        lda #$01
+        bit _ff
+        lda #$00
+        bit _00
+        lda #$01
+        bit _00
+        nop

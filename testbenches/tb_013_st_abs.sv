@@ -5,9 +5,9 @@
 
 
 
-module tb_011_st_abs;
+module tb_013_st_abs;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/011_st_abs.tv";
+    parameter MEM_FILE = "./tests/013_st_abs.tv";
     logic clk;
     logic rst;
 
@@ -22,8 +22,8 @@ module tb_011_st_abs;
     );
 
     initial begin
-        $dumpfile("tb_011_st_abs.vcd");
-        $dumpvars(0, tb_011_st_abs);
+        $dumpfile("tb_013_st_abs.vcd");
+        $dumpvars(0, tb_013_st_abs);
         #1 rst = 0; #2; rst = 1;
     end
 
