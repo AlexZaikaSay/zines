@@ -58,7 +58,7 @@ module alu (
                 i = 0;
                 d = 0;
                 v = 0;
-                n = b[7];
+                n = result[7];
                 c = 0;
             end
             ALU_SUB,
@@ -74,7 +74,7 @@ module alu (
                 i = 0;
                 d = 0;
                 v = 0;
-                n = 0;
+                n = result[7];
                 c = 0;
             end
             ALU_OR: begin
@@ -82,7 +82,7 @@ module alu (
                 i = 0;
                 d = 0;
                 v = 0;
-                n = 0;
+                n = result[7];
                 c = 0;
             end
             ALU_EOR: begin
@@ -90,7 +90,7 @@ module alu (
                 i = 0;
                 d = 0;
                 v = 0;
-                n = 0;
+                n = result[7];
                 c = 0;
             end
             ALU_BIT: begin
@@ -135,11 +135,11 @@ module alu (
             end
             default: begin
                 result = 8'bz;
-                i = 0;
-                d = 0;
-                v = 0;
-                n = 0;
-                c = 0;
+                i = z;
+                d = z;
+                v = z;
+                n = z;
+                c = z;
             end
         endcase
     end

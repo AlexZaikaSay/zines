@@ -1,0 +1,18 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+start:  lda #$55
+        cmp #$55
+        cmp #$AA
+        ldx #$55
+        cpx #$55
+        cpx #$AA
+        ldy #$55
+        cpy #$55
+        cpy #$AA
+        nop
