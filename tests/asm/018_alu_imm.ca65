@@ -6,12 +6,13 @@ code_segment = $400
 
         .CODE
         .org code_segment
-start:  lda #$55
+start:  clc
+        lda #$55
         adc #$55
         lda #$01
         adc #$ff
-        lda #$00
-        sbc #$01
+        lda #$81
+        sbc #$02
         lda #$02
         sbc #$01
         lda #$55

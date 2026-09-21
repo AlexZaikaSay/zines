@@ -24,13 +24,15 @@ module main_fsm (
     output logic        w_y,
     output logic        w_s,
     output logic        w_mem,
+    output logic [1:0]  src_c_in, // TODO: check later if it really needs
     output logic [1:0]  src_next_pc_h,
     output logic [1:0]  src_next_pc_l,
     output logic        src_addr_h,
     output logic        src_addr_l,
     output logic [2:0]  src_alu_a,
     output logic [1:0]  src_alu_b,
-    output logic [3:0]  alu_op
+    output logic [3:0]  alu_op,
+    output logic        undef
 );
   typedef enum logic [4:0] {
         Fetch,          // Fetch
@@ -122,33 +124,45 @@ module main_fsm (
     always_comb begin 
         case (state)
             Fetch: begin
-                casez (imm)
+                case (imm)
                     OP_CLC,
                     OP_SEC,
                     OP_CLI,
                     OP_SEI,
                     OP_CLV,
                     OP_CLD,
-                    OP_SED: 
+                    OP_SED: begin
+                        undef = 0;
                         next_state = LoadFlags;
+                    end
                     OP_LDA_imm,
                     OP_LDX_imm,
-                    OP_LDY_imm: 
+                    OP_LDY_imm: begin
+                        undef = 0;
                         next_state = LoadImm;
+                    end
                     OP_CMP_imm,
                     OP_CPX_imm,
-                    OP_CPY_imm:
+                    OP_CPY_imm: begin
+                        undef = 0;
                         next_state = CompareImm;
+                    end
                     OP_AND_imm,
                     OP_ORA_imm,
                     OP_EOR_imm,
                     OP_ADC_imm,
-                    OP_SBC_imm: 
+                    OP_SBC_imm: begin
+                        undef = 0;
                         next_state = AluImm;
-                    OP_NOP: 
+                    end
+                    OP_NOP: begin
+                        undef = 0;
                         next_state = Nothing;
-                    OP_JMP_abs:
+                    end
+                    OP_JMP_abs: begin
+                        undef = 0;
                         next_state = FetchLoByte;
+                    end
                     OP_BNE,
                     OP_BEQ,
                     OP_BPL,
@@ -156,31 +170,43 @@ module main_fsm (
                     OP_BCC,
                     OP_BCS,
                     OP_BVC,
-                    OP_BVS:
+                    OP_BVS: begin
+                        undef = 0;
                         next_state = Branch;
-                    OP_TXS:
+                    end
+                    OP_TXS: begin
+                        undef = 0;
                         next_state = TransferStack;
+                    end
                     OP_TSX,
                     OP_TAX,
                     OP_TXA,
                     OP_TAY,
-                    OP_TYA: 
+                    OP_TYA: begin
+                        undef = 0;
                         next_state = Transfer;
+                    end
                     OP_BIT_abs,
                     OP_LDA_abs,
                     OP_LDX_abs,
                     OP_LDY_abs,
                     OP_STA_abs,
                     OP_STX_abs,
-                    OP_STY_abs: 
+                    OP_STY_abs: begin
+                        undef = 0;
                         next_state = FetchLoByte;
+                    end
                     OP_DEX,
                     OP_INX,
                     OP_DEY,
-                    OP_INY: 
+                    OP_INY: begin
+                        undef = 0;
                         next_state = IncDec;
-                    default: 
+                    end
+                    default: begin
+                        undef = 1;
                         next_state = Fetch;
+                    end
                 endcase
             end
             FetchLoByte: begin
@@ -327,6 +353,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
@@ -340,6 +367,7 @@ module main_fsm (
                 casez (inst)
                     OP_DEX: begin
                         // DEX
+                        src_c_in = 2;   // carry 1 for decrement
                         src_alu_a = 1;  // source ALU A is X register
                         alu_op = 1;     // ALU operation is SUB (for decrement)
                         w_x = 1;        // write X register
@@ -347,13 +375,16 @@ module main_fsm (
                     end
                     OP_INX: begin
                         // INX
+                        src_c_in = 1;  // carry 0 for increment
                         src_alu_a = 1; // source ALU A is X register
                         alu_op = 0;    // ALU operation is ADD (for increment)
                         w_x = 1;       // write X register
                         w_y = 0;
+                        
                     end
                     OP_DEY: begin
                         // DEY
+                        src_c_in = 2;   // carry 1 for decrement
                         src_alu_a = 2; // source ALU A is Y register
                         alu_op = 1;    // ALU operation is SUB (for decrement)
                         w_x = 0;
@@ -361,13 +392,14 @@ module main_fsm (
                     end
                     OP_INY: begin
                         // INY
+                        src_c_in = 1;  // carry 0 for increment
                         src_alu_a = 2; // source ALU A is Y register
                         alu_op = 0;    // ALU operation is ADD (for increment)
                         w_x = 0;
                         w_y = 1;       // write Y register
                     end
                     default: begin
-                        // INY
+                        src_c_in = 0;
                         src_alu_a = 0;
                         alu_op = 0;
                         w_x = 0;
@@ -481,6 +513,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 0;
@@ -538,6 +571,7 @@ module main_fsm (
                 w_low_byte = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
@@ -571,6 +605,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
@@ -621,6 +656,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;       // carry from flags for ALU ADC/SBC operations
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
@@ -680,6 +716,7 @@ module main_fsm (
                 w_low_byte = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 1;     // source address high byte is from memory
@@ -703,6 +740,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
@@ -730,6 +768,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
@@ -773,6 +812,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 1;          // write to memory ALU result
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
@@ -798,6 +838,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
@@ -824,6 +865,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 1;  // source next PC high byte is imm
                 src_next_pc_l = 1;  // source next PC low byte is low_byte
                 src_addr_h = 0;     // source addr is PC
@@ -849,6 +891,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
@@ -875,13 +918,14 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_next_pc_h = 0;
                 src_next_pc_l = 2;  // source next PC low byte is ALU result
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_a = 4;      // source ALU A is PC low byte
                 src_alu_b = 1;      // source ALU B is low byte
-                alu_op = 0;         // ALU operation: ADD
+                alu_op = 12;        // ALU operation: CORR
             end
             BranchCrossInc: begin
                 // Logic for handling branch taken with +1 page
@@ -901,6 +945,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_next_pc_h = 2;  // source next PC low byte is ALU result
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
@@ -927,6 +972,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_next_pc_h = 2;  // source next PC low byte is ALU result
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
@@ -993,6 +1039,7 @@ module main_fsm (
                 w_low_byte = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 0;
@@ -1018,6 +1065,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 1;            // write S register from ALU
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 0;
@@ -1044,6 +1092,7 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
+                src_c_in = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
                 src_addr_h = 0;
