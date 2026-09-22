@@ -66,13 +66,14 @@ module mos6502 #(
     logic w_y;
     logic w_s;
 
-    logic       src_addr_h;
-    logic       src_addr_l;
+    logic [1:0] src_addr_h;
+    logic [1:0] src_addr_l;
     logic [1:0] src_next_pc_h;
     logic [1:0] src_next_pc_l;
     logic [2:0] src_alu_a;
     logic [1:0] src_alu_b;
     logic [1:0] src_c_in;
+    logic [1:0] src_data_out;
 
     logic [3:0] alu_op;
 
@@ -126,16 +127,18 @@ module mos6502 #(
         .q(pc_l)
     );
 
-    mux2_1 addr_h_mux2_1(
+    mux3_1 addr_h_mux3_1(
         .a(pc_h),
         .b(high_byte),
+        .c(8'h01),
         .sel(src_addr_h), 
         .y(addr[15:8])
     );
 
-    mux2_1 addr_l_mux2_1(
+    mux3_1 addr_l_mux3_1(
         .a(pc_l),
         .b(low_byte),
+        .c(s),
         .sel(src_addr_l),
         .y(addr[7:0])
     );
@@ -248,6 +251,7 @@ module mos6502 #(
         .w_high_byte(w_high_byte),
         .w_low_byte(w_low_byte),
         .src_c_in(src_c_in),
+        .src_data_out(src_data_out),
         .src_addr_h(src_addr_h),
         .src_addr_l(src_addr_l),
         .src_next_pc_h(src_next_pc_h),
@@ -292,6 +296,12 @@ module mos6502 #(
         .c(c)
     );
 
-    assign data_out = alu_result;
+    mux3_1 src_data_out_mux3_1(
+        .a(alu_result),
+        .b(a),
+        .c(flags),
+        .sel(src_data_out),
+        .y(data_out)
+    );
 
 endmodule

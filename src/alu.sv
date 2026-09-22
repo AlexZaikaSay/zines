@@ -30,9 +30,10 @@ module alu (
     parameter ALU_SET_V = 10;
     parameter ALU_SET_I = 11;
     parameter ALU_CORR  = 12;
+    parameter ALU_FLAGS = 13;
 
 
-    always @*
+    always @(*)
     begin
 
         and_out = a & b;
@@ -47,6 +48,7 @@ module alu (
                 v = 0;
                 n = result[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_B: begin
                 result = b;
@@ -55,6 +57,7 @@ module alu (
                 v = 0;
                 n = result[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_SUB: begin  
                 {c, result} = {1'b0, a} + {1'b0, ~b} + {8'b0, c_in};
@@ -62,6 +65,7 @@ module alu (
                 d = 0;
                 v = (a[7] ^ b[7]) & (a[7] ^ result[7]);
                 n = result[7];
+                z = (result == 8'b0);
             end
             ALU_ADD: begin  
                 {c, result} = {1'b0, a} + {1'b0, b} + {8'b0, c_in};
@@ -69,6 +73,7 @@ module alu (
                 d = 0;
                 v = (~(a[7] ^ b[7])) & (a[7] ^ result[7]);
                 n = result[7];
+                z = (result == 8'b0);
             end
             ALU_CORR: begin
                 {c, result} = {1'b0, a} + {1'b0, b};
@@ -76,6 +81,7 @@ module alu (
                 d = 0;
                 v = (a[7] ^ b[7]) & (a[7] ^ result[7]);
                 n = 0;
+                z = (result == 8'b0);
             end
             ALU_AND: begin
                 result = and_out;
@@ -84,6 +90,7 @@ module alu (
                 v = 0;
                 n = result[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_OR: begin
                 result = or_out;
@@ -92,6 +99,7 @@ module alu (
                 v = 0;
                 n = result[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_EOR: begin
                 result = xor_out;
@@ -100,6 +108,7 @@ module alu (
                 v = 0;
                 n = result[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_BIT: begin
                 result = and_out;
@@ -108,6 +117,7 @@ module alu (
                 v = b[6];
                 n = b[7];
                 c = 0;
+                z = (result == 8'b0);
             end
             ALU_SET_C: begin
                 result = b;
@@ -116,6 +126,7 @@ module alu (
                 v = 0;
                 n = 0;
                 c = b[0];
+                z = 0;
             end
             ALU_SET_V: begin
                 result = b;
@@ -124,6 +135,7 @@ module alu (
                 v = b[0];
                 n = 0;
                 c = 0;
+                z = 0;
             end
             ALU_SET_I: begin
                 result = b;
@@ -132,6 +144,7 @@ module alu (
                 v = 0;
                 n = 0;
                 c = 0;
+                z = 0;
             end
             ALU_SET_D: begin
                 result = b;
@@ -140,18 +153,27 @@ module alu (
                 v = 0;
                 n = 0;
                 c = 0;
+                z = 0;
+            end
+            ALU_FLAGS: begin
+                result = b;
+                i = b[2];
+                d = b[3];
+                v = b[6];
+                n = b[7];
+                c = b[0];
+                z = b[1];
             end
             default: begin
                 result = 8'bz;
-                i = z;
-                d = z;
-                v = z;
-                n = z;
-                c = z;
+                i = 0;
+                d = 0;
+                v = 0;
+                n = 0;
+                c = 0;
+                z = 0;
             end
         endcase
     end
-
-    assign z = (result == 8'b0);
 
 endmodule

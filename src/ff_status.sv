@@ -16,7 +16,7 @@ module ff_status (
     output logic [7:0] q
 );
 
-    parameter RESET_VALUE = 8'bxx1101xx;
+    parameter RESET_VALUE = 8'b00110110;
     parameter C_FLAG = 0;
     parameter Z_FLAG = 1;
     parameter I_FLAG = 2;
