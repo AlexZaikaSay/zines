@@ -38,13 +38,12 @@ module main_fsm (
   typedef enum logic [4:0] {
         Fetch,          // Fetch
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
-        LoadImm,        // Load immediate value into A, X, or Y
-        CompareImm,     // Compare immediate value with A
-        AluImm,         // Arithmetic/Logic (ADC, SBC, AND, ORA, EOR) with immediate values
+        LoadCmpImm,     // Load/Compare immediate with A, X, or Y
+        AluImm,         // Arithmetic/Logic (ADC, SBC, AND, ORA, EOR) with immediate 
         FetchLoByte,    // Fetch low byte of absolute address
         FetchHiByte,    // Fetch high byte of absolute address
         Store,          // Store value of A to memory
-        Load,           // Load from memory to A, X, or Y
+        LoadCmp,        // Load/Compare memory with A, X, or Y
         Bit,            // Handle BIT instruction
         JmpAbs,         // Handle high byte of JMP absolute
         Branch,         // Handle branch instructions (BNE, BEQ)
@@ -113,12 +112,15 @@ module main_fsm (
     parameter OP_INY        = 8'hC8;
     parameter OP_CMP_imm    = 8'hC9;
     parameter OP_DEX        = 8'hCA;
+    parameter OP_CMP_abs    = 8'hCD;
+    parameter OP_CPY_abs    = 8'hCC;
     parameter OP_BNE        = 8'hD0;
     parameter OP_CLD        = 8'hD8;
     parameter OP_CPX_imm    = 8'hE0;
     parameter OP_INX        = 8'hE8;
     parameter OP_SBC_imm    = 8'hE9;
     parameter OP_NOP        = 8'hEA;
+    parameter OP_CPX_abs    = 8'hEC;
     parameter OP_BEQ        = 8'hF0;
     parameter OP_SED        = 8'hF8;
 
@@ -144,17 +146,14 @@ module main_fsm (
                         undef = 0;
                         next_state = LoadFlags;
                     end
+                    OP_CMP_imm,
+                    OP_CPX_imm,
+                    OP_CPY_imm,
                     OP_LDA_imm,
                     OP_LDX_imm,
                     OP_LDY_imm: begin
                         undef = 0;
-                        next_state = LoadImm;
-                    end
-                    OP_CMP_imm,
-                    OP_CPX_imm,
-                    OP_CPY_imm: begin
-                        undef = 0;
-                        next_state = CompareImm;
+                        next_state = LoadCmpImm;
                     end
                     OP_AND_imm,
                     OP_ORA_imm,
@@ -167,10 +166,6 @@ module main_fsm (
                     OP_NOP: begin
                         undef = 0;
                         next_state = Nothing;
-                    end
-                    OP_JMP_abs: begin
-                        undef = 0;
-                        next_state = FetchLoByte;
                     end
                     OP_BNE,
                     OP_BEQ,
@@ -195,13 +190,17 @@ module main_fsm (
                         undef = 0;
                         next_state = Transfer;
                     end
+                    OP_CMP_abs,
+                    OP_CPX_abs,
+                    OP_CPY_abs,
                     OP_BIT_abs,
                     OP_LDA_abs,
                     OP_LDX_abs,
                     OP_LDY_abs,
                     OP_STA_abs,
                     OP_STX_abs,
-                    OP_STY_abs: begin
+                    OP_STY_abs,
+                    OP_JMP_abs: begin
                         undef = 0;
                         next_state = FetchLoByte;
                     end
@@ -247,6 +246,9 @@ module main_fsm (
                 case (inst)
                     OP_JMP_abs:
                         next_state = JmpAbs;
+                    OP_CMP_abs,
+                    OP_CPX_abs,
+                    OP_CPY_abs,
                     OP_BIT_abs,
                     OP_LDA_abs,
                     OP_LDX_abs,
@@ -262,10 +264,13 @@ module main_fsm (
             FetchHiByte: begin
                 undef = 0;
                 case (inst)
+                    OP_CMP_abs,
+                    OP_CPX_abs,
+                    OP_CPY_abs,
                     OP_LDA_abs,
                     OP_LDX_abs,
                     OP_LDY_abs: 
-                        next_state = Load;
+                        next_state = LoadCmp;
                     
                     OP_STA_abs,
                     OP_STX_abs,
@@ -561,45 +566,68 @@ module main_fsm (
                 src_addr_l = 0;
                 src_alu_a = 0;
             end
-            LoadImm: begin
+            LoadCmpImm: begin
                 case (inst)
                     OP_LDA_imm: begin
                         // Load Accumulator with Immediate
+                        w_c = 0;
                         w_a = 1;        // write A register
                         w_x = 0;
                         w_y = 0;
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDX_imm: begin
                         // Load X register with Immediate
+                        w_c = 0;
                         w_a = 0;
                         w_x = 1;        // write X register
                         w_y = 0;
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDY_imm: begin
                         // Load Y register with Immediate
+                        w_c = 0;
                         w_a = 0;
                         w_x = 0;
                         w_y = 1;        // write Y register
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_CMP_imm: begin
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 0;  // source ALU A is A
+                        alu_op = 1;     // ALU operation is SUB
+                    end
+                    OP_CPX_imm: begin
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 1;  // source ALU A is X
+                        alu_op = 1;     // ALU operation is SUB
+                    end
+                    OP_CPY_imm: begin
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 2;  // source ALU A is Y
+                        alu_op = 1;     // ALU operation is SUB
+                    end
                     default: begin
+                        w_c = 0;
                         w_a = 0;                  
                         w_x = 0;
                         w_y = 0; 
                         src_alu_a = 0;
-                        src_alu_b = 0;
                         alu_op = 0; 
                     end
                 endcase
-                w_c = 0;
                 w_i = 0;
                 w_v = 0;
                 w_d = 0;
@@ -612,79 +640,48 @@ module main_fsm (
                 w_low_byte = 0;
                 w_s = 0;
                 w_mem = 0;
-                src_c_in = 0;
+                src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
-            end
-            CompareImm: begin
-                // Logic for handling compare immediate instruction
-                case (inst)
-                    OP_CMP_imm: 
-                        src_alu_a = 0;      // source ALU A is A
-                    OP_CPX_imm:
-                        src_alu_a = 1;      // source ALU A is X
-                    OP_CPY_imm:
-                        src_alu_a = 2;      // source ALU A is Y
-                    default:
-                        src_alu_a = 0;
-                endcase
-                w_c = 1;
-                w_i = 0;
-                w_v = 0;
-                w_d = 0;
-                w_z = 1;
-                w_n = 1;
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
-                w_high_byte = 0;
-                w_low_byte = 0;
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 2;       // carry 1 for ALU SUB operation
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
                 src_alu_b = 0;      // source ALU B is data_in
-                alu_op = 1;         // ALU operation is SUB
             end
             AluImm: begin
                 // Logic for handling arithmetic immediate instruction
                 case (inst)
                     OP_ADC_imm: begin
+                        w_c = 1;    // write C flag
                         w_v = 1;    // write V flag
                         alu_op = 0; // ALU operation is ADD
                     end
                     OP_SBC_imm: begin
+                        w_c = 1;    // write C flag
                         w_v = 1;    // write V flag
                         alu_op = 1; // ALU operation is SUB
                     end
                     OP_AND_imm: begin
+                        w_c = 0;
                         w_v = 0;
                         alu_op = 4; // ALU operation is AND
                     end
                     OP_ORA_imm: begin
+                        w_c = 0;
                         w_v = 0;
                         alu_op = 5; // ALU operation is OR
                     end
                     OP_EOR_imm: begin
+                        w_c = 0;
                         w_v = 0;
                         alu_op = 6; // ALU operation is EOR
                     end
                     default: begin
+                        w_c = 0;
                         w_v = 0;
                         alu_op = 0;
                     end
                 endcase
-                w_c = 1;            // write C flag
                 w_i = 0;
                 w_d = 0;
                 w_z = 1;            // write Z flag
@@ -708,46 +705,72 @@ module main_fsm (
                 src_alu_a = 0;      // source ALU A is A
                 src_alu_b = 0;      // source ALU B is data_in
             end
-            Load: begin
+            LoadCmp: begin
                 // Logic for handling load from memory
                 case (inst)
                     OP_LDA_abs: begin
-                        // Load Accumulator with memory
+                        // Load Accumulator from memory
+                        w_c = 0;
                         w_a = 1;        // write A register
                         w_x = 0;
                         w_y = 0;
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDX_abs: begin
-                        // Load X register with Immediate
+                        // Load X register from memory
+                        w_c = 0;
                         w_a = 0;
                         w_x = 1;        // write X register
                         w_y = 0;
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDY_abs: begin
-                        // Load Y register with Immediate
+                        // Load Y register from memory
+                        w_c = 0;
                         w_a = 0;
                         w_x = 0;
                         w_y = 1;        // write Y register
                         src_alu_a = 0;  // source ALU A is A
-                        src_alu_b = 0;  // source ALU B is data_in
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_CMP_abs: begin
+                        // Compare Accumulator with memory
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 0;  // source ALU A is A
+                        alu_op = 1;     // ALU operation is SUB
+                    end
+                    OP_CPX_abs: begin
+                        // Compare X register with memory
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 1;  // source ALU A is X
+                        alu_op = 1;     // ALU operation is SUB
+                    end
+                    OP_CPY_abs: begin
+                        // Compare Y register with memory
+                        w_c = 1;        // write C flag
+                        w_a = 0;
+                        w_x = 0;
+                        w_y = 0;
+                        src_alu_a = 2;  // source ALU A is Y
+                        alu_op = 1;     // ALU operation is SUB
+                    end
                     default: begin
+                        w_c = 0;
                         w_a = 0;                  
                         w_x = 0;
                         w_y = 0; 
                         src_alu_a = 0;
-                        src_alu_b = 0;
                         alu_op = 0; 
                     end
                 endcase
-                w_c = 0;
                 w_i = 0;
                 w_v = 0;
                 w_d = 0;
@@ -760,12 +783,13 @@ module main_fsm (
                 w_low_byte = 0;
                 w_s = 0;
                 w_mem = 0;
-                src_c_in = 0;
+                src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 0;
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;  
                 src_addr_h = 1;     // source address high byte is from memory
                 src_addr_l = 1;     // source address low byte is from memory
+                src_alu_b = 0;      // source ALU B is data_in
             end
             FetchLoByte: begin
                 // Logic for handling low byte of absolute
