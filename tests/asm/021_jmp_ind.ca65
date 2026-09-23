@@ -1,0 +1,15 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+start:  jmp (ind)
+        nop
+
+ind:    .word   label
+
+label:  nop
+        nop

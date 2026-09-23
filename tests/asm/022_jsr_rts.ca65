@@ -1,0 +1,18 @@
+data_segment = $200  
+code_segment = $400  
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+start:  ldx #$ff
+        txs
+        jsr func
+        nop
+
+func:   nop
+        rts
+
+label:  nop
+        nop
