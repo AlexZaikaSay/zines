@@ -1,0 +1,28 @@
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+start:  ldx #$ff
+        txs
+        brk
+        nop
+        jmp cont
+
+
+irq:    nop
+        rti
+
+cont:   nop
+
+       
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   irq

@@ -9,6 +9,7 @@
 `include "ff.sv"
 `include "ff_status.sv"
 `include "main_fsm.sv"
+`include "int_control.sv"
 
 
 module mos6502 #(
@@ -41,6 +42,9 @@ module mos6502 #(
     logic [7:0] y;
     logic [7:0] s;
 
+    logic [15:0] irq_addr_h;
+    logic [15:0] irq_addr_l;
+
     logic pc_adder_l_cout;
 
     logic c;
@@ -69,8 +73,8 @@ module mos6502 #(
     logic w_s;
 
     logic       src_low_byte;
-    logic [1:0] src_addr_h;
-    logic [1:0] src_addr_l;
+    logic [2:0] src_addr_h;
+    logic [2:0] src_addr_l;
     logic [1:0] src_next_pc_h;
     logic [1:0] src_next_pc_l;
     logic [2:0] src_alu_a;
@@ -79,6 +83,11 @@ module mos6502 #(
     logic [2:0] src_data_out;
 
     logic [3:0] alu_op;
+
+    int_control int_control_inst(
+        .irq_addr_h(irq_addr_h),
+        .irq_addr_l(irq_addr_l)
+    );
 
     adder pc_h_adder(
         .a(pc_h),
@@ -131,18 +140,22 @@ module mos6502 #(
         .q(pc_l)
     );
 
-    mux3_1 addr_h_mux3_1(
+    mux5_1 addr_h_mux5_1(
         .a(pc_h),
         .b(high_byte),
         .c(8'h01),
+        .d(irq_addr_h[15:8]), 
+        .e(irq_addr_l[15:8]),
         .sel(src_addr_h), 
         .y(addr[15:8])
     );
 
-    mux3_1 addr_l_mux3_1(
+    mux5_1 addr_l_mux5_1(
         .a(pc_l),
         .b(low_byte),
         .c(s),
+        .d(irq_addr_h[7:0]),
+        .e(irq_addr_l[7:0]),
         .sel(src_addr_l),
         .y(addr[7:0])
     );
@@ -229,7 +242,7 @@ module mos6502 #(
         .q(s)
     );
 
-    mux3_1 #1 carry_in_mux3_1(
+    mux3_1 #(.WIDTH(1)) carry_in_mux3_1(
         .a(flags[0]), // TODO: make constants
         .b(1'b0),
         .c(1'b1),

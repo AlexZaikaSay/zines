@@ -29,14 +29,14 @@ module main_fsm (
     output logic [2:0]  src_data_out,
     output logic [1:0]  src_next_pc_h,
     output logic [1:0]  src_next_pc_l,
-    output logic [1:0]  src_addr_h,
-    output logic [1:0]  src_addr_l,
+    output logic [2:0]  src_addr_h,
+    output logic [2:0]  src_addr_l,
     output logic [2:0]  src_alu_a,
     output logic [1:0]  src_alu_b,
     output logic [3:0]  alu_op,
     output logic        undef
 );
-  typedef enum logic [4:0] {
+  typedef enum logic [5:0] {
         Fetch,          // Fetch
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
         LoadCmpImm,     // Load/Compare immediate with A, X, or Y
@@ -63,9 +63,12 @@ module main_fsm (
         PushPCLow,      // Handle push PC low byte
         PullPCLow,      // Handle pull PC low byte
         PullPCHigh,     // Handle pull PC high byte
+        FetchVectorLow, // Handle fetching low byte of interrupt vector
+        FetchVectorHigh,// Handle fetching high byte of interrupt vector
         PCInc,          // Handle PC increment
         Jsr,            // Handle JSR instruction
-        PullInc,        // Handle pull S increment
+        PullInc,        // Handle S increment
+        PullInc2,       // Handle S increment again
         Nothing         // do nothing for NOP
     } state_t;
 
@@ -80,6 +83,7 @@ module main_fsm (
     assign v_flag = flags[6];
     assign n_flag = flags[7];
 
+    parameter OP_BRK        = 8'h00;
     parameter OP_PHP        = 8'h08;
     parameter OP_ORA_imm    = 8'h09;
     parameter OP_BPL        = 8'h10;
@@ -90,6 +94,7 @@ module main_fsm (
     parameter OP_BIT_abs    = 8'h2C;
     parameter OP_BMI        = 8'h30;
     parameter OP_SEC        = 8'h38;
+    parameter OP_RTI        = 8'h40;
     parameter OP_PHA        = 8'h48;
     parameter OP_EOR_imm    = 8'h49;
     parameter OP_JMP_abs    = 8'h4C;
@@ -225,6 +230,9 @@ module main_fsm (
                         undef = 0;
                         next_state = IncDec;
                     end
+                    OP_RTI:
+                        next_state = PullInc;
+                    OP_BRK,
                     OP_RTS,
                     OP_PLA,
                     OP_PLP,
@@ -242,6 +250,7 @@ module main_fsm (
             Skip: begin
                 undef = 0;
                 case (inst)
+                    OP_BRK,
                     OP_JSR:
                         next_state = PushPCHigh;
                     OP_RTS,
@@ -261,13 +270,34 @@ module main_fsm (
             end
             PushPCLow: begin
                 undef = 0;
-                next_state = Jsr;
+                case (inst)
+                    OP_BRK:
+                        next_state = Push;
+                    OP_JSR:
+                        next_state = Jsr;
+                    default:
+                        next_state = Fetch;
+                endcase
+            end
+            Push: begin
+                undef = 0;
+                case (inst)
+                    OP_BRK:
+                        next_state = FetchVectorLow;
+                    default:
+                        next_state = Fetch;
+                endcase
+            end
+            FetchVectorLow: begin
+                undef = 0;
+                next_state = FetchVectorHigh;
             end
             PullInc: begin
                 undef = 0;
                 case (inst)
                     OP_RTS:
                         next_state = PullPCLow;
+                    OP_RTI,
                     OP_PLA,
                     OP_PLP:
                         next_state = Pull;
@@ -275,13 +305,31 @@ module main_fsm (
                         next_state = Fetch;
                 endcase
             end
+            Pull: begin
+                undef = 0;
+                case (inst)
+                    OP_RTI:
+                        next_state = PullInc2;
+                    default:
+                        next_state = Fetch;
+                endcase
+            end
+            PullInc2: begin
+                undef = 0;
+                next_state = PullPCLow;
+            end
             PullPCLow: begin
                 undef = 0;
                 next_state = PullPCHigh;
             end
             PullPCHigh: begin
                 undef = 0;
-                next_state = PCInc;
+                case (inst)
+                    OP_RTI:
+                        next_state = Fetch;
+                    default:
+                        next_state = PCInc;
+                endcase
             end
             FetchLoByte: begin
                 undef = 0;
@@ -906,6 +954,64 @@ module main_fsm (
                 src_alu_b = 0;
                 alu_op = 0;
             end
+            FetchVectorLow: begin
+                // Logic for handling low byte of interrupt vector
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 1;     // write low byte of vector
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 0;
+                src_low_byte = 0;   // source low byte is data_in
+                src_data_out = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 4;     // source addr is high byte of irq address low byte
+                src_addr_l = 4;     // source addr is low byte of irq address low byte
+                src_alu_a = 0;
+                src_alu_b = 0;
+                alu_op = 0;
+            end
+            FetchVectorHigh: begin
+                // Logic for handling high byte of interrupt vector
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 1;    // write next PC high byte
+                w_next_pc_l = 1;    // write next PC low byte
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 0;
+                src_low_byte = 0;
+                src_data_out = 0;
+                src_next_pc_h = 1;  // source next PC high byte is imm
+                src_next_pc_l = 1;  // source next PC low byte is low_byte
+                src_addr_h = 3;     // source addr is high byte of irq address high byte
+                src_addr_l = 3;     // source addr is low byte of irq address high byte
+                src_alu_a = 0;
+                src_alu_b = 0;
+                alu_op = 0;
+            end
             Store: begin
                 // Logic for handling store instruction
                 case (inst)
@@ -1371,6 +1477,7 @@ module main_fsm (
                 case (inst)
                     OP_PHA:
                         src_data_out = 1;   // source data out A for memory write
+                    OP_BRK,
                     OP_PHP:
                         src_data_out = 2;   // source data out Flags for memory write
                     default: 
@@ -1402,6 +1509,7 @@ module main_fsm (
                 src_alu_b = 3;      // source ALU B is 1
                 alu_op = 1;         // ALU operation: SUB
             end
+            PullInc2,
             PullInc: begin
                 // Increment S register before pull
                 w_c = 0;
@@ -1442,6 +1550,7 @@ module main_fsm (
                         w_d = 0;
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_RTI,
                     OP_PLP: begin
                         w_a = 0;
                         w_c = 1;        // write C flag
@@ -1525,9 +1634,9 @@ module main_fsm (
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
-                w_s = 0;            // write S register from ALU
+                w_s = 0;
                 w_mem = 0;
-                src_c_in = 1;       // carry 0 for increment
+                src_c_in = 0;
                 src_low_byte = 0;
                 src_data_out = 0;
                 src_next_pc_h = 1;  // source next PC high byte is imm
