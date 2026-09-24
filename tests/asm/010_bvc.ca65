@@ -1,5 +1,6 @@
-data_segment = $200  
-code_segment = $400  
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
 
         .DATA
         .org data_segment
@@ -8,7 +9,6 @@ code_segment = $400
 
         .CODE
         .org code_segment
-
 start:  bit _ff
         bvc nb_
         clv
@@ -47,3 +47,9 @@ nb_long_:
 b_long_:
         bvc back
         
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000

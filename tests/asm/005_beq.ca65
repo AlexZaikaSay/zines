@@ -1,6 +1,12 @@
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .DATA
+        .org data_segment
 
         .CODE
-        ; simple down
+        .org code_segment
 start:  lda #1
         beq eq_
         lda #0
@@ -38,4 +44,10 @@ eq_long:
         nop
 ne_long:
         beq back
+        
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000
         

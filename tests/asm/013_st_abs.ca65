@@ -1,5 +1,6 @@
-data_segment = $200  
-code_segment = $400  
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
 
         .DATA
         .org data_segment
@@ -14,3 +15,9 @@ start:  lda #$15
         ldy #$17
         sty var
         nop
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000

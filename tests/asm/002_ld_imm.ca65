@@ -1,8 +1,21 @@
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .DATA
+        .org data_segment
 
         .CODE
+        .org code_segment
 start:  lda #$00
         lda #$f5
         ldx #$00
         ldx #$f3
         ldy #$00
         ldy #$f1
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000

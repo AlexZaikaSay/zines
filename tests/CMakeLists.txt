@@ -7,11 +7,8 @@ file(GLOB ASM_SOURCES CONFIGURE_DEPENDS
 
 foreach(SRC ${ASM_SOURCES})
     get_filename_component(NAME ${SRC} NAME_WE)
-    if(NAME STREQUAL "6502_functional_test")
-        set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502_functional.cfg)
-    else()
-        set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502.cfg)
-    endif()
+    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502.cfg)
+
     set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
     set(LST ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.lst)
     set(BIN ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.bin)

@@ -1,5 +1,6 @@
-data_segment = $200  
-code_segment = $400  
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
 
         .DATA
         .org data_segment
@@ -13,3 +14,9 @@ start:  ldx #$0
         dey
         iny
         nop
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000
