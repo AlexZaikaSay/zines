@@ -35,12 +35,12 @@ module tb_023_brk_rti;
                 11: begin
                     // check BRK 
                     if (db_device.cpu.pc_h !== 8'h04 || db_device.cpu.pc_l !== 8'h08 || db_device.cpu.s !== 8'hfc || 
-                        db_device.memory.data[16'h1ff] !== 8'h04 || db_device.memory.data[16'h1fe] !== 8'h04 || db_device.memory.data[16'h1fd] !== 8'hb4)
+                        db_device.memory.data[16'h1ff] !== 8'h04 || db_device.memory.data[16'h1fe] !== 8'h05 || db_device.memory.data[16'h1fd] !== 8'hb4)
                         $error("TEST FAILED: BRK, pc: %h%h, s: %h", db_device.cpu.pc_h, db_device.cpu.pc_l, db_device.cpu.s); 
                 end
                 19: begin
                     // check RTI 
-                    if (db_device.cpu.pc_h !== 8'h04 || db_device.cpu.pc_l !== 8'h04 || 
+                    if (db_device.cpu.pc_h !== 8'h04 || db_device.cpu.pc_l !== 8'h05 || 
                         db_device.cpu.s !== 8'hff || db_device.cpu.flags !== 8'hb4)
                         $error("TEST FAILED: RTI, pc: %h%h, s: %h, flags: %h", db_device.cpu.pc_h, db_device.cpu.pc_l, db_device.cpu.s, db_device.cpu.flags); 
                 end

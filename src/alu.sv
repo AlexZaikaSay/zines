@@ -1,12 +1,13 @@
 
 module alu (
     input  logic [3:0] alu_op,
-    input  logic [7:0] a,
-    input  logic [7:0] b,
+    input  logic [7:0] a_in,
+    input  logic [7:0] b_in,
     input  logic  c_in,
     output logic [7:0] result,
     output logic  i,
     output logic  d,
+    output logic  b,
     output logic  v,
     output logic  n,
     output logic  c,
@@ -31,55 +32,61 @@ module alu (
     parameter ALU_SET_I = 11;
     parameter ALU_CORR  = 12;
     parameter ALU_FLAGS = 13;
+    parameter ALU_SET_B = 14;
 
 
     always @(*)
     begin
 
-        and_out = a & b;
-        or_out  = a | b;
-        xor_out = a ^ b;
+        and_out = a_in & b_in;
+        or_out  = a_in | b_in;
+        xor_out = a_in ^ b_in;
 
         case (alu_op)
             ALU_A: begin
-                result = a;
+                result = a_in;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = result[7];
                 c = 0;
                 z = (result == 8'b0);
             end
             ALU_B: begin
-                result = b;
+                result = b_in;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = result[7];
                 c = 0;
                 z = (result == 8'b0);
             end
             ALU_SUB: begin  
-                {c, result} = {1'b0, a} + {1'b0, ~b} + {8'b0, c_in};
+                {c, result} = {1'b0, a_in} + {1'b0, ~b_in} + {8'b0, c_in};
                 i = 0;
                 d = 0;
-                v = (a[7] ^ b[7]) & (a[7] ^ result[7]);
+                b = 0;
+                v = (a_in[7] ^ b_in[7]) & (a_in[7] ^ result[7]);
                 n = result[7];
                 z = (result == 8'b0);
             end
             ALU_ADD: begin  
-                {c, result} = {1'b0, a} + {1'b0, b} + {8'b0, c_in};
+                {c, result} = {1'b0, a_in} + {1'b0, b_in} + {8'b0, c_in};
                 i = 0;
                 d = 0;
-                v = (~(a[7] ^ b[7])) & (a[7] ^ result[7]);
+                b = 0;
+                v = (~(a_in[7] ^ b_in[7])) & (a_in[7] ^ result[7]);
                 n = result[7];
                 z = (result == 8'b0);
             end
             ALU_CORR: begin
-                {c, result} = {1'b0, a} + {1'b0, b};
+                {c, result} = {1'b0, a_in} + {1'b0, b_in};
                 i = 0;
                 d = 0;
-                v = (a[7] ^ b[7]) & (a[7] ^ result[7]);
+                b = 0;
+                v = (a_in[7] ^ b_in[7]) & (a_in[7] ^ result[7]);
                 n = 0;
                 z = (result == 8'b0);
             end
@@ -87,6 +94,7 @@ module alu (
                 result = and_out;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = result[7];
                 c = 0;
@@ -96,6 +104,7 @@ module alu (
                 result = or_out;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = result[7];
                 c = 0;
@@ -105,6 +114,7 @@ module alu (
                 result = xor_out;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = result[7];
                 c = 0;
@@ -114,60 +124,77 @@ module alu (
                 result = and_out;
                 i = 0;
                 d = 0;
-                v = b[6];
-                n = b[7];
+                b = 0;
+                v = b_in[6];
+                n = b_in[7];
                 c = 0;
                 z = (result == 8'b0);
             end
             ALU_SET_C: begin
-                result = b;
+                result = b_in;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = 0;
-                c = b[0];
+                c = b_in[0];
                 z = 0;
             end
             ALU_SET_V: begin
-                result = b;
+                result = b_in;
                 i = 0;
                 d = 0;
-                v = b[0];
+                b = 0;
+                v = b_in[0];
                 n = 0;
                 c = 0;
                 z = 0;
             end
             ALU_SET_I: begin
-                result = b;
-                i = b[0];
+                result = b_in;
+                i = b_in[0];
                 d = 0;
+                b = 0;
+                v = 0;
+                n = 0;
+                c = 0;
+                z = 0;
+            end
+            ALU_SET_B: begin
+                result = b_in;
+                i = 0;
+                d = 0;
+                b = b_in[0];
                 v = 0;
                 n = 0;
                 c = 0;
                 z = 0;
             end
             ALU_SET_D: begin
-                result = b;
+                result = b_in;
                 i = 0;
-                d = b[0];
+                d = b_in[0];
+                b = 0;
                 v = 0;
                 n = 0;
                 c = 0;
                 z = 0;
             end
             ALU_FLAGS: begin
-                result = b;
-                i = b[2];
-                d = b[3];
-                v = b[6];
-                n = b[7];
-                c = b[0];
-                z = b[1];
+                result = b_in;
+                i = b_in[2];
+                d = b_in[3];
+                b = 0;
+                v = b_in[6];
+                n = b_in[7];
+                c = b_in[0];
+                z = b_in[1];
             end
             default: begin
                 result = 8'bz;
                 i = 0;
                 d = 0;
+                b = 0;
                 v = 0;
                 n = 0;
                 c = 0;

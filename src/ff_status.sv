@@ -5,12 +5,14 @@ module ff_status (
     input logic z,
     input logic i,
     input logic d,
+    input logic b,
     input logic v,
     input logic n,
     input logic w_c,
     input logic w_z,
     input logic w_i,
     input logic w_d,
+    input logic w_b,
     input logic w_v,
     input logic w_n,
     output logic [7:0] q
@@ -21,6 +23,7 @@ module ff_status (
     parameter Z_FLAG = 1;
     parameter I_FLAG = 2;
     parameter D_FLAG = 3;
+    parameter B_FLAG = 4;
     parameter V_FLAG = 6;
     parameter N_FLAG = 7;
 
@@ -37,6 +40,8 @@ module ff_status (
                 q[I_FLAG] <= i;
             if (w_d)
                 q[D_FLAG] <= d;
+            if (w_b)
+                q[B_FLAG] <= b;
             if (w_v)
                 q[V_FLAG] <= v;
             if (w_n)

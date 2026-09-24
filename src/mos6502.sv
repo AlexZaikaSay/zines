@@ -5,7 +5,7 @@
 `include "mux3_1.sv"
 `include "mux4_1.sv"
 `include "mux5_1.sv"
-`include "mux7_1.sv"
+`include "mux8_1.sv"
 `include "ff.sv"
 `include "ff_status.sv"
 `include "main_fsm.sv"
@@ -29,6 +29,7 @@ module mos6502 #(
     logic [7:0] next_pc_l;
     logic [7:0] next_pc_h_a;
     logic [7:0] next_pc_l_a;
+    logic [7:0] next_high_byte;
     logic [7:0] next_low_byte;
     logic [7:0] inst;
     logic [7:0] high_byte;
@@ -51,12 +52,14 @@ module mos6502 #(
     logic z;
     logic i;
     logic d;
+    logic b;
     logic v;
     logic n;
     logic w_c;
     logic w_z;
     logic w_i;
     logic w_d;
+    logic w_b;
     logic w_v;
     logic w_n;
 
@@ -72,6 +75,7 @@ module mos6502 #(
     logic w_y;
     logic w_s;
 
+    logic [1:0] src_high_byte;
     logic       src_low_byte;
     logic [2:0] src_addr_h;
     logic [2:0] src_addr_l;
@@ -183,10 +187,18 @@ module mos6502 #(
         .q(low_byte)
     );
 
+    mux3_1 high_byte_mux3_1(
+        .a(data_in),
+        .b(8'b0),
+        .c(alu_result),
+        .sel(src_high_byte),
+        .y(next_high_byte)
+    );
+
     ff high_byte_ff (
         .clk(clk),
         .rst(rst),
-        .d(data_in),
+        .d(next_high_byte),
         .en(w_high_byte),
         .q(high_byte)
     );
@@ -198,12 +210,14 @@ module mos6502 #(
         .z(z),
         .i(i),
         .d(d),
+        .b(b),
         .v(v),
         .n(n),
         .w_c(w_c),
         .w_z(w_z),
         .w_i(w_i),
         .w_d(w_d),
+        .w_b(w_b),
         .w_v(w_v),
         .w_n(w_n),
         .q(flags)
@@ -262,6 +276,7 @@ module mos6502 #(
         .w_z(w_z),
         .w_i(w_i),
         .w_d(w_d),
+        .w_b(w_b),
         .w_v(w_v),
         .w_n(w_n),
         .w_a(w_a),
@@ -275,6 +290,7 @@ module mos6502 #(
         .w_high_byte(w_high_byte),
         .w_low_byte(w_low_byte),
         .src_c_in(src_c_in),
+        .src_high_byte(src_high_byte),
         .src_low_byte(src_low_byte),
         .src_data_out(src_data_out),
         .src_addr_h(src_addr_h),
@@ -287,7 +303,7 @@ module mos6502 #(
         .undef(undef)
     );
 
-    mux7_1 src_alu_a_mux7_1(
+    mux8_1 src_alu_a_mux8_1(
         .a(a),
         .b(x),
         .c(y),
@@ -295,6 +311,7 @@ module mos6502 #(
         .e(pc_l),
         .f(pc_h),
         .g(low_byte),
+        .h(high_byte),
         .sel(src_alu_a),
         .y(alu_a)
     );
@@ -310,15 +327,16 @@ module mos6502 #(
 
     alu alu_device (
         .alu_op(alu_op),
-        .a(alu_a),
-        .b(alu_b),
+        .a_in(alu_a),
+        .b_in(alu_b),
         .c_in(c_in),
         .result(alu_result),
         .i(i),
         .d(d),
+        .b(b),
+        .v(v),
         .n(n),
         .z(z),
-        .v(v),
         .c(c)
     );
 
