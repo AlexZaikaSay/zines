@@ -44,7 +44,8 @@ module main_fsm (
         LoadCmpImm,     // Load/Compare immediate with A, X, or Y
         AluImm,         // Arithmetic/Logic (ADC, SBC, AND, ORA, EOR) with immediate 
         FetchLoByte,    // Fetch low byte of absolute address
-        FetchHiByte,    // Fetch high byte of absolute address
+        FetchHiByte,    // Fetch high byte of absolute address, and add X or Y to the address low
+        AddXY,          // Add X or Y to the address low
         Store,          // Store value of A to memory
         LoadCmp,        // Load/Compare memory with A, X, or Y
         Bit,            // Handle BIT instruction
@@ -133,6 +134,9 @@ module main_fsm (
     parameter OP_LDX_abs    = 8'hAE;
     parameter OP_LDA_abs    = 8'hAD;
     parameter OP_BCS        = 8'hB0;
+    parameter OP_LDY_zp_x   = 8'hB4;
+    parameter OP_LDA_zp_x   = 8'hB5;    
+    parameter OP_LDX_zp_y   = 8'hB6;
     parameter OP_CLV        = 8'hB8;
     parameter OP_LDA_abs_y  = 8'hB9;
     parameter OP_TSX        = 8'hBA;
@@ -148,6 +152,7 @@ module main_fsm (
     parameter OP_CMP_abs    = 8'hCD;
     parameter OP_CPY_abs    = 8'hCC;
     parameter OP_BNE        = 8'hD0;
+    parameter OP_CMP_zp_x   = 8'hD5; 
     parameter OP_CLD        = 8'hD8;
     parameter OP_CMP_abs_y  = 8'hD9;
     parameter OP_CMP_abs_x  = 8'hDD;
@@ -227,11 +232,15 @@ module main_fsm (
                         next_state = Transfer;
                     end
                     OP_CMP_zp,
+                    OP_CMP_zp_x,
                     OP_CPX_zp,
                     OP_CPY_zp,
                     OP_LDA_zp,
+                    OP_LDA_zp_x,
                     OP_LDX_zp,
+                    OP_LDX_zp_y,
                     OP_LDY_zp,
+                    OP_LDY_zp_x,
                     OP_STA_zp,
                     OP_STX_zp,
                     OP_STY_zp,
@@ -265,9 +274,14 @@ module main_fsm (
                         next_state = IncDec;
                     end
                     OP_RTI:
+                    begin
+                        undef = 0;
                         next_state = PullInc;
-                    OP_BRK:
+                    end
+                    OP_BRK: begin
+                        undef = 0;
                         next_state = BrkFlags;
+                    end
                     OP_RTS,
                     OP_PLA,
                     OP_PLP,
@@ -372,6 +386,11 @@ module main_fsm (
             FetchLoByte: begin
                 undef = 0;
                 case (inst)
+                    OP_CMP_zp_x,
+                    OP_LDA_zp_x,
+                    OP_LDY_zp_x,
+                    OP_LDX_zp_y: 
+                        next_state = AddXY;
                     OP_JSR: 
                         next_state = Skip;
                     OP_JMP_abs:
@@ -441,6 +460,7 @@ module main_fsm (
                         next_state = Fetch;
                 endcase
             end
+            AddXY,
             PageInc: begin
                 undef = 0;
                 next_state = LoadCmp;
@@ -891,6 +911,7 @@ module main_fsm (
                 // Logic for handling load from memory
                 case (inst)
                     OP_LDA_zp,
+                    OP_LDA_zp_x,
                     OP_LDA_abs_x,
                     OP_LDA_abs_y,
                     OP_LDA_abs: begin
@@ -903,6 +924,7 @@ module main_fsm (
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDX_zp,
+                    OP_LDX_zp_y,
                     OP_LDX_abs_y,
                     OP_LDX_abs: begin
                         // Load X register from memory
@@ -914,6 +936,7 @@ module main_fsm (
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_LDY_zp,
+                    OP_LDY_zp_x,
                     OP_LDY_abs_x,
                     OP_LDY_abs: begin
                         // Load Y register from memory
@@ -925,6 +948,7 @@ module main_fsm (
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_CMP_zp,
+                    OP_CMP_zp_x,
                     OP_CMP_abs_x,
                     OP_CMP_abs_y,
                     OP_CMP_abs: begin
@@ -1026,16 +1050,16 @@ module main_fsm (
                     OP_CMP_abs_x,
                     OP_LDA_abs_x,
                     OP_LDY_abs_x: begin
-                        // Store X to memory
-                        w_low_byte = 1;     // write low byte of absolute address
-                        src_alu_a = 1;      // source ALU A is X register
+                        // Add X to low byte
+                        w_low_byte = 1; // write low byte of absolute address
+                        src_alu_a = 1;  // source ALU A is X register
                     end
                     OP_CMP_abs_y,
                     OP_LDA_abs_y,
                     OP_LDX_abs_y: begin
-                        // Store Y to memory
-                        w_low_byte = 1;     // write low byte of absolute address
-                        src_alu_a = 2;      // source ALU A is Y register
+                        // Add Y to low byte
+                        w_low_byte = 1; // write low byte of absolute address
+                        src_alu_a = 2;  // source ALU A is Y register
                     end
                     default: begin
                         w_low_byte = 0;
@@ -1065,6 +1089,51 @@ module main_fsm (
                 src_next_pc_h = 0;  // source next PC is PC+1
                 src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
+                src_addr_l = 0;
+                src_alu_b = 1;      // source ALU B is low byte of absolute address
+                alu_op = 0;         // ALU operation is ADD 
+            end
+            AddXY: begin
+                // Addition X or Y to low byte of absolute address
+                case (inst)
+                    OP_CMP_zp_x,
+                    OP_LDA_zp_x,
+                    OP_LDY_zp_x: begin
+                        // Add X to low byte
+                        src_alu_a = 1;  // source ALU A is X register
+                    end
+                    OP_LDX_zp_y: begin
+                        // Add Y to low byte
+                        src_alu_a = 2;  // source ALU A is Y register
+                    end
+                    default: begin
+                        src_alu_a = 0;
+                    end
+                endcase
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_b = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 1;     // write low byte of absolute address
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 1;       // carry 0 for ALU ADD operation
+                src_high_byte = 0;
+                src_low_byte = 1;   // source low byte is alu_result
+                src_data_out = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_b = 1;      // source ALU B is low byte of absolute address
                 alu_op = 0;         // ALU operation is ADD 

@@ -28,7 +28,7 @@ module tb_023_brk_rti;
     end
 
     initial begin
-        for (integer i = 0; i < 20; i++) begin
+        for (integer i = 0; i < 30; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
             case (i)
