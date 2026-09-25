@@ -5,9 +5,9 @@
 
 
 
-module tb_020_cmp_abs;
+module tb_028_cmp_zp;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/020_cmp_abs.tv";
+    parameter MEM_FILE = "./tests/028_cmp_zp.tv";
     logic clk;
     logic rst;
 
@@ -22,46 +22,47 @@ module tb_020_cmp_abs;
     );
 
     initial begin
-        $dumpfile("tb_020_cmp_abs.vcd");
-        $dumpvars(0, tb_020_cmp_abs);
+        $dumpfile("tb_028_cmp_zp.vcd");
+        $dumpvars(0, tb_028_cmp_zp);
         #1 rst = 0; #2; rst = 1;
     end
 
     initial begin
-        for (integer i = 0; i < 40; i++) begin
+        for (integer i = 0; i < 30; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
             case (i)
-                6: begin
-                    // check CMP abs
+                5: begin
+                    // check CMP zp
                     if (db_device.cpu.flags[7] !== 1'b0 || db_device.cpu.flags[1] !== 1'b1 || db_device.cpu.flags[0] !== 1'b1)
-                        $error("TEST FAILED: CMP ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                        $error("TEST FAILED: CMP ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
                 end
-                10: begin
-                    // check CMP abs
+                8: begin
+                    // check CMP zp
                     if (db_device.cpu.flags[7] !== 1'b1 || db_device.cpu.flags[1] !== 1'b0 || db_device.cpu.flags[0] !== 1'b0)
-                        $error("TEST FAILED: CMP ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                        $error("TEST FAILED: CMP ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                end
+                13: begin
+                    // check CPX zp
+                    if (db_device.cpu.flags[7] !== 1'b0 || db_device.cpu.flags[1] !== 1'b1 || db_device.cpu.flags[0] !== 1'b1)
+                        $error("TEST FAILED: CPX ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
                 end
                 16: begin
-                    // check CPX abs
-                    if (db_device.cpu.flags[7] !== 1'b0 || db_device.cpu.flags[1] !== 1'b1 || db_device.cpu.flags[0] !== 1'b1)
-                        $error("TEST FAILED: CPX ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
-                end
-                20: begin
-                    // check CPX abs
+                    // check CPX zp
                     if (db_device.cpu.flags[7] !== 1'b1 || db_device.cpu.flags[1] !== 1'b0 || db_device.cpu.flags[0] !== 1'b0)
-                        $error("TEST FAILED: CPX ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                        $error("TEST FAILED: CPX ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
                 end
-                26: begin
-                    // check CPY abs
+                21: begin
+                    // check CPY zp
                     if (db_device.cpu.flags[7] !== 1'b0 || db_device.cpu.flags[1] !== 1'b1 || db_device.cpu.flags[0] !== 1'b1)
-                        $error("TEST FAILED: CPY ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                        $error("TEST FAILED: CPY ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
                 end
-                30: begin
-                    // check CPY abs
+                24: begin
+                    // check CPY zp
                     if (db_device.cpu.flags[7] !== 1'b1 || db_device.cpu.flags[1] !== 1'b0 || db_device.cpu.flags[0] !== 1'b0)
-                        $error("TEST FAILED: CPY ABS, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
-                end                default: begin
+                        $error("TEST FAILED: CPY ZP, z=%b, n=%b, c=%b", db_device.cpu.flags[1], db_device.cpu.flags[7], db_device.cpu.flags[0]); 
+                end
+                default: begin
                     // No specific check for this cycle
                 end
             endcase

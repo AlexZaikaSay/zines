@@ -123,6 +123,9 @@ module main_fsm (
     parameter OP_TXS        = 8'h9A;
     parameter OP_LDY_imm    = 8'hA0;
     parameter OP_LDX_imm    = 8'hA2;
+    parameter OP_LDY_zp     = 8'hA4;
+    parameter OP_LDA_zp     = 8'hA5;
+    parameter OP_LDX_zp     = 8'hA6;
     parameter OP_TAY        = 8'hA8;
     parameter OP_LDA_imm    = 8'hA9;
     parameter OP_TAX        = 8'hAA;
@@ -137,6 +140,8 @@ module main_fsm (
     parameter OP_LDA_abs_x  = 8'hBD;
     parameter OP_LDX_abs_y  = 8'hBE;
     parameter OP_CPY_imm    = 8'hC0;
+    parameter OP_CPY_zp     = 8'hC4;
+    parameter OP_CMP_zp     = 8'hC5;
     parameter OP_INY        = 8'hC8;
     parameter OP_CMP_imm    = 8'hC9;
     parameter OP_DEX        = 8'hCA;
@@ -147,6 +152,7 @@ module main_fsm (
     parameter OP_CMP_abs_y  = 8'hD9;
     parameter OP_CMP_abs_x  = 8'hDD;
     parameter OP_CPX_imm    = 8'hE0;
+    parameter OP_CPX_zp     = 8'hE4;
     parameter OP_INX        = 8'hE8;
     parameter OP_SBC_imm    = 8'hE9;
     parameter OP_NOP        = 8'hEA;
@@ -220,6 +226,12 @@ module main_fsm (
                         undef = 0;
                         next_state = Transfer;
                     end
+                    OP_CMP_zp,
+                    OP_CPX_zp,
+                    OP_CPY_zp,
+                    OP_LDA_zp,
+                    OP_LDX_zp,
+                    OP_LDY_zp,
                     OP_STA_zp,
                     OP_STX_zp,
                     OP_STY_zp,
@@ -368,6 +380,13 @@ module main_fsm (
                     OP_STX_zp,
                     OP_STY_zp:
                         next_state = Store;
+                    OP_CMP_zp,
+                    OP_CPX_zp,
+                    OP_CPY_zp,
+                    OP_LDA_zp,
+                    OP_LDX_zp,
+                    OP_LDY_zp: 
+                        next_state = LoadCmp;
                     OP_JMP_ind, 
                     OP_CMP_abs,
                     OP_CPX_abs,
@@ -871,6 +890,7 @@ module main_fsm (
             LoadCmp: begin
                 // Logic for handling load from memory
                 case (inst)
+                    OP_LDA_zp,
                     OP_LDA_abs_x,
                     OP_LDA_abs_y,
                     OP_LDA_abs: begin
@@ -882,6 +902,7 @@ module main_fsm (
                         src_alu_a = 0;  // source ALU A is A
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_LDX_zp,
                     OP_LDX_abs_y,
                     OP_LDX_abs: begin
                         // Load X register from memory
@@ -892,6 +913,7 @@ module main_fsm (
                         src_alu_a = 0;  // source ALU A is A
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_LDY_zp,
                     OP_LDY_abs_x,
                     OP_LDY_abs: begin
                         // Load Y register from memory
@@ -902,6 +924,7 @@ module main_fsm (
                         src_alu_a = 0;  // source ALU A is A
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_CMP_zp,
                     OP_CMP_abs_x,
                     OP_CMP_abs_y,
                     OP_CMP_abs: begin
@@ -913,6 +936,7 @@ module main_fsm (
                         src_alu_a = 0;  // source ALU A is A
                         alu_op = 1;     // ALU operation is SUB
                     end
+                    OP_CPX_zp,
                     OP_CPX_abs: begin
                         // Compare X register with memory
                         w_c = 1;        // write C flag
@@ -922,6 +946,7 @@ module main_fsm (
                         src_alu_a = 1;  // source ALU A is X
                         alu_op = 1;     // ALU operation is SUB
                     end
+                    OP_CPY_zp,
                     OP_CPY_abs: begin
                         // Compare Y register with memory
                         w_c = 1;        // write C flag
