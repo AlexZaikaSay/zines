@@ -1,0 +1,30 @@
+zero_page    = $00   
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .ZEROPAGE
+        .org zero_page
+        var:  .res    1,0 
+
+        .DATA
+        .org data_segment
+        
+        .CODE
+        .org code_segment
+start:  lda #$15
+        ldx #$1
+        ldy #$0
+        sta var,x
+        ldx #$16
+        stx var,y
+        ldy #$17
+        ldx #$2
+        sty var,x
+        nop
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000
