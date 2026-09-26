@@ -31,7 +31,7 @@ module tb_6502_functional_test;
     end
 
     initial begin
-        for (; i < 120000; i++)
+        for (; i < 130000; i++)
         begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
