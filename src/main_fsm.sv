@@ -36,13 +36,14 @@ module main_fsm (
     output logic [2:0]  src_addr_l,
     output logic [2:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
-    output logic [3:0]  alu_op,
+    output logic [4:0]  alu_op,
     output logic        undef
 );
   typedef enum logic [5:0] {
         Fetch,          // Fetch
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
         LoadCmpImm,     // Load/Compare immediate with A, X, or Y
+        AluAcc,         // Arithmetic/Logic (ASL, LSR, ROL, ROR) with accumulator
         AluImm,         // Arithmetic/Logic (ADC, SBC, AND, ORA, EOR) with immediate 
         FetchLoByte,    // Fetch low byte of absolute address
         FetchHiByte,    // Fetch high byte of absolute address, and add X or Y to the address low
@@ -95,23 +96,28 @@ module main_fsm (
     parameter OP_BRK        = 8'h00;
     parameter OP_PHP        = 8'h08;
     parameter OP_ORA_imm    = 8'h09;
+    parameter OP_ASL        = 8'h0A;
     parameter OP_BPL        = 8'h10;
     parameter OP_CLC        = 8'h18;
     parameter OP_JSR        = 8'h20;
+    parameter OP_BIT_zp     = 8'h24;
     parameter OP_PLP        = 8'h28;
     parameter OP_AND_imm    = 8'h29;
+    parameter OP_ROL        = 8'h2A;
     parameter OP_BIT_abs    = 8'h2C;
     parameter OP_BMI        = 8'h30;
     parameter OP_SEC        = 8'h38;
     parameter OP_RTI        = 8'h40;
     parameter OP_PHA        = 8'h48;
     parameter OP_EOR_imm    = 8'h49;
+    parameter OP_LSR        = 8'h4A;
     parameter OP_JMP_abs    = 8'h4C;
     parameter OP_BVC        = 8'h50;
     parameter OP_CLI        = 8'h58;
     parameter OP_RTS        = 8'h60;
     parameter OP_PLA        = 8'h68;
     parameter OP_ADC_imm    = 8'h69;
+    parameter OP_ROR        = 8'h6A;
     parameter OP_JMP_ind    = 8'h6C;
     parameter OP_BVS        = 8'h70;
     parameter OP_SEI        = 8'h78;
@@ -192,6 +198,13 @@ module main_fsm (
         case (state)
             Fetch: begin
                 case (imm)
+                    OP_ROR,
+                    OP_ROL,
+                    OP_LSR,
+                    OP_ASL: begin
+                        undef = 0;
+                        next_state = AluAcc;
+                    end
                     OP_CLC,
                     OP_SEC,
                     OP_CLI,
@@ -252,6 +265,7 @@ module main_fsm (
                     OP_CMP_ind_y,
                     OP_LDA_ind_y,
                     OP_STA_ind_y,
+                    OP_BIT_zp,
                     OP_CMP_zp,
                     OP_CMP_zp_x,
                     OP_CPX_zp,
@@ -439,6 +453,8 @@ module main_fsm (
                     OP_STX_zp,
                     OP_STY_zp:
                         next_state = Store;
+                    OP_BIT_zp:
+                        next_state = Bit;
                     OP_CMP_zp,
                     OP_CPX_zp,
                     OP_CPY_zp,
@@ -974,6 +990,49 @@ module main_fsm (
                 src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
+                src_alu_b = 0;      // source ALU B is data_in
+            end
+            AluAcc: begin
+                 // Logic for handling arithmetic immediate instruction
+                case (inst)
+                    OP_ASL:
+                        alu_op = 15;// ALU operation is ASL
+                    OP_LSR:
+                        alu_op = 16;// ALU operation is LSR
+                    OP_ROR:
+                        alu_op = 17;// ALU operation is ROR
+                    OP_ROL:
+                        alu_op = 18;// ALU operation is ROL
+                    default:
+                        alu_op = 0;
+                endcase
+                w_c = 1;            // write C flag
+                w_i = 0;
+                w_v = 0;
+                w_d = 0;
+                w_b = 0;
+                w_z = 1;            // write Z flag
+                w_n = 1;            // write N flag
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_low_byte_ind = 0;
+                w_a = 1;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 0;
+                src_high_byte = 0;
+                src_low_byte = 0;
+                src_data_out = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 0;
+                src_addr_l = 0;
+                src_alu_a = 0;      // source ALU A is A
                 src_alu_b = 0;      // source ALU B is data_in
             end
             AluImm: begin

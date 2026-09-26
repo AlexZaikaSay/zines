@@ -88,7 +88,7 @@ module mos6502 #(
     logic [1:0] src_c_in;
     logic [2:0] src_data_out;
 
-    logic [3:0] alu_op;
+    logic [4:0] alu_op;
 
     int_control int_control_inst(
         .irq_addr_h(irq_addr_h),

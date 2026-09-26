@@ -1,6 +1,6 @@
 
 module alu (
-    input  logic [3:0] alu_op,
+    input  logic [4:0] alu_op,
     input  logic [7:0] a_in,
     input  logic [7:0] b_in,
     input  logic  c_in,
@@ -33,6 +33,10 @@ module alu (
     parameter ALU_CORR  = 12;
     parameter ALU_FLAGS = 13;
     parameter ALU_SET_B = 14;
+    parameter ALU_ASL   = 15;
+    parameter ALU_LSR   = 16;
+    parameter ALU_ROR   = 17;
+    parameter ALU_ROL   = 18;
 
 
     always @(*)
@@ -189,6 +193,46 @@ module alu (
                 n = b_in[7];
                 c = b_in[0];
                 z = b_in[1];
+            end
+            ALU_ASL: begin
+                result = {a_in[6:0], 1'b0};
+                i = 0;
+                d = 0;
+                b = 0;
+                v = 0;
+                n = result[7];
+                c = a_in[7];
+                z = (result == 8'b0);
+            end
+            ALU_LSR: begin
+                result = {1'b0, a_in[7:1]};
+                i = 0;
+                d = 0;
+                b = 0;
+                v = 0;
+                n = 0;
+                c = a_in[0];
+                z = (result == 8'b0);
+            end
+            ALU_ROR: begin
+                result = {c_in, a_in[7:1]};
+                i = 0;
+                d = 0;
+                b = 0;
+                v = 0;
+                n = c_in;
+                c = a_in[0];
+                z = (result == 8'b0);
+            end
+            ALU_ROL: begin
+                result = {a_in[6:0], c_in};
+                i = 0;
+                d = 0;
+                b = 0;
+                v = 0;
+                n = result[7];
+                c = a_in[7]; 
+                z = (result == 8'b0);
             end
             default: begin
                 result = 8'bz;
