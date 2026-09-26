@@ -4,17 +4,17 @@ vect_segment = $fffa
 
         .DATA
         .org data_segment
-        var1:  .res    1,12 
-        var2:  .res    1,13 
-        var3:  .res    1,14
+        var1:  .byte    12 
+        var2:  .byte    13 
+        var3:  .byte    14
 
 .repeat 253
         .byte  00
 .endrepeat
 
-        var4:  .res    1,15 
-        var5:  .res    1,16 
-        var6:  .res    1,17
+        var4:  .byte    15 
+        var5:  .byte    16 
+        var6:  .byte    17
 
         .CODE
         .org code_segment

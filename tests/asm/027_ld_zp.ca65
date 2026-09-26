@@ -5,7 +5,7 @@ vect_segment = $fffa
 
         .ZEROPAGE
         .org zero_page
-        var:  .res    1,12 
+        var:  .byte     12 
 
         .DATA
         .org data_segment

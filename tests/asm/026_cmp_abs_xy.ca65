@@ -4,15 +4,15 @@ vect_segment = $fffa
 
         .DATA
         .org data_segment
-        _aa:  .res    1,$aa 
-        _55:  .res    1,$55 
+        _aa:  .byte     $aa 
+        _55:  .byte     $55 
 
 .repeat 254
         .byte  00
 .endrepeat
 
-        _11:  .res    1,$11 
-        _22:  .res    1,$22 
+        _11:  .byte     $11 
+        _22:  .byte     $22 
 
         .CODE
         .org code_segment

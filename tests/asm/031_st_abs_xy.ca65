@@ -4,9 +4,9 @@ vect_segment = $fffa
 
         .DATA
         .org data_segment
-        var1:  .res    1,0
-        var2:  .res    1,0 
-        var3:  .res    1,0  
+        var1:  .byte    0
+        var2:  .byte    0 
+        var3:  .byte    0  
 
 
         .CODE

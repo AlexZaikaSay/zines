@@ -4,8 +4,8 @@ vect_segment = $fffa
 
         .DATA
         .org data_segment
-        _ff:  .res    1,$ff 
-        _00:  .res    1,$00 
+        _ff:  .byte   $ff 
+        _00:  .byte   $00 
 
         .CODE
         .org code_segment
