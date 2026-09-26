@@ -1,0 +1,58 @@
+zero_page    = $00
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .ZEROPAGE
+        .org zero_page
+_aa:    .word   __aa
+_55:    .word   __55
+_ff:    .word   __ff
+_01:    .word   __01
+_02:    .word   __02
+
+        .DATA
+        .org data_segment
+__aa:   .byte   0
+__55:   .byte   0
+__ff:   .byte   0
+__01:   .byte   0
+__02:   .byte   0
+
+___aa:  .byte   $aa
+___55:  .byte   $55
+___ff:  .byte   $ff
+___01:  .byte   $01
+___02:  .byte   $02
+
+        .CODE
+        .org code_segment
+start:  clc
+        lda #$55
+        ldy #$05
+        adc (_55),y
+        lda #$01
+        adc (_ff),y
+        lda #$81
+        sbc (_02),y
+        lda #$02
+        sbc (_01),y
+        lda #$55
+        and (_aa),y
+        lda #$55
+        and (_55),y
+        lda #$55
+        ora (_aa),y
+        lda #$55
+        ora (_55),y
+        lda #$55
+        eor (_aa),y
+        lda #$55
+        eor (_55),y
+        nop
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   $0000
+        .word   $0000

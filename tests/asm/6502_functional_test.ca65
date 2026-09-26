@@ -141,7 +141,7 @@ ram_top = -1
 
 ;disable test decimal mode ADC & SBC, 0=enable, 1=disable,
 ;2=disable including decimal flag in processor status
-disable_decimal = 0
+disable_decimal = 1
 
 ;macros for error & success traps to allow user modification
 ;example:
@@ -5397,7 +5397,7 @@ bin_rti_ret:
         success         ;if you get here everything went well
 ; -------------
 ; S U C C E S S ************************************************
-        jmp start       ;run again
+        jmp *       ;run again
 
     .if disable_decimal < 1
 ; core subroutine of the decimal add/subtract test

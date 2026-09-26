@@ -97,48 +97,76 @@ module main_fsm (
     assign n_flag = flags[7];
 
     parameter OP_BRK        = 8'h00;
+    parameter OP_ORA_ind_x  = 8'h01;
+    parameter OP_ORA_zp     = 8'h05;
     parameter OP_ASL_zp     = 8'h06;
     parameter OP_PHP        = 8'h08;
     parameter OP_ORA_imm    = 8'h09;
     parameter OP_ASL        = 8'h0A;
+    parameter OP_ORA_abs    = 8'h0D;
     parameter OP_ASL_abs    = 8'h0E;
     parameter OP_BPL        = 8'h10;
+    parameter OP_ORA_ind_y  = 8'h11;
+    parameter OP_ORA_zp_x   = 8'h15;
     parameter OP_ASL_zp_x   = 8'h16;
     parameter OP_CLC        = 8'h18;
+    parameter OP_ORA_abs_y  = 8'h19;
+    parameter OP_ORA_abs_x  = 8'h1D;
     parameter OP_ASL_abs_x  = 8'h1E;
     parameter OP_JSR        = 8'h20;
+    parameter OP_AND_ind_x  = 8'h21;
     parameter OP_BIT_zp     = 8'h24;
+    parameter OP_AND_zp     = 8'h25;
     parameter OP_ROL_zp     = 8'h26;
     parameter OP_PLP        = 8'h28;
     parameter OP_AND_imm    = 8'h29;
     parameter OP_ROL        = 8'h2A;
     parameter OP_BIT_abs    = 8'h2C;
+    parameter OP_AND_abs    = 8'h2D;
     parameter OP_ROL_abs    = 8'h2E;
     parameter OP_BMI        = 8'h30;
+    parameter OP_AND_ind_y  = 8'h31;
+    parameter OP_AND_zp_x   = 8'h35;
     parameter OP_ROL_zp_x   = 8'h36;
     parameter OP_SEC        = 8'h38;
+    parameter OP_AND_abs_y  = 8'h39;
+    parameter OP_AND_abs_x  = 8'h3D;
     parameter OP_ROL_abs_x  = 8'h3E;
     parameter OP_RTI        = 8'h40;
+    parameter OP_EOR_ind_x  = 8'h41;
+    parameter OP_EOR_zp     = 8'h45;
     parameter OP_LSR_zp     = 8'h46;
     parameter OP_PHA        = 8'h48;
     parameter OP_EOR_imm    = 8'h49;
     parameter OP_LSR        = 8'h4A;
     parameter OP_JMP_abs    = 8'h4C;
+    parameter OP_EOR_abs    = 8'h4D;
     parameter OP_LSR_abs    = 8'h4E;
     parameter OP_BVC        = 8'h50;
+    parameter OP_EOR_ind_y  = 8'h51;
+    parameter OP_EOR_zp_x   = 8'h55;
     parameter OP_LSR_zp_x   = 8'h56;
     parameter OP_CLI        = 8'h58;
+    parameter OP_EOR_abs_y  = 8'h59;
+    parameter OP_EOR_abs_x  = 8'h5D;
     parameter OP_LSR_abs_x  = 8'h5E;
     parameter OP_RTS        = 8'h60;
+    parameter OP_ADC_ind_x  = 8'h61;
+    parameter OP_ADC_zp     = 8'h65;
     parameter OP_ROR_zp     = 8'h66;
     parameter OP_PLA        = 8'h68;
     parameter OP_ADC_imm    = 8'h69;
     parameter OP_ROR        = 8'h6A;
     parameter OP_JMP_ind    = 8'h6C;
+    parameter OP_ADC_abs    = 8'h6D;
     parameter OP_ROR_abs    = 8'h6E;
     parameter OP_BVS        = 8'h70;
+    parameter OP_ADC_ind_y  = 8'h71;
+    parameter OP_ADC_zp_x   = 8'h75;
     parameter OP_ROR_zp_x   = 8'h76;
     parameter OP_SEI        = 8'h78;
+    parameter OP_ADC_abs_y  = 8'h79;
+    parameter OP_ADC_abs_x  = 8'h7D;
     parameter OP_ROR_abs_x  = 8'h7E;
     parameter OP_STA_ind_x  = 8'h81;
     parameter OP_STY_zp     = 8'h84;
@@ -201,16 +229,23 @@ module main_fsm (
     parameter OP_CMP_abs_x  = 8'hDD;
     parameter OP_DEC_abs_x  = 8'hDE;
     parameter OP_CPX_imm    = 8'hE0;
+    parameter OP_SBC_ind_x  = 8'hE1;
     parameter OP_CPX_zp     = 8'hE4;
+    parameter OP_SBC_zp     = 8'hE5;
     parameter OP_INC_zp     = 8'hE6;
     parameter OP_INX        = 8'hE8;
     parameter OP_SBC_imm    = 8'hE9;
     parameter OP_NOP        = 8'hEA;
     parameter OP_CPX_abs    = 8'hEC;
+    parameter OP_SBC_abs    = 8'hED;
     parameter OP_INC_abs    = 8'hEE;
     parameter OP_BEQ        = 8'hF0;
+    parameter OP_SBC_ind_y  = 8'hF1;
+    parameter OP_SBC_zp_x   = 8'hF5;
     parameter OP_INC_zp_x   = 8'hF6;
     parameter OP_SED        = 8'hF8;
+    parameter OP_SBC_abs_y  = 8'hF9;
+    parameter OP_SBC_abs_x  = 8'hFD;
     parameter OP_INC_abs_x  = 8'hFE;
 
     always_ff @(posedge clk or negedge rst) begin
@@ -286,9 +321,19 @@ module main_fsm (
                         undef = 0;
                         next_state = Transfer;
                     end
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x,
                     OP_STA_ind_x,
+                    OP_ADC_ind_y,
+                    OP_SBC_ind_y,
+                    OP_AND_ind_y,
+                    OP_ORA_ind_y,
+                    OP_EOR_ind_y,
                     OP_CMP_ind_y,
                     OP_LDA_ind_y,
                     OP_STA_ind_y,
@@ -298,6 +343,11 @@ module main_fsm (
                     OP_ROR_zp,
                     OP_DEC_zp,
                     OP_INC_zp,
+                    OP_ADC_zp,
+                    OP_SBC_zp,
+                    OP_AND_zp,
+                    OP_ORA_zp,
+                    OP_EOR_zp,
                     OP_BIT_zp,
                     OP_CMP_zp,
                     OP_CPX_zp,
@@ -316,6 +366,11 @@ module main_fsm (
                     OP_INC_zp_x,
                     OP_ROL_zp_x,
                     OP_ROR_zp_x,
+                    OP_ADC_zp_x,
+                    OP_SBC_zp_x,
+                    OP_AND_zp_x,
+                    OP_ORA_zp_x,
+                    OP_EOR_zp_x,
                     OP_CMP_zp_x,
                     OP_LDA_zp_x,
                     OP_LDY_zp_x,
@@ -326,6 +381,11 @@ module main_fsm (
                     OP_LSR_abs,
                     OP_ROL_abs,
                     OP_ROR_abs,
+                    OP_ADC_abs,
+                    OP_SBC_abs,
+                    OP_AND_abs,
+                    OP_ORA_abs,
+                    OP_EOR_abs,
                     OP_DEC_abs,
                     OP_INC_abs,
                     OP_CMP_abs,
@@ -342,10 +402,20 @@ module main_fsm (
                     OP_LDA_abs_y,
                     OP_LDX_abs_y,
                     OP_STA_abs_y,
+                    OP_ADC_abs_y,
+                    OP_SBC_abs_y,
+                    OP_AND_abs_y,
+                    OP_ORA_abs_y,
+                    OP_EOR_abs_y,
                     OP_ASL_abs_x,
                     OP_LSR_abs_x,
                     OP_ROL_abs_x,
                     OP_ROR_abs_x,
+                    OP_ADC_abs_x,
+                    OP_SBC_abs_x,
+                    OP_AND_abs_x,
+                    OP_ORA_abs_x,
+                    OP_EOR_abs_x,
                     OP_DEC_abs_x,
                     OP_INC_abs_x,
                     OP_CMP_abs_x,
@@ -495,10 +565,20 @@ module main_fsm (
                     OP_DEC_zp,
                     OP_INC_zp:
                         next_state = FetchData;
+                    OP_ADC_ind_y,
+                    OP_SBC_ind_y,
+                    OP_AND_ind_y,
+                    OP_ORA_ind_y,
+                    OP_EOR_ind_y,
                     OP_STA_ind_y,
                     OP_LDA_ind_y,
                     OP_CMP_ind_y:
                         next_state = FetchLoByteInd;
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x,
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x,
@@ -506,6 +586,11 @@ module main_fsm (
                     OP_LSR_zp_x,
                     OP_ROL_zp_x,
                     OP_ROR_zp_x,
+                    OP_ADC_zp_x,
+                    OP_SBC_zp_x,
+                    OP_AND_zp_x,
+                    OP_ORA_zp_x,
+                    OP_EOR_zp_x,
                     OP_DEC_zp_x,
                     OP_INC_zp_x,
                     OP_STA_zp_x,
@@ -526,6 +611,12 @@ module main_fsm (
                         next_state = Store;
                     OP_BIT_zp:
                         next_state = Bit;
+                    OP_ADC_zp,
+                    OP_SBC_zp,
+                    OP_AND_zp,
+                    OP_ORA_zp,
+                    OP_EOR_zp:
+                        next_state = AluAcc;
                     OP_CMP_zp,
                     OP_CPX_zp,
                     OP_CPY_zp,
@@ -540,6 +631,11 @@ module main_fsm (
                     OP_ROR_abs,
                     OP_DEC_abs,
                     OP_INC_abs,
+                    OP_ADC_abs,
+                    OP_SBC_abs,
+                    OP_AND_abs,
+                    OP_ORA_abs,
+                    OP_EOR_abs,
                     OP_CMP_abs,
                     OP_CPX_abs,
                     OP_CPY_abs,
@@ -554,10 +650,20 @@ module main_fsm (
                     OP_LDA_abs_y,
                     OP_LDX_abs_y,
                     OP_STA_abs_y,
+                    OP_ADC_abs_y,
+                    OP_SBC_abs_y,
+                    OP_AND_abs_y,
+                    OP_ORA_abs_y,
+                    OP_EOR_abs_y,
                     OP_ASL_abs_x,
                     OP_LSR_abs_x,
                     OP_ROL_abs_x,
                     OP_ROR_abs_x,
+                    OP_ADC_abs_x,
+                    OP_SBC_abs_x,
+                    OP_AND_abs_x,
+                    OP_ORA_abs_x,
+                    OP_EOR_abs_x,
                     OP_DEC_abs_x,
                     OP_INC_abs_x,
                     OP_CMP_abs_x,
@@ -586,18 +692,32 @@ module main_fsm (
                     OP_ROR_abs_x,
                     OP_DEC_abs_x,
                     OP_INC_abs_x,
-                    OP_STA_abs_y,
-                    OP_STA_abs_x:
+                    OP_STA_abs_x,
+                    OP_STA_abs_y:
                         if (c)
                             next_state = PageInc; // Increment page if page boundary is crossed
                         else
                             next_state = Skip;
+                    OP_ADC_abs_y,
+                    OP_SBC_abs_y,
+                    OP_AND_abs_y,
+                    OP_ORA_abs_y,
+                    OP_EOR_abs_y,
+                    OP_ADC_abs_x,
+                    OP_SBC_abs_x,
+                    OP_AND_abs_x,
+                    OP_ORA_abs_x,
+                    OP_EOR_abs_x:
+                        if (c)
+                            next_state = PageInc; // Increment page if page boundary is crossed
+                        else
+                            next_state = AluAcc;
                     OP_CMP_abs_x,
-                    OP_CMP_abs_y,
                     OP_LDA_abs_x,
+                    OP_LDY_abs_x,
+                    OP_CMP_abs_y,
                     OP_LDA_abs_y,
-                    OP_LDX_abs_y,
-                    OP_LDY_abs_x:
+                    OP_LDX_abs_y:
                         if (c)
                             next_state = PageInc; // Increment page if page boundary is crossed
                         else
@@ -624,6 +744,12 @@ module main_fsm (
                         next_state = Store;
                     OP_BIT_abs:
                         next_state = Bit;
+                    OP_ADC_abs,
+                    OP_SBC_abs,
+                    OP_AND_abs,
+                    OP_ORA_abs,
+                    OP_EOR_abs:
+                        next_state = AluAcc;
                     default:
                         next_state = Fetch;
                 endcase
@@ -631,10 +757,20 @@ module main_fsm (
             FetchLoByteInd: begin
                 undef = 0;
                 case (inst)
+                    OP_ADC_ind_y,
+                    OP_SBC_ind_y,
+                    OP_AND_ind_y,
+                    OP_ORA_ind_y,
+                    OP_EOR_ind_y,
                     OP_STA_ind_y,
                     OP_CMP_ind_y,
-                    OP_LDA_ind_y: 
+                    OP_LDA_ind_y:
                         next_state = FetchHiByteIndY;
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x,
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x: 
@@ -649,6 +785,12 @@ module main_fsm (
                     next_state = PageInc; // Increment page if page boundary is crossed
                 else
                     case (inst)
+                        OP_ADC_ind_y,
+                        OP_SBC_ind_y,
+                        OP_AND_ind_y,
+                        OP_ORA_ind_y,
+                        OP_EOR_ind_y:
+                            next_state = AluAcc;
                         OP_STA_ind_y:
                             next_state = Skip;
                         OP_CMP_ind_y,
@@ -661,6 +803,12 @@ module main_fsm (
             FetchHiByteInd: begin
                 undef = 0;
                 case (inst)
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x: 
+                        next_state = AluAcc;
                     OP_STA_ind_x:
                         next_state = Store;
                     OP_CMP_ind_x,
@@ -673,6 +821,12 @@ module main_fsm (
             AddXY: begin
                 undef = 0;
                 case (inst)
+                    OP_ADC_zp_x,
+                    OP_SBC_zp_x,
+                    OP_AND_zp_x,
+                    OP_ORA_zp_x,
+                    OP_EOR_zp_x:
+                        next_state = AluAcc;
                     OP_ASL_zp_x,
                     OP_LSR_zp_x,
                     OP_ROL_zp_x,
@@ -680,6 +834,11 @@ module main_fsm (
                     OP_DEC_zp_x,
                     OP_INC_zp_x:
                         next_state = FetchData;
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x,
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x:
@@ -700,6 +859,22 @@ module main_fsm (
             PageInc: begin
                 undef = 0;
                 case (inst)
+                    OP_ADC_ind_y,
+                    OP_SBC_ind_y,
+                    OP_AND_ind_y,
+                    OP_ORA_ind_y,
+                    OP_EOR_ind_y,
+                    OP_ADC_abs_y,
+                    OP_SBC_abs_y,
+                    OP_AND_abs_y,
+                    OP_ORA_abs_y,
+                    OP_EOR_abs_y,
+                    OP_ADC_abs_x,
+                    OP_SBC_abs_x,
+                    OP_AND_abs_x,
+                    OP_ORA_abs_x,
+                    OP_EOR_abs_x: 
+                        next_state = AluAcc;
                     OP_ASL_abs_x,
                     OP_LSR_abs_x,
                     OP_ROL_abs_x,
@@ -712,12 +887,12 @@ module main_fsm (
                     OP_STA_abs_x:
                         next_state = Store;
                     OP_CMP_ind_y,
-                    OP_CMP_abs_x,
-                    OP_CMP_abs_y,
                     OP_LDA_ind_y,
-                    OP_LDA_abs_x,
+                    OP_CMP_abs_y,
                     OP_LDA_abs_y,
                     OP_LDX_abs_y,
+                    OP_CMP_abs_x,
+                    OP_LDA_abs_x,
                     OP_LDY_abs_x:
                         next_state = LoadCmp;
                     default:
@@ -1113,20 +1288,88 @@ module main_fsm (
             AluAcc: begin
                  // Logic for handling arithmetic immediate instruction
                 case (inst)
-                    OP_ASL:
-                        alu_op = 15;// ALU operation is ASL
-                    OP_LSR:
-                        alu_op = 16;// ALU operation is LSR
-                    OP_ROR:
-                        alu_op = 17;// ALU operation is ROR
-                    OP_ROL:
-                        alu_op = 18;// ALU operation is ROL
-                    default:
+                    OP_ADC_ind_y,
+                    OP_ADC_ind_x,
+                    OP_ADC_abs_y,
+                    OP_ADC_abs_x,
+                    OP_ADC_zp_x,
+                    OP_ADC_abs,
+                    OP_ADC_zp: begin
+                        w_c = 1;        // write C flag
+                        w_v = 1;        // write V flag
+                        alu_op = 0;     // ALU operation is ADD
+                    end
+                    OP_SBC_ind_y,
+                    OP_SBC_ind_x,
+                    OP_SBC_abs_y,
+                    OP_SBC_abs_x,
+                    OP_SBC_zp_x,
+                    OP_SBC_abs,
+                    OP_SBC_zp: begin
+                        w_c = 1;        // write C flag
+                        w_v = 1;        // write V flag
+                        alu_op = 1;     // ALU operation is SUB
+                    end
+                    OP_AND_ind_y,
+                    OP_AND_ind_x,
+                    OP_AND_abs_y,
+                    OP_AND_abs_x,
+                    OP_AND_zp_x,
+                    OP_AND_abs,
+                    OP_AND_zp: begin
+                        w_c = 0;
+                        w_v = 0;
+                        alu_op = 4;     // ALU operation is AND
+                    end
+                    OP_ORA_ind_y,
+                    OP_ORA_ind_x,
+                    OP_ORA_abs_y,
+                    OP_ORA_abs_x,
+                    OP_ORA_zp_x,
+                    OP_ORA_abs,
+                    OP_ORA_zp: begin
+                        w_c = 0;
+                        w_v = 0;
+                        alu_op = 5;     // ALU operation is OR
+                    end
+                    OP_EOR_ind_y,
+                    OP_EOR_ind_x,
+                    OP_EOR_abs_y,
+                    OP_EOR_abs_x,
+                    OP_EOR_zp_x,
+                    OP_EOR_abs,
+                    OP_EOR_zp: begin
+                        w_c = 0;
+                        w_v = 0;
+                        alu_op = 6;     // ALU operation is EOR
+                    end
+                    OP_ASL: begin
+                        w_c = 1;        // write C flag
+                        w_v = 0;
+                        alu_op = 15;    // ALU operation is ASL
+                    end
+                    OP_LSR: begin
+                        w_c = 1;        // write C flag
+                        w_v = 0;
+                        alu_op = 16;    // ALU operation is LSR
+                    end
+                    OP_ROR: begin
+                        w_c = 1;        // write C flag
+                        w_v = 0;
+                        alu_op = 17;    // ALU operation is ROR
+                    end
+                    OP_ROL: begin
+                        w_c = 1;        // write C flag
+                        w_v = 0;
+                        alu_op = 18;    // ALU operation is ROL
+                    end
+                    default: begin
+                        w_c = 0;
+                        w_v = 0;
                         alu_op = 0;
+                    end
                 endcase
-                w_c = 1;            // write C flag
                 w_i = 0;
-                w_v = 0;
                 w_d = 0;
                 w_b = 0;
                 w_z = 1;            // write Z flag
@@ -1142,14 +1385,14 @@ module main_fsm (
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
-                src_c_in = 0;
-                src_high_byte = 0;
-                src_low_byte = 0;
+                src_c_in = 0;       // carry from flags for ALU ADC/SBC operations
+                src_high_byte = 0; 
+                src_low_byte = 0;   
                 src_data_out = 0;
                 src_next_pc_h = 0;
                 src_next_pc_l = 0;
-                src_addr_h = 0;
-                src_addr_l = 0;
+                src_addr_h = 1;     // source address is high_byte
+                src_addr_l = 1;     // source address is low_byte
                 src_alu_a = 0;      // source ALU A is A
                 src_alu_b = 0;      // source ALU B is data_in
             end
@@ -1177,7 +1420,7 @@ module main_fsm (
                     OP_ASL_zp_x,
                     OP_ASL_abs_x: begin
                         w_c = 1;        // write C flag
-                        src_c_in = 0;
+                        src_c_in = 0;   // carry from flags
                         alu_op = 15;    // ALU operation is ASL
                     end
                     OP_LSR_abs,
@@ -1185,7 +1428,7 @@ module main_fsm (
                     OP_LSR_zp_x,
                     OP_LSR_abs_x: begin
                         w_c = 1;        // write C flag
-                        src_c_in = 0;
+                        src_c_in = 0;   // carry from flags
                         alu_op = 16;    // ALU operation is LSR
                     end
                     OP_ROR_abs,
@@ -1193,7 +1436,7 @@ module main_fsm (
                     OP_ROR_zp_x,
                     OP_ROR_abs_x: begin
                         w_c = 1;        // write C flag
-                        src_c_in = 0;
+                        src_c_in = 0;   // carry from flags
                         alu_op = 17;    // ALU operation is ROR
                     end
                     OP_ROL_abs,
@@ -1201,7 +1444,7 @@ module main_fsm (
                     OP_ROL_zp_x,
                     OP_ROL_abs_x: begin
                         w_c = 1;        // write C flag
-                        src_c_in = 0;
+                        src_c_in = 0;   // carry from flags
                         alu_op = 18;    // ALU operation is ROL
                     end
                     default: begin
@@ -1448,6 +1691,11 @@ module main_fsm (
                     OP_LSR_abs_x,
                     OP_ROL_abs_x,
                     OP_ROR_abs_x,
+                    OP_ADC_abs_x,
+                    OP_SBC_abs_x,
+                    OP_AND_abs_x,
+                    OP_ORA_abs_x,
+                    OP_EOR_abs_x,
                     OP_DEC_abs_x,
                     OP_INC_abs_x,
                     OP_STA_abs_x,
@@ -1458,6 +1706,11 @@ module main_fsm (
                         w_low_byte = 1; // write low byte of absolute address
                         src_alu_a = 1;  // source ALU A is X register
                     end
+                    OP_ADC_abs_y,
+                    OP_SBC_abs_y,
+                    OP_AND_abs_y,
+                    OP_ORA_abs_y,
+                    OP_EOR_abs_y,
                     OP_STA_abs_y,
                     OP_CMP_abs_y,
                     OP_LDA_abs_y,
@@ -1577,7 +1830,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write updated low byte
-                w_temp = 1; // write low byte of indirect address from mem
+                w_temp = 1;         // write low byte of indirect address from mem
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1667,8 +1920,18 @@ module main_fsm (
                     OP_LSR_zp_x,
                     OP_ROL_zp_x,
                     OP_ROR_zp_x,
+                    OP_ADC_zp_x,
+                    OP_SBC_zp_x,
+                    OP_AND_zp_x,
+                    OP_ORA_zp_x,
+                    OP_EOR_zp_x,
                     OP_DEC_zp_x,
                     OP_INC_zp_x,
+                    OP_ADC_ind_x,
+                    OP_SBC_ind_x,
+                    OP_AND_ind_x,
+                    OP_ORA_ind_x,
+                    OP_EOR_ind_x,
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x,
