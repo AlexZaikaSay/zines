@@ -47,7 +47,8 @@ module main_fsm (
         FetchLoByte,    // Fetch low byte of absolute address
         FetchHiByte,    // Fetch high byte of absolute address, and add X or Y to the address low
         FetchLoByteInd, // Fetch low byte of indirect address
-        FetchHiByteInd, // Fetch high byte of indirect address, and add Y to the address low
+        FetchHiByteInd, // Fetch high byte of indirect address
+        FetchHiByteIndY,// Fetch high byte of indirect address, and add Y to the address low
         AddXY,          // Add X or Y to the address low
         Store,          // Store value of A to memory
         LoadCmp,        // Load/Compare memory with A, X, or Y
@@ -114,6 +115,7 @@ module main_fsm (
     parameter OP_JMP_ind    = 8'h6C;
     parameter OP_BVS        = 8'h70;
     parameter OP_SEI        = 8'h78;
+    parameter OP_STA_ind_x  = 8'h81;
     parameter OP_STY_zp     = 8'h84;
     parameter OP_STA_zp     = 8'h85;
     parameter OP_STX_zp     = 8'h86;
@@ -123,6 +125,7 @@ module main_fsm (
     parameter OP_STA_abs    = 8'h8D;
     parameter OP_STX_abs    = 8'h8E;
     parameter OP_BCC        = 8'h90;
+    parameter OP_STA_ind_y  = 8'h91;
     parameter OP_STY_zp_x   = 8'h94;
     parameter OP_STA_zp_x   = 8'h95;
     parameter OP_STX_zp_y   = 8'h96;
@@ -131,6 +134,7 @@ module main_fsm (
     parameter OP_STA_abs_x  = 8'h9D;
     parameter OP_TXS        = 8'h9A;
     parameter OP_LDY_imm    = 8'hA0;
+    parameter OP_LDA_ind_x  = 8'hA1;
     parameter OP_LDX_imm    = 8'hA2;
     parameter OP_LDY_zp     = 8'hA4;
     parameter OP_LDA_zp     = 8'hA5;
@@ -153,6 +157,7 @@ module main_fsm (
     parameter OP_LDA_abs_x  = 8'hBD;
     parameter OP_LDX_abs_y  = 8'hBE;
     parameter OP_CPY_imm    = 8'hC0;
+    parameter OP_CMP_ind_x  = 8'hC1;
     parameter OP_CPY_zp     = 8'hC4;
     parameter OP_CMP_zp     = 8'hC5;
     parameter OP_INY        = 8'hC8;
@@ -241,8 +246,12 @@ module main_fsm (
                         undef = 0;
                         next_state = Transfer;
                     end
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x,
+                    OP_STA_ind_x,
                     OP_CMP_ind_y,
                     OP_LDA_ind_y,
+                    OP_STA_ind_y,
                     OP_CMP_zp,
                     OP_CMP_zp_x,
                     OP_CPX_zp,
@@ -320,6 +329,7 @@ module main_fsm (
             Skip: begin
                 undef = 0;
                 case (inst)
+                    OP_STA_ind_y,
                     OP_STA_abs_x,
                     OP_STA_abs_y:
                         next_state = Store;
@@ -406,9 +416,13 @@ module main_fsm (
             FetchLoByte: begin
                 undef = 0;
                 case (inst)
+                    OP_STA_ind_y,
                     OP_LDA_ind_y,
                     OP_CMP_ind_y:
                         next_state = FetchLoByteInd;
+                    OP_STA_ind_x,
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x,
                     OP_STA_zp_x,
                     OP_STX_zp_y,
                     OP_STY_zp_x,
@@ -496,18 +510,53 @@ module main_fsm (
             end
             FetchLoByteInd: begin
                 undef = 0;
-                next_state = FetchHiByteInd;
+                case (inst)
+                    OP_STA_ind_y,
+                    OP_CMP_ind_y,
+                    OP_LDA_ind_y: 
+                        next_state = FetchHiByteIndY;
+                    OP_STA_ind_x,
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x: 
+                        next_state = FetchHiByteInd;
+                    default:
+                        next_state = Fetch;
+                endcase
             end
-            FetchHiByteInd: begin
+            FetchHiByteIndY: begin
                 undef = 0;
                 if (c)
                     next_state = PageInc; // Increment page if page boundary is crossed
                 else
-                    next_state = LoadCmp;
+                    case (inst)
+                        OP_STA_ind_y:
+                            next_state = Skip;
+                        OP_CMP_ind_y,
+                        OP_LDA_ind_y: 
+                            next_state = LoadCmp;
+                        default:
+                            next_state = Fetch;
+                    endcase
+            end
+            FetchHiByteInd: begin
+                undef = 0;
+                case (inst)
+                    OP_STA_ind_x:
+                        next_state = Store;
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x: 
+                        next_state = LoadCmp;
+                    default:
+                        next_state = Fetch;
+                endcase
             end
             AddXY: begin
                 undef = 0;
                 case (inst)
+                    OP_STA_ind_x,
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x:
+                        next_state = FetchLoByteInd;
                     OP_STA_zp_x,
                     OP_STY_zp_x,
                     OP_STX_zp_y:
@@ -524,6 +573,7 @@ module main_fsm (
             PageInc: begin
                 undef = 0;
                 case (inst)
+                    OP_STA_ind_y,
                     OP_STA_abs_y,
                     OP_STA_abs_x:
                         next_state = Store;
@@ -990,6 +1040,7 @@ module main_fsm (
             LoadCmp: begin
                 // Logic for handling load from memory
                 case (inst)
+                    OP_LDA_ind_x,
                     OP_LDA_ind_y,
                     OP_LDA_zp,
                     OP_LDA_zp_x,
@@ -1028,6 +1079,7 @@ module main_fsm (
                         src_alu_a = 0;  // source ALU A is A
                         alu_op = 3;     // ALU operation is pass B
                     end
+                    OP_CMP_ind_x,
                     OP_CMP_ind_y,
                     OP_CMP_zp,
                     OP_CMP_zp_x,
@@ -1214,6 +1266,38 @@ module main_fsm (
             end
             FetchHiByteInd: begin
                 // Logic for handling high byte of indirect address
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_b = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 1;    // write high byte of indirect address
+                w_low_byte = 1;     // write updated low byte
+                w_low_byte_ind = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 0;
+                src_high_byte = 0;  // source high byte is data_in
+                src_low_byte = 1;   // source low byte is alu_result
+                src_data_out = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 1;     // source addr is high byte
+                src_addr_l = 1;     // source addr is low byte
+                src_alu_a = 0;
+                src_alu_b = 4;      // source ALU B is low byte indirect
+                alu_op = 3;         // ALU operation is pass B
+            end
+            FetchHiByteIndY: begin
+                // Logic for handling high byte of indirect address
                 // also addition Y to low byte of absolute address
                 w_c = 0;
                 w_i = 0;
@@ -1248,6 +1332,9 @@ module main_fsm (
             AddXY: begin
                 // Addition X or Y to low byte of absolute address
                 case (inst)
+                    OP_STA_ind_x,
+                    OP_CMP_ind_x,
+                    OP_LDA_ind_x,
                     OP_STA_zp_x,
                     OP_STY_zp_x,
                     OP_CMP_zp_x,
@@ -1393,6 +1480,7 @@ module main_fsm (
             Store: begin
                 // Logic for handling store instruction
                 case (inst)
+                    OP_STA_ind_x,
                     OP_STA_zp_x,
                     OP_STA_zp,
                     OP_STA_abs: begin
