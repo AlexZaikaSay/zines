@@ -1,5 +1,5 @@
 
-module mux8_1
+module mux9_1
 (
     input  logic [7:0] a,
     input  logic [7:0] b,
@@ -9,7 +9,8 @@ module mux8_1
     input  logic [7:0] f,
     input  logic [7:0] g,
     input  logic [7:0] h,
-    input  logic [2:0] sel,
+    input  logic [7:0] i,
+    input  logic [3:0] sel,
     output logic [7:0] y
 );
 
@@ -21,6 +22,7 @@ module mux8_1
                (sel == 5) ? f :
                (sel == 6) ? g :
                (sel == 7) ? h :
+               (sel == 8) ? i :
                8'h00;
 
 endmodule

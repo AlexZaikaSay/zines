@@ -20,7 +20,7 @@ module main_fsm (
     output logic        w_inst,
     output logic        w_high_byte,
     output logic        w_low_byte,
-    output logic        w_low_byte_ind,
+    output logic        w_temp,
     output logic        w_a,
     output logic        w_x,
     output logic        w_y,
@@ -34,15 +34,18 @@ module main_fsm (
     output logic [1:0]  src_next_pc_l,
     output logic [2:0]  src_addr_h,
     output logic [2:0]  src_addr_l,
-    output logic [2:0]  src_alu_a,
+    output logic [3:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
     output logic [4:0]  alu_op,
     output logic        undef
 );
   typedef enum logic [5:0] {
         Fetch,          // Fetch
+        FetchData,      // Fetch data from memory to tmp register
+        WriteFakeData,  // Write fake data to memory
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
         LoadCmpImm,     // Load/Compare immediate with A, X, or Y
+        AluTemp,        // Arithmetic/Logic (ASL, LSR, ROL, ROR) with temp
         AluAcc,         // Arithmetic/Logic (ASL, LSR, ROL, ROR) with accumulator
         AluImm,         // Arithmetic/Logic (ADC, SBC, AND, ORA, EOR) with immediate 
         FetchLoByte,    // Fetch low byte of absolute address
@@ -94,33 +97,49 @@ module main_fsm (
     assign n_flag = flags[7];
 
     parameter OP_BRK        = 8'h00;
+    parameter OP_ASL_zp     = 8'h06;
     parameter OP_PHP        = 8'h08;
     parameter OP_ORA_imm    = 8'h09;
     parameter OP_ASL        = 8'h0A;
+    parameter OP_ASL_abs    = 8'h0E;
     parameter OP_BPL        = 8'h10;
+    parameter OP_ASL_zp_x   = 8'h16;
     parameter OP_CLC        = 8'h18;
+    parameter OP_ASL_abs_x  = 8'h1E;
     parameter OP_JSR        = 8'h20;
     parameter OP_BIT_zp     = 8'h24;
+    parameter OP_ROL_zp     = 8'h26;
     parameter OP_PLP        = 8'h28;
     parameter OP_AND_imm    = 8'h29;
     parameter OP_ROL        = 8'h2A;
     parameter OP_BIT_abs    = 8'h2C;
+    parameter OP_ROL_abs    = 8'h2E;
     parameter OP_BMI        = 8'h30;
+    parameter OP_ROL_zp_x   = 8'h36;
     parameter OP_SEC        = 8'h38;
+    parameter OP_ROL_abs_x  = 8'h3E;
     parameter OP_RTI        = 8'h40;
+    parameter OP_LSR_zp     = 8'h46;
     parameter OP_PHA        = 8'h48;
     parameter OP_EOR_imm    = 8'h49;
     parameter OP_LSR        = 8'h4A;
     parameter OP_JMP_abs    = 8'h4C;
+    parameter OP_LSR_abs    = 8'h4E;
     parameter OP_BVC        = 8'h50;
+    parameter OP_LSR_zp_x   = 8'h56;
     parameter OP_CLI        = 8'h58;
+    parameter OP_LSR_abs_x  = 8'h5E;
     parameter OP_RTS        = 8'h60;
+    parameter OP_ROR_zp     = 8'h66;
     parameter OP_PLA        = 8'h68;
     parameter OP_ADC_imm    = 8'h69;
     parameter OP_ROR        = 8'h6A;
     parameter OP_JMP_ind    = 8'h6C;
+    parameter OP_ROR_abs    = 8'h6E;
     parameter OP_BVS        = 8'h70;
+    parameter OP_ROR_zp_x   = 8'h76;
     parameter OP_SEI        = 8'h78;
+    parameter OP_ROR_abs_x  = 8'h7E;
     parameter OP_STA_ind_x  = 8'h81;
     parameter OP_STY_zp     = 8'h84;
     parameter OP_STA_zp     = 8'h85;
@@ -265,24 +284,36 @@ module main_fsm (
                     OP_CMP_ind_y,
                     OP_LDA_ind_y,
                     OP_STA_ind_y,
+                    OP_ASL_zp,
+                    OP_LSR_zp,
+                    OP_ROL_zp,
+                    OP_ROR_zp,
                     OP_BIT_zp,
                     OP_CMP_zp,
-                    OP_CMP_zp_x,
                     OP_CPX_zp,
                     OP_CPY_zp,
                     OP_LDA_zp,
-                    OP_LDA_zp_x,
                     OP_LDX_zp,
-                    OP_LDX_zp_y,
                     OP_LDY_zp,
-                    OP_LDY_zp_x,
                     OP_STA_zp,
-                    OP_STA_zp_x,
                     OP_STX_zp,
-                    OP_STX_zp_y,
                     OP_STY_zp,
+                    OP_STX_zp_y,
+                    OP_LDX_zp_y,
+                    OP_ASL_zp_x,
+                    OP_LSR_zp_x,
+                    OP_ROL_zp_x,
+                    OP_ROR_zp_x,
+                    OP_CMP_zp_x,
+                    OP_LDA_zp_x,
+                    OP_LDY_zp_x,
+                    OP_STA_zp_x,
                     OP_STY_zp_x,
                     OP_JSR,
+                    OP_ASL_abs,
+                    OP_LSR_abs,
+                    OP_ROL_abs,
+                    OP_ROR_abs,
                     OP_CMP_abs,
                     OP_CPX_abs,
                     OP_CPY_abs,
@@ -290,16 +321,20 @@ module main_fsm (
                     OP_LDA_abs,
                     OP_LDX_abs,
                     OP_LDY_abs,
-                    OP_CMP_abs_x,
-                    OP_CMP_abs_y,
-                    OP_LDA_abs_x,
-                    OP_LDA_abs_y,
-                    OP_LDX_abs_y,
-                    OP_LDY_abs_x,
                     OP_STA_abs,
                     OP_STX_abs,
                     OP_STY_abs,
+                    OP_CMP_abs_y,
+                    OP_LDA_abs_y,
+                    OP_LDX_abs_y,
                     OP_STA_abs_y,
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x,
+                    OP_CMP_abs_x,
+                    OP_LDA_abs_x,
+                    OP_LDY_abs_x,
                     OP_STA_abs_x,
                     OP_JMP_ind,
                     OP_JMP_abs: begin
@@ -343,6 +378,11 @@ module main_fsm (
             Skip: begin
                 undef = 0;
                 case (inst)
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x:
+                        next_state = FetchData;
                     OP_STA_ind_y,
                     OP_STA_abs_x,
                     OP_STA_abs_y:
@@ -430,6 +470,11 @@ module main_fsm (
             FetchLoByte: begin
                 undef = 0;
                 case (inst)
+                    OP_ASL_zp,
+                    OP_LSR_zp,
+                    OP_ROL_zp,
+                    OP_ROR_zp:
+                        next_state = FetchData;
                     OP_STA_ind_y,
                     OP_LDA_ind_y,
                     OP_CMP_ind_y:
@@ -437,12 +482,16 @@ module main_fsm (
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x,
+                    OP_ASL_zp_x,
+                    OP_LSR_zp_x,
+                    OP_ROL_zp_x,
+                    OP_ROR_zp_x,
                     OP_STA_zp_x,
-                    OP_STX_zp_y,
                     OP_STY_zp_x,
                     OP_CMP_zp_x,
                     OP_LDA_zp_x,
                     OP_LDY_zp_x,
+                    OP_STX_zp_y,
                     OP_LDX_zp_y: 
                         next_state = AddXY;
                     OP_JSR: 
@@ -463,6 +512,10 @@ module main_fsm (
                     OP_LDY_zp: 
                         next_state = LoadCmp;
                     OP_JMP_ind, 
+                    OP_ASL_abs,
+                    OP_LSR_abs,
+                    OP_ROL_abs,
+                    OP_ROR_abs,
                     OP_CMP_abs,
                     OP_CPX_abs,
                     OP_CPY_abs,
@@ -470,25 +523,41 @@ module main_fsm (
                     OP_LDA_abs,
                     OP_LDX_abs,
                     OP_LDY_abs,
-                    OP_CMP_abs_x,
-                    OP_CMP_abs_y,
-                    OP_LDA_abs_x,
-                    OP_LDA_abs_y,
-                    OP_LDX_abs_y,
-                    OP_LDY_abs_x,
                     OP_STA_abs,
                     OP_STX_abs,
                     OP_STY_abs,
+                    OP_CMP_abs_y,
+                    OP_LDA_abs_y,
+                    OP_LDX_abs_y,
                     OP_STA_abs_y,
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x,
+                    OP_CMP_abs_x,
+                    OP_LDA_abs_x,
+                    OP_LDY_abs_x,
                     OP_STA_abs_x:
                         next_state = FetchHiByte;
                     default:
                         next_state = Fetch;
                 endcase
             end
+            FetchData: begin
+                undef = 0;
+                next_state = WriteFakeData;
+            end
+            WriteFakeData: begin
+                undef = 0;
+                next_state = AluTemp;
+            end
             FetchHiByte: begin
                 undef = 0;
                 case (inst)
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x,
                     OP_STA_abs_y,
                     OP_STA_abs_x:
                         if (c)
@@ -505,6 +574,11 @@ module main_fsm (
                             next_state = PageInc; // Increment page if page boundary is crossed
                         else
                             next_state = LoadCmp;
+                    OP_ASL_abs,
+                    OP_LSR_abs,
+                    OP_ROL_abs,
+                    OP_ROR_abs:
+                        next_state = FetchData;
                     OP_CMP_abs,
                     OP_CPX_abs,
                     OP_CPY_abs,
@@ -569,6 +643,11 @@ module main_fsm (
             AddXY: begin
                 undef = 0;
                 case (inst)
+                    OP_ASL_zp_x,
+                    OP_LSR_zp_x,
+                    OP_ROL_zp_x,
+                    OP_ROR_zp_x:
+                        next_state = FetchData;
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x:
@@ -589,6 +668,11 @@ module main_fsm (
             PageInc: begin
                 undef = 0;
                 case (inst)
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x:
+                        next_state = FetchData;
                     OP_STA_ind_y,
                     OP_STA_abs_y,
                     OP_STA_abs_x:
@@ -720,7 +804,7 @@ module main_fsm (
                 w_inst = 1;         // write instruction
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -794,7 +878,7 @@ module main_fsm (
                 w_inst = 1;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_s = 0;
                 w_mem = 0;
@@ -890,7 +974,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -979,7 +1063,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
@@ -1018,7 +1102,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1034,6 +1118,61 @@ module main_fsm (
                 src_addr_l = 0;
                 src_alu_a = 0;      // source ALU A is A
                 src_alu_b = 0;      // source ALU B is data_in
+            end
+            AluTemp: begin
+                 // Logic for handling arithmetic with temp
+                case (inst)
+                    OP_ASL_abs,
+                    OP_ASL_zp,
+                    OP_ASL_zp_x,
+                    OP_ASL_abs_x:
+                        alu_op = 15;// ALU operation is ASL
+                    OP_LSR_abs,
+                    OP_LSR_zp,
+                    OP_LSR_zp_x,
+                    OP_LSR_abs_x:
+                        alu_op = 16;// ALU operation is LSR
+                    OP_ROR_abs,
+                    OP_ROR_zp,
+                    OP_ROR_zp_x,
+                    OP_ROR_abs_x:
+                        alu_op = 17;// ALU operation is ROR
+                    OP_ROL_abs,
+                    OP_ROL_zp,
+                    OP_ROL_zp_x,
+                    OP_ROL_abs_x:
+                        alu_op = 18;// ALU operation is ROL
+                    default:
+                        alu_op = 0;
+                endcase
+                w_c = 1;            // write C flag
+                w_i = 0;
+                w_v = 0;
+                w_d = 0;
+                w_b = 0;
+                w_z = 1;            // write Z flag
+                w_n = 1;            // write N flag
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_temp = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 1;
+                src_c_in = 0;
+                src_high_byte = 0;
+                src_low_byte = 0;
+                src_data_out = 0;   // source for data_out is ALU result
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 1;     // source addr is high byte of absolute address
+                src_addr_l = 1;     // source addr is low byte of absolute address
+                src_alu_a = 8;      // source ALU A is temp
+                src_alu_b = 0;
             end
             AluImm: begin
                 // Logic for handling arithmetic immediate instruction
@@ -1079,7 +1218,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1193,7 +1332,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
@@ -1220,7 +1359,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 1;    // write high byte of absolute address
                 w_low_byte = 1;     // write low byte of absolute address
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1242,6 +1381,10 @@ module main_fsm (
                 // Logic for handling high byte of absolute
                 // also addition X or Y to low byte of absolute address
                 case (inst)
+                    OP_ASL_abs_x,
+                    OP_LSR_abs_x,
+                    OP_ROL_abs_x,
+                    OP_ROR_abs_x,
                     OP_STA_abs_x,
                     OP_CMP_abs_x,
                     OP_LDA_abs_x,
@@ -1274,7 +1417,7 @@ module main_fsm (
                 w_next_pc_l = 1;    // write next PC low byte
                 w_inst = 0;
                 w_high_byte = 1;    // write high byte of absolute address
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1291,6 +1434,70 @@ module main_fsm (
                 src_alu_b = 1;      // source ALU B is low byte of absolute address
                 alu_op = 0;         // ALU operation is ADD 
             end
+            FetchData: begin
+                // Logic for handling fetch data
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_b = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_temp = 1; // write low byte of indirect address from mem
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 0;
+                src_c_in = 0;
+                src_high_byte = 0;
+                src_low_byte = 0;
+                src_data_out = 0;
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 1;     // source addr is high byte
+                src_addr_l = 1;     // source addr is low byte
+                src_alu_a = 0;
+                src_alu_b = 0;
+                alu_op = 0;
+            end
+            WriteFakeData: begin
+                // Logic for handling fetch data
+                w_c = 0;
+                w_i = 0;
+                w_v = 0;
+                w_b = 0;
+                w_d = 0;
+                w_z = 0;
+                w_n = 0;
+                w_next_pc_h = 0;
+                w_next_pc_l = 0;
+                w_inst = 0;
+                w_high_byte = 0;
+                w_low_byte = 0;
+                w_temp = 0;
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 0;
+                w_mem = 1;
+                src_c_in = 0;
+                src_high_byte = 0;
+                src_low_byte = 0;
+                src_data_out = 0;   // source data out is ALU result
+                src_next_pc_h = 0;
+                src_next_pc_l = 0;
+                src_addr_h = 1;     // source addr is high byte
+                src_addr_l = 1;     // source addr is low byte
+                src_alu_a = 8;      // source ALU A is temp
+                src_alu_b = 0;
+                alu_op = 2;         // ALU operation is pass A
+            end
             FetchLoByteInd: begin
                 // Logic for handling low byte of indirect address
                 w_c = 0;
@@ -1305,7 +1512,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write updated low byte
-                w_low_byte_ind = 1; // write low byte of indirect address from mem
+                w_temp = 1; // write low byte of indirect address from mem
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1337,7 +1544,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 1;    // write high byte of indirect address
                 w_low_byte = 1;     // write updated low byte
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1352,7 +1559,7 @@ module main_fsm (
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 0;
-                src_alu_b = 4;      // source ALU B is low byte indirect
+                src_alu_b = 4;      // source ALU B is temp
                 alu_op = 3;         // ALU operation is pass B
             end
             FetchHiByteIndY: begin
@@ -1370,7 +1577,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 1;    // write high byte of indirect address
                 w_low_byte = 1;     // write updated low byte
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1385,12 +1592,16 @@ module main_fsm (
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 2;      // source ALU A is Y
-                src_alu_b = 4;      // source ALU B is low byte indirect
+                src_alu_b = 4;      // source ALU B is temp
                 alu_op = 0;         // ALU operation is ADD
             end
             AddXY: begin
                 // Addition X or Y to low byte of absolute address
                 case (inst)
+                    OP_ASL_zp_x,
+                    OP_LSR_zp_x,
+                    OP_ROL_zp_x,
+                    OP_ROR_zp_x,
                     OP_STA_ind_x,
                     OP_CMP_ind_x,
                     OP_LDA_ind_x,
@@ -1423,7 +1634,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of absolute address
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1454,7 +1665,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of vector
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1486,7 +1697,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1518,7 +1729,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 1;    // write high byte of ALU result
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1574,7 +1785,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1605,7 +1816,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1637,7 +1848,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1669,7 +1880,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1701,7 +1912,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write updated low byte
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1733,7 +1944,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1765,7 +1976,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1796,7 +2007,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte - branch offset
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1828,7 +2039,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1860,7 +2071,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1892,7 +2103,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1967,7 +2178,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 0;
@@ -1995,7 +2206,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2027,7 +2238,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2059,7 +2270,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2100,7 +2311,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2132,7 +2343,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2187,7 +2398,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_x = 0;
                 w_y = 0;
                 w_s = 0;
@@ -2217,7 +2428,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of PC
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2249,7 +2460,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2281,7 +2492,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2313,7 +2524,7 @@ module main_fsm (
                 w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_low_byte_ind = 0;
+                w_temp = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;

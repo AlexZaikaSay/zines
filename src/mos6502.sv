@@ -5,7 +5,7 @@
 `include "mux3_1.sv"
 `include "mux4_1.sv"
 `include "mux5_1.sv"
-`include "mux8_1.sv"
+`include "mux9_1.sv"
 `include "ff.sv"
 `include "ff_status.sv"
 `include "main_fsm.sv"
@@ -34,7 +34,7 @@ module mos6502 #(
     logic [7:0] inst;
     logic [7:0] high_byte;
     logic [7:0] low_byte;
-    logic [7:0] low_byte_ind;
+    logic [7:0] temp;
     logic [7:0] flags;
     logic [7:0] alu_result;
     logic [7:0] alu_a;
@@ -71,7 +71,7 @@ module mos6502 #(
     logic w_inst;
     logic w_high_byte;
     logic w_low_byte;
-    logic w_low_byte_ind;
+    logic w_temp;
     logic w_a;
     logic w_x;
     logic w_y;
@@ -83,7 +83,7 @@ module mos6502 #(
     logic [2:0] src_addr_l;
     logic [1:0] src_next_pc_h;
     logic [1:0] src_next_pc_l;
-    logic [2:0] src_alu_a;
+    logic [3:0] src_alu_a;
     logic [2:0] src_alu_b;
     logic [1:0] src_c_in;
     logic [2:0] src_data_out;
@@ -189,12 +189,12 @@ module mos6502 #(
         .q(low_byte)
     );
 
-    ff low_byte_ind_ff (
+    ff temp_ff (
         .clk(clk),
         .rst(rst),
         .d(data_in),
-        .en(w_low_byte_ind),
-        .q(low_byte_ind)
+        .en(w_temp),
+        .q(temp)
     );
 
     mux3_1 high_byte_mux3_1(
@@ -299,7 +299,7 @@ module mos6502 #(
         .w_inst(w_inst),
         .w_high_byte(w_high_byte),
         .w_low_byte(w_low_byte),
-        .w_low_byte_ind(w_low_byte_ind),
+        .w_temp(w_temp),
         .src_c_in(src_c_in),
         .src_high_byte(src_high_byte),
         .src_low_byte(src_low_byte),
@@ -314,7 +314,7 @@ module mos6502 #(
         .undef(undef)
     );
 
-    mux8_1 src_alu_a_mux8_1(
+    mux9_1 src_alu_a_mux9_1(
         .a(a),
         .b(x),
         .c(y),
@@ -323,6 +323,7 @@ module mos6502 #(
         .f(pc_h),
         .g(low_byte),
         .h(high_byte),
+        .i(temp),
         .sel(src_alu_a),
         .y(alu_a)
     );
@@ -332,7 +333,7 @@ module mos6502 #(
         .b(low_byte),
         .c(8'h00),
         .d(8'h01),
-        .e(low_byte_ind),
+        .e(temp),
         .sel(src_alu_b),
         .y(alu_b)
     );
