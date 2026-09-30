@@ -1,4 +1,5 @@
 set(TESTBENCH_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(TEST_ASSETS ${CMAKE_SOURCE_DIR}/assets/SMB.nes)
 
 file(GLOB TESTBENCHS
     "${TESTBENCH_DIR}/tb_*.sv"
@@ -60,12 +61,14 @@ foreach(TB_FILE ${TESTBENCHS})
             ${IVERILOG_EXECUTABLE}
             -g2012
             -o ${OUTPUT_FILE}
-            -I ${SOURCE_DIR}
+            -I ${CPU_SOURCE_DIR}
+            -I ${SD_CARD_SOURCE_DIR}
             ${TB_FILE}
         DEPENDS
             ${RTL_SOURCES}
             ${TB_FILE}
             ${TESTVECTORS}
+            ${TEST_ASSETS}
         COMMENT "Compiling ${TB_NAME}"
     )
 
