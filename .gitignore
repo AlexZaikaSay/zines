@@ -1,1 +1,8 @@
 build/
+*.bak
+quartus/.qsys_edit/
+quartus/db/
+quartus/incremental_db/
+quartus/output_files/
+quartus/simulation/
+quartus/*.rpt
