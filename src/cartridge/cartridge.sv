@@ -8,14 +8,14 @@ module cartridge #(
     // Upper bound of bytes read from the card (16-byte header + PRG + CHR), rounded up to sectors.
     parameter integer MAX_FILE_BYTES = 81 * 512
 )(
-    input  logic        CLOCK_50,
-    input  logic        RESET_N,
+    input  logic        clk,
+    input  logic        reset,
 
-    output logic        SD_CLK,
-    output logic        SD_CMD,
-    input  logic        SD_DAT0,
-    output logic        SD_CS_N,
-    input  logic        SD_CD,
+    output logic        sd_clk,
+    output logic        sd_cmd,
+    input  logic        sd_dat0,
+    output logic        sd_cs_n,
+    input  logic        sd_cd,
 
     // CPU side
     input  logic [15:0] cpu_addr,
@@ -60,13 +60,13 @@ module cartridge #(
         .LOAD_WORDS(LOAD_WORDS),
         .START_LBA(START_LBA)
     ) sd_card_inst (
-        .clk(CLOCK_50),
-        .reset_n(RESET_N),
-        .sd_clk(SD_CLK),
-        .sd_cmd(SD_CMD),
-        .sd_dat0(SD_DAT0),
-        .sd_cs_n(SD_CS_N),
-        .sd_cd_n(SD_CD),
+        .clk(clk),
+        .reset_n(reset),
+        .sd_clk(sd_clk),
+        .sd_cmd(sd_cmd),
+        .sd_dat0(sd_dat0),
+        .sd_cs_n(sd_cs_n),
+        .sd_cd_n(sd_cd),
         .busy(sd_busy),
         .done(sd_done),
         .error(sd_error),
@@ -102,8 +102,8 @@ module cartridge #(
 
     wire hdr_ok = (hdr_error == 8'h00);
 
-    always_ff @(posedge CLOCK_50 or negedge RESET_N) begin
-        if (!RESET_N) begin
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
             magic_ok  <= 4'd0;
             prg_banks <= 8'd0;
             chr_banks <= 8'd0;
@@ -141,7 +141,7 @@ module cartridge #(
     logic [7:0] chr_mem [0:8191];
 
     // Loader write port
-    always_ff @(posedge CLOCK_50) begin
+    always_ff @(posedge clk) begin
         if (byte_valid && hdr_ok && (byte_index >= 32'd16)) begin
             if (in_prg)
                 prg_mem[data_off[14:0]] <= byte_data;
@@ -162,7 +162,7 @@ module cartridge #(
     // ----------------------------------------------------------------
     wire [14:0] prg_addr = (prg_banks == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
 
-    always_ff @(posedge CLOCK_50) begin
+    always_ff @(posedge clk) begin
         if (cpu_ce && cpu_rw && cpu_addr[15])
             cpu_data_out <= prg_mem[prg_addr];
     end
@@ -172,7 +172,7 @@ module cartridge #(
     // ----------------------------------------------------------------
     wire chr_sel = !ppu_addr[13];
 
-    always_ff @(posedge CLOCK_50) begin
+    always_ff @(posedge clk) begin
         if (chr_sel && ppu_wr && chr_is_ram)
             chr_mem[ppu_addr[12:0]] <= ppu_data_in;
         if (chr_sel && ppu_rd)

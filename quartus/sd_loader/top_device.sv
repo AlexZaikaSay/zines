@@ -37,7 +37,7 @@ module top_device (
         .START_LBA(32'd0)
     ) sd_card_inst (
         .clk(CLOCK_50),
-        .reset_n(RESET_N),
+        .reset(RESET_N),
         .sd_clk(SD_CLK),
         .sd_cmd(SD_CMD),
         .sd_dat0(SD_DAT0),

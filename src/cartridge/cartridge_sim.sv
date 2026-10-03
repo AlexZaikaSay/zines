@@ -4,7 +4,7 @@ module cartridge_sim #(
     parameter string  ROM_FILE      = "../assets/SMB.nes",
     parameter integer MAX_FILE_BYTES = 40976 + 512
 )(
-    input  logic        CLOCK_50,
+    input  logic        clk,
 
     // CPU side
     input  logic [15:0] cpu_addr,
@@ -107,14 +107,14 @@ module cartridge_sim #(
     // PRG-ROM at $8000-$FFFF, mirrored when 16 KiB
     wire [14:0] prg_addr = (prg_banks == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
 
-    always_ff @(posedge CLOCK_50) begin
+    always_ff @(posedge clk) begin
         if (cpu_ce && cpu_rw && cpu_addr[15])
             cpu_data_out <= prg_mem[prg_addr];
     end
 
     wire chr_sel = !ppu_addr[13];
 
-    always_ff @(posedge CLOCK_50) begin
+    always_ff @(posedge clk) begin
         if (chr_sel && ppu_wr && chr_is_ram)
             chr_mem[ppu_addr[12:0]] <= ppu_data_in;
         if (chr_sel && ppu_rd)
