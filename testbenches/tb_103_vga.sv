@@ -1,5 +1,5 @@
 
-`include "vga.sv"
+`include "vga/vga.sv"
 
 /* verilator lint_off STMTDLY */
 
