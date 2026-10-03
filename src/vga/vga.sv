@@ -91,5 +91,20 @@ module vga #
         end
     end
 
+    // Test pattern: 8 vertical color bars across the visible area.
+    wire [2:0] bar = 3'(h_counter / 80);
+
+    always_comb begin
+        if (h_visible && v_visible) begin
+            red   = {4{bar[0]}};
+            green = {4{bar[1]}};
+            blue  = {4{bar[2]}};
+        end else begin
+            red   = 4'h0;
+            green = 4'h0;
+            blue  = 4'h0;
+        end
+    end
+
 endmodule
 
