@@ -1,7 +1,7 @@
 `include "sd_card.sv"
 
 module tb_100_sd_card;
-    localparam integer RAM_WORDS = 128;
+    localparam integer LOAD_WORDS = 128;
 
     logic clk = 1'b0;
     logic reset_n = 1'b0;
@@ -12,7 +12,10 @@ module tb_100_sd_card;
     logic busy;
     logic done;
     logic error;
-    logic [RAM_WORDS-1:0][31:0] ram;
+    logic        rx_valid;
+    logic [7:0]  rx_data;
+    logic [31:0] rx_index;
+    logic [7:0]  received [0:LOAD_WORDS*4-1];
 
     logic [7:0] command [0:5];
     logic [7:0] command_shift;
@@ -33,7 +36,7 @@ module tb_100_sd_card;
         .CLK_FREQ_HZ(8_000_000),
         .INIT_SPI_HZ(400_000),
         .RUN_SPI_HZ(1_000_000),
-        .RAM_WORDS(RAM_WORDS),
+        .LOAD_WORDS(LOAD_WORDS),
         .START_LBA(32'd7)
     ) dut (
         .clk,
@@ -46,8 +49,15 @@ module tb_100_sd_card;
         .busy,
         .done,
         .error,
-        .ram
+        .byte_valid(rx_valid),
+        .byte_data(rx_data),
+        .byte_index(rx_index)
     );
+
+    always @(posedge clk) begin
+        if (rx_valid)
+            received[rx_index] <= rx_data;
+    end
 
     task automatic queue_byte(input logic [7:0] value);
         begin
@@ -184,10 +194,12 @@ module tb_100_sd_card;
         end
         if (busy)
             $fatal(1, "SD controller still busy after done");
-        if (ram[0] !== 32'h03020100)
-            $fatal(1, "Unexpected first RAM word: %08h", ram[0]);
-        if (ram[127] !== 32'hFFFEFDFC)
-            $fatal(1, "Unexpected last RAM word: %08h", ram[127]);
+        if ({received[3], received[2], received[1], received[0]} !== 32'h03020100)
+            $fatal(1, "Unexpected first word: %02h%02h%02h%02h",
+                   received[3], received[2], received[1], received[0]);
+        if ({received[511], received[510], received[509], received[508]} !== 32'hFFFEFDFC)
+            $fatal(1, "Unexpected last word: %02h%02h%02h%02h",
+                   received[511], received[510], received[509], received[508]);
 
         $display("SD-card read test passed");
         $finish;

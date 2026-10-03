@@ -10,9 +10,9 @@ module sd_card #(
     // SPI clock after initialization.
     parameter integer RUN_SPI_HZ  = 10_000_000,
 
-    // Number of 32-bit words to load.
+    // Number of 32-bit words to read from the card.
     // 16384 words = 64 KiB.
-    parameter integer RAM_WORDS   = 16384,
+    parameter integer LOAD_WORDS  = 16384,
 
     // Maximum wait for the data token after CMD17 returns R1.
     parameter integer READ_TOKEN_TIMEOUT_MS = 100,
@@ -36,8 +36,10 @@ module sd_card #(
     output logic        error,
     output logic [7:0]  error_code,
 
-    // Loaded RAM
-    output logic [RAM_WORDS-1:0][31:0] ram
+    // Streaming output: one-cycle pulse per received data byte
+    output logic        byte_valid,
+    output logic [7:0]  byte_data,
+    output logic [31:0] byte_index
 );
 
     // ================================================================
@@ -242,7 +244,6 @@ module sd_card #(
     logic [31:0] ram_addr;
 
     logic [1:0]  word_byte;
-    logic [23:0] word_buffer;
 
     logic [31:0] token_wait_counter;
 
@@ -412,13 +413,18 @@ module sd_card #(
             ram_addr <= 0;
 
             word_byte <= 0;
-            word_buffer <= 0;
 
             sd_high_capacity <= 1'b1;
             ocr1 <= 0;
 
+            byte_valid <= 1'b0;
+            byte_data  <= 8'h00;
+            byte_index <= 32'd0;
+
         end
         else begin
+
+            byte_valid <= 1'b0;
 
             case (state)
 
@@ -1103,8 +1109,6 @@ module sd_card #(
 
                         word_byte <= 0;
 
-                        word_buffer <= 0;
-
                         state <= ST_READ_DATA;
 
                     end
@@ -1124,68 +1128,23 @@ module sd_card #(
                 end
 
                 // ----------------------------------------------------
-                // Read 512 bytes
-                //
-                // Byte order:
-                //
-                // byte 0 -> [7:0]
-                // byte 1 -> [15:8]
-                // byte 2 -> [23:16]
-                // byte 3 -> [31:24]
-                //
-                // This gives little-endian 32-bit words.
+                // Read 512 bytes, streamed out through byte_valid/byte_data/byte_index.
                 // ----------------------------------------------------
 
                 ST_READ_DATA: begin
 
                     if (spi_done) begin
 
-                        case (word_byte)
+                        byte_valid <= 1'b1;
+                        byte_data  <= rx_byte;
+                        byte_index <= {ram_addr[29:0], word_byte};
 
-                            2'd0: begin
-                                word_buffer[7:0] <= rx_byte;
-                                word_byte <= 1;
-                            end
+                        word_byte <= word_byte + 1'b1;
 
-                            2'd1: begin
-                                word_buffer[15:8] <= rx_byte;
-                                word_byte <= 2;
-                            end
-
-                            2'd2: begin
-                                word_buffer[23:16] <= rx_byte;
-                                word_byte <= 3;
-                            end
-
-                            2'd3: begin
-
-                                // Direct write to internal RAM.
-                                if (ram_addr < RAM_WORDS) begin
-
-                                    ram[ram_addr] <= {
-                                        rx_byte,
-                                        word_buffer[23:0]
-                                    };
-
-                                end
-                                else begin
-
-                                    error_code <= 8'h0E;
-                                    state <= ST_ERROR;
-                                end
-
-                                ram_addr <= ram_addr + 1'b1;
-
-                                word_byte <= 0;
-
-                            end
-
-                        endcase
+                        if (word_byte == 2'd3)
+                            ram_addr <= ram_addr + 1'b1;
 
                         // 512 bytes = 128 words.
-                        //
-                        // We detect the end after word 127.
-                        //
                         if ((word_byte == 2'd3) &&
                             (ram_addr[6:0] == 7'd127)) begin
 
@@ -1226,11 +1185,11 @@ module sd_card #(
 
                     // Number of sectors required:
                     //
-                    // RAM_WORDS * 4 / 512
+                    // LOAD_WORDS * 4 / 512
                     //
-                    // = RAM_WORDS / 128
+                    // = LOAD_WORDS / 128
                     //
-                    if (sector_count + 1 >= (RAM_WORDS / 128)) begin
+                    if (sector_count + 1 >= (LOAD_WORDS / 128)) begin
 
                         state <= ST_DONE;
 

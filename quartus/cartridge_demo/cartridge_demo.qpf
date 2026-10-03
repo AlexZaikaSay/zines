@@ -1,0 +1,3 @@
+QUARTUS_VERSION = "18.1"
+DATE = "2026-10-03"
+PROJECT_REVISION = "cartridge_demo"

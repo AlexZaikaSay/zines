@@ -22,5 +22,8 @@ SD_CD   = IO_T18 (SD_CD)
 `SD_CD` is active low: low means a card is inserted. If it is high when the
 controller starts, loading stops immediately with `error_code = 8'h02`.
 
-Open `sd_loader.qpf` in Quartus, compile, and program the generated `.sof`
-file. The SD card must be connected for the loader to leave its busy state.
+Open `sd_loader/sd_loader.qpf` in Quartus, compile, and program the generated `.sof`
+file (in `sd_loader/output_files`). The SD card must be connected for the loader to leave its busy state.
+
+`cartridge_demo/cartridge_demo.qpf` loads an iNES file through the `cartridge`
+module and shows the first CHR byte on the 7-segment display.

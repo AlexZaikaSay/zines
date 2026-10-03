@@ -13,13 +13,16 @@ module top_device (
     output logic       LEDR,
     output logic       LED2
 );
-    localparam integer RAM_WORDS = 10368;
+    localparam integer LOAD_WORDS = 10368;
 
     logic busy;
     logic done;
     logic error;
     logic [7:0] error_code;
-    logic [RAM_WORDS-1:0][31:0] ram;
+    logic       byte_valid;
+    logic [7:0] byte_data;
+    logic [31:0] byte_index;
+    logic [7:0] header_byte4;
 
     logic [31:0] scan_counter;
     logic [1:0] scan_digit;
@@ -30,7 +33,7 @@ module top_device (
         .CLK_FREQ_HZ(50_000_000),
         .INIT_SPI_HZ(400_000),
         .RUN_SPI_HZ(10_000_000),
-        .RAM_WORDS(RAM_WORDS),
+        .LOAD_WORDS(LOAD_WORDS),
         .START_LBA(32'd0)
     ) sd_card_inst (
         .clk(CLOCK_50),
@@ -44,10 +47,19 @@ module top_device (
         .done,
         .error,
         .error_code,
-        .ram
+        .byte_valid,
+        .byte_data,
+        .byte_index
     );
 
-    assign displayed_byte = done ? ram[1][7:0] : error_code;
+    always_ff @(posedge CLOCK_50 or negedge RESET_N) begin
+        if (!RESET_N)
+            header_byte4 <= 8'h00;
+        else if (byte_valid && byte_index == 32'd4)
+            header_byte4 <= byte_data;
+    end
+
+    assign displayed_byte = done ? header_byte4 : error_code;
     assign LEDR = error ? 1'b0 : (done ? 1'b1 : 1'b0);
     assign LED2 = SD_CD;
 
