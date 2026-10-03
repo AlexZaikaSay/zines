@@ -21,7 +21,7 @@ module sd_card #(
     parameter logic [31:0] START_LBA = 32'd0
 )(
     input  logic        clk,
-    input  logic        reset_n,
+    input  logic        reset,
 
     // SD card SPI interface
     output logic        sd_clk,
@@ -101,8 +101,8 @@ module sd_card #(
 
     logic [DIV_W-1:0] spi_cnt;
 
-    always_ff @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
             sd_clk      <= 1'b0;
             sd_cmd      <= 1'b1;
             spi_tx_latched <= 8'hFF;
@@ -383,9 +383,9 @@ module sd_card #(
     // Main FSM
     // ================================================================
 
-    always_ff @(posedge clk or negedge reset_n) begin
+    always_ff @(posedge clk or negedge reset) begin
 
-        if (!reset_n) begin
+        if (!reset) begin
 
             state <= ST_RESET;
 

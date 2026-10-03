@@ -30,7 +30,7 @@ module tb_102_cartridge;
     cartridge_sim #(
         .ROM_FILE(`ASSET_FILE)
     ) dut (
-        .CLOCK_50(clk),
+        .clk,
         .cpu_addr,
         .cpu_data_in(8'h00),
         .cpu_data_out,

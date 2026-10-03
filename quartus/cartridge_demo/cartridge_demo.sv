@@ -25,13 +25,13 @@ module cartridge_demo (
     logic [3:0]  displayed_nibble;
 
     cartridge cartridge_inst (
-        .CLOCK_50,
-        .RESET_N,
-        .SD_CLK,
-        .SD_CMD,
-        .SD_DAT0,
-        .SD_CS_N,
-        .SD_CD,
+        .clk(CLOCK_50),
+        .reset(RESET_N),
+        .sd_clk(SD_CLK),
+        .sd_cmd(SD_CMD),
+        .sd_dat0(SD_DAT0),
+        .sd_cs_n(SD_CS_N),
+        .sd_cd_n(SD_CD),
         // First PRG-ROM byte is at $8000.
         .cpu_addr(16'h8000),
         .cpu_data_in(8'h00),
