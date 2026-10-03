@@ -61,9 +61,10 @@ foreach(TB_FILE ${TESTBENCHS})
             ${IVERILOG_EXECUTABLE}
             -g2012
             -o ${OUTPUT_FILE}
+            -I ${CARTRIDGE_SOURCE_DIR}
             -I ${CPU_SOURCE_DIR}
             -I ${SD_CARD_SOURCE_DIR}
-            -I ${CARTRIDGE_SOURCE_DIR}
+            -I ${VGA_SOURCE_DIR}
             ${TB_FILE}
         DEPENDS
             ${RTL_SOURCES}
