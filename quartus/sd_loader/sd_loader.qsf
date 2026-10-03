@@ -1,0 +1,42 @@
+set_global_assignment -name FAMILY "Cyclone 10 LP"
+set_global_assignment -name DEVICE 10CL080YU484C8G
+set_global_assignment -name TOP_LEVEL_ENTITY top_device
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
+set_global_assignment -name SYSTEMVERILOG_FILE top_device.sv
+set_global_assignment -name SDC_FILE sd_loader.sdc
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
+
+# Verified against Test11_project_7SEG_LED for this board revision.
+set_location_assignment PIN_G1 -to CLOCK_50
+set_location_assignment PIN_P3 -to RESET_N
+set_location_assignment PIN_U14 -to SMG_Data[7]
+set_location_assignment PIN_AA19 -to SMG_Data[6]
+set_location_assignment PIN_V15 -to SMG_Data[5]
+set_location_assignment PIN_U12 -to SMG_Data[4]
+set_location_assignment PIN_V13 -to SMG_Data[3]
+set_location_assignment PIN_AB18 -to SMG_Data[2]
+set_location_assignment PIN_AB19 -to SMG_Data[1]
+set_location_assignment PIN_W14 -to SMG_Data[0]
+set_location_assignment PIN_U11 -to Scan_Sig[2]
+set_location_assignment PIN_V16 -to Scan_Sig[1]
+set_location_assignment PIN_AA18 -to Scan_Sig[0]
+set_location_assignment PIN_Y4 -to LEDR
+set_location_assignment PIN_V5 -to LED2
+
+# SD-card socket. In SPI mode SD_D3 is chip-select.
+set_location_assignment PIN_U19 -to SD_DAT0
+set_location_assignment PIN_W19 -to SD_CMD
+set_location_assignment PIN_W20 -to SD_CLK
+set_location_assignment PIN_W17 -to SD_CS_N
+set_location_assignment PIN_T18 -to SD_CD
+
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND "AS INPUT TRI-STATED"
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.0 Lite Edition"
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top

@@ -5,7 +5,7 @@ module tb_101_sd_card;
     localparam string  ASSET_FILE = "../assets/SMB.nes";
     localparam integer SECTOR_BYTES = 512;
     localparam integer IMAGE_SECTORS = (ASSET_BYTES + SECTOR_BYTES - 1) / SECTOR_BYTES;
-    localparam integer RAM_WORDS = IMAGE_SECTORS * 128;
+    localparam integer LOAD_WORDS = IMAGE_SECTORS * 128;
 
     logic clk = 1'b0;
     logic reset_n = 1'b0;
@@ -16,7 +16,10 @@ module tb_101_sd_card;
     logic busy;
     logic done;
     logic error;
-    logic [RAM_WORDS-1:0][31:0] ram;
+    logic        rx_valid;
+    logic [7:0]  rx_data;
+    logic [31:0] rx_index;
+    logic [7:0]  received [0:LOAD_WORDS*4-1];
 
     logic [7:0] asset_image [0:ASSET_BYTES-1];
     logic [7:0] command [0:5];
@@ -40,7 +43,7 @@ module tb_101_sd_card;
         .CLK_FREQ_HZ(8_000_000),
         .INIT_SPI_HZ(400_000),
         .RUN_SPI_HZ(1_000_000),
-        .RAM_WORDS(RAM_WORDS),
+        .LOAD_WORDS(LOAD_WORDS),
         .START_LBA(32'd7)
     ) dut (
         .clk,
@@ -53,8 +56,15 @@ module tb_101_sd_card;
         .busy,
         .done,
         .error,
-        .ram
+        .byte_valid(rx_valid),
+        .byte_data(rx_data),
+        .byte_index(rx_index)
     );
+
+    always @(posedge clk) begin
+        if (rx_valid)
+            received[rx_index] <= rx_data;
+    end
 
     task automatic queue_byte(input logic [7:0] value);
         begin
@@ -197,18 +207,13 @@ module tb_101_sd_card;
         if (busy)
             $fatal(1, "SD controller still busy after done");
 
-        for (word_index = 0; word_index < ASSET_BYTES / 4; word_index = word_index + 1) begin
-            if (ram[word_index] !== {
-                asset_image[word_index * 4 + 3],
-                asset_image[word_index * 4 + 2],
-                asset_image[word_index * 4 + 1],
-                asset_image[word_index * 4]
-            })
-                $fatal(1, "RAM mismatch at word %0d: %08h", word_index, ram[word_index]);
+        for (word_index = 0; word_index < ASSET_BYTES; word_index = word_index + 1) begin
+            if (received[word_index] !== asset_image[word_index])
+                $fatal(1, "Mismatch at byte %0d: %02h", word_index, received[word_index]);
         end
 
-        if (ram[ASSET_BYTES / 4] !== 32'h00000000)
-            $fatal(1, "Expected zero padding after asset: %08h", ram[ASSET_BYTES / 4]);
+        if (received[ASSET_BYTES] !== 8'h00)
+            $fatal(1, "Expected zero padding after asset: %02h", received[ASSET_BYTES]);
 
         $display("%s SD-card load test passed (%0d bytes)", ASSET_FILE, ASSET_BYTES);
         $finish;
