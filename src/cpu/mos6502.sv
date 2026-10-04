@@ -2,7 +2,6 @@
 `include "adder.sv"
 `include "alu.sv"
 `include "mux2_1.sv"
-`include "mux3_1.sv"
 `include "mux4_1.sv"
 `include "mux5_1.sv"
 `include "mux9_1.sv"
@@ -91,6 +90,7 @@ module mos6502 #(
     logic [4:0] alu_op;
 
     int_control int_control_inst(
+        .sel(2'b10),
         .irq_addr_h(irq_addr_h),
         .irq_addr_l(irq_addr_l)
     );

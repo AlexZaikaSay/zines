@@ -13,8 +13,8 @@ module devboard
 );
 
     logic [15:0] addr;
-    logic [7:0] mem_rd;
-    logic [7:0] mem_wd;
+    logic [7:0] data_in;
+    logic [7:0] data_out;
     logic we;
 
     mos6502 #(
@@ -24,8 +24,8 @@ module devboard
         .clk(clk),
         .rst(rst),
         .addr(addr),
-        .data_out(mem_wd),
-        .data_in(mem_rd),
+        .data_out(data_out),
+        .data_in(data_in),
         .we(we)
     );
 
@@ -34,8 +34,8 @@ module devboard
     ) memory (
         .clk(clk),
         .addr(addr),
-        .rd(mem_rd),
-        .wd(mem_wd),
+        .rd(data_in),
+        .wd(data_out),
         .we(we)
     );
 
