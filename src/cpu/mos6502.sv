@@ -1,12 +1,10 @@
 
 `include "adder.sv"
 `include "alu.sv"
-`include "mux2_1.sv"
 `include "mux4_1.sv"
 `include "mux5_1.sv"
 `include "mux9_1.sv"
 `include "ff.sv"
-`include "ff_status.sv"
 `include "main_fsm.sv"
 `include "int_control.sv"
 
@@ -28,8 +26,6 @@ module mos6502 #(
     logic [7:0] next_pc_l;
     logic [7:0] next_pc_h_a;
     logic [7:0] next_pc_l_a;
-    logic [7:0] next_high_byte;
-    logic [7:0] next_low_byte;
     logic [7:0] high_byte;
     logic [7:0] low_byte;
     logic [7:0] temp;
@@ -49,18 +45,8 @@ module mos6502 #(
 
     logic c;
     logic z;
-    logic i;
-    logic d;
-    logic b;
     logic v;
     logic n;
-    logic w_c;
-    logic w_z;
-    logic w_i;
-    logic w_d;
-    logic w_b;
-    logic w_v;
-    logic w_n;
 
     logic c_in;
 
@@ -80,7 +66,7 @@ module mos6502 #(
     logic [1:0] src_c_in;
     logic [2:0] src_data_out;
 
-    logic [4:0] alu_op;
+    logic [3:0] alu_op;
 
     int_control int_control_inst(
         .sel(2'b10),
@@ -159,26 +145,6 @@ module mos6502 #(
         .y(addr[7:0])
     );
 
-    ff_status status_ff (
-        .clk(clk),
-        .rst(rst),
-        .c(c),
-        .z(z),
-        .i(i),
-        .d(d),
-        .b(b),
-        .v(v),
-        .n(n),
-        .w_c(w_c),
-        .w_z(w_z),
-        .w_i(w_i),
-        .w_d(w_d),
-        .w_b(w_b),
-        .w_v(w_v),
-        .w_n(w_n),
-        .q(flags)
-    );
-
     ff a_ff (
         .clk(clk),
         .rst(rst),
@@ -225,16 +191,10 @@ module mos6502 #(
         .rst(rst),
         .imm(data_in),
         .alu_result(alu_result),
-        .flags(flags),
         .c(c),
         .v(v),
-        .w_c(w_c),
-        .w_z(w_z),
-        .w_i(w_i),
-        .w_d(w_d),
-        .w_b(w_b),
-        .w_v(w_v),
-        .w_n(w_n),
+        .z(z),
+        .n(n),
         .w_a(w_a),
         .w_x(w_x),
         .w_y(w_y),
@@ -254,6 +214,7 @@ module mos6502 #(
         .temp(temp),
         .high_byte(high_byte),
         .low_byte(low_byte),
+        .flags(flags),
         .undef(undef)
     );
 
@@ -287,9 +248,6 @@ module mos6502 #(
         .b_in(alu_b),
         .c_in(c_in),
         .result(alu_result),
-        .i(i),
-        .d(d),
-        .b(b),
         .v(v),
         .n(n),
         .z(z),
