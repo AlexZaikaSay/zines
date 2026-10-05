@@ -66,15 +66,11 @@ module mos6502 #(
 
     logic w_next_pc_h;
     logic w_next_pc_l;
-    logic w_high_byte;
-    logic w_low_byte;
     logic w_a;
     logic w_x;
     logic w_y;
     logic w_s;
 
-    logic [1:0] src_high_byte;
-    logic       src_low_byte;
     logic [2:0] src_addr_h;
     logic [2:0] src_addr_l;
     logic [1:0] src_next_pc_h;
@@ -163,37 +159,6 @@ module mos6502 #(
         .y(addr[7:0])
     );
 
-    mux2_1 low_byte_mux2_1(
-        .a(data_in),
-        .b(alu_result),
-        .sel(src_low_byte),
-        .y(next_low_byte)
-    );
-
-    ff low_byte_ff (
-        .clk(clk),
-        .rst(rst),
-        .d(next_low_byte),
-        .en(w_low_byte),
-        .q(low_byte)
-    );
-
-    mux3_1 high_byte_mux3_1(
-        .a(data_in),
-        .b(8'b0),
-        .c(alu_result),
-        .sel(src_high_byte),
-        .y(next_high_byte)
-    );
-
-    ff high_byte_ff (
-        .clk(clk),
-        .rst(rst),
-        .d(next_high_byte),
-        .en(w_high_byte),
-        .q(high_byte)
-    );
-
     ff_status status_ff (
         .clk(clk),
         .rst(rst),
@@ -259,6 +224,7 @@ module mos6502 #(
         .clk(clk),
         .rst(rst),
         .imm(data_in),
+        .alu_result(alu_result),
         .flags(flags),
         .c(c),
         .v(v),
@@ -276,11 +242,7 @@ module mos6502 #(
         .w_mem(we),
         .w_next_pc_h(w_next_pc_h),
         .w_next_pc_l(w_next_pc_l),
-        .w_high_byte(w_high_byte),
-        .w_low_byte(w_low_byte),
         .src_c_in(src_c_in),
-        .src_high_byte(src_high_byte),
-        .src_low_byte(src_low_byte),
         .src_data_out(src_data_out),
         .src_addr_h(src_addr_h),
         .src_addr_l(src_addr_l),
@@ -290,6 +252,8 @@ module mos6502 #(
         .src_alu_b(src_alu_b),
         .alu_op(alu_op),
         .temp(temp),
+        .high_byte(high_byte),
+        .low_byte(low_byte),
         .undef(undef)
     );
 
