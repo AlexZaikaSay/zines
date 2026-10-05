@@ -4,7 +4,6 @@ module main_fsm (
     input logic         clk,
     input logic         rst,
     input logic [7:0]   imm,
-    input logic [7:0]   inst,
     input logic [7:0]   flags,
     input logic         c,
     input logic         v,
@@ -17,10 +16,8 @@ module main_fsm (
     output logic        w_n,
     output logic        w_next_pc_h,
     output logic        w_next_pc_l,
-    output logic        w_inst,
     output logic        w_high_byte,
     output logic        w_low_byte,
-    output logic        w_temp,
     output logic        w_a,
     output logic        w_x,
     output logic        w_y,
@@ -37,6 +34,7 @@ module main_fsm (
     output logic [3:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
     output logic [4:0]  alu_op,
+    output logic [7:0]  temp,
     output logic        undef
 );
   typedef enum logic [5:0] {
@@ -90,6 +88,8 @@ module main_fsm (
     logic z_flag;
     logic v_flag;
     logic n_flag;
+
+    logic [7:0] inst;
 
     assign c_flag = flags[0];
     assign z_flag = flags[1];
@@ -254,7 +254,8 @@ module main_fsm (
             undef <= 0;
         end else
             case (state)
-            Fetch:
+            Fetch: begin
+                inst <= imm;
                 case (imm)
                     OP_ROR,
                     OP_ROL,
@@ -425,6 +426,7 @@ module main_fsm (
                         state <= Fetch;
                     end
                 endcase
+            end
             BrkFlags:
                 state <= PushPCHigh;
             Skip:
@@ -619,8 +621,10 @@ module main_fsm (
                     default:
                         state <= Fetch;
                 endcase
-            FetchData:
+            FetchData: begin
+                temp <= imm;
                 state <= WriteFakeData;
+            end
             WriteFakeData:
                 state <= AluTemp;
             FetchHiByte:
@@ -692,7 +696,8 @@ module main_fsm (
                     default:
                         state <= Fetch;
                 endcase
-            FetchLoByteInd:
+            FetchLoByteInd: begin
+                temp <= imm;
                 case (inst)
                     OP_ADC_IND_Y,
                     OP_SBC_IND_Y,
@@ -715,6 +720,7 @@ module main_fsm (
                     default:
                         state <= Fetch;
                 endcase
+            end
             FetchHiByteIndY:
                 if (c)
                     state <= PageInc; // Increment page if page boundary is crossed
@@ -829,78 +835,48 @@ module main_fsm (
                 endcase
             JmpIndLowByte:
                 state <= JmpInd;
-            Branch:
+            Branch: begin
+                state <= Fetch;
                 case (inst)
                     OP_BNE:
-                        // BNE
-                        if (~z_flag)
-                            // BNE is taken if Z flag is 0
+                        if (~z_flag)    // BNE is taken if Z flag is 0
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;  
                     OP_BEQ:
                         // BEQ
-                        if (z_flag)
-                            // BEQ is taken if Z flag is 1
+                        if (z_flag)     // BEQ is taken if Z flag is 1
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;
                     OP_BPL:
-                        // BPL
-                        if (~n_flag)
-                            // BPL is taken if N flag is 0
+                        if (~n_flag)    // BPL is taken if N flag is 0
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;
                     OP_BMI:
-                        // BMI
-                        if (n_flag)
-                            // BMI is taken if N flag is 1
+                        if (n_flag)     // BMI is taken if N flag is 1
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;
                     OP_BCC:
-                        // BCC
-                        if (~c_flag)
-                            // BCC is taken if C flag is 0
+                        if (~c_flag)    // BCC is taken if C flag is 0
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;
                     OP_BCS:
-                        // BCS
-                        if (c_flag)
-                            // BCS is taken if C flag is 1
+                        if (c_flag)     // BCS is taken if C flag is 1
                             state <= BranchTaken; 
-                        else
-                            state <= Fetch;
                     OP_BVC:
-                        // BVC
-                        if (~v_flag)
-                            // BVC is taken if V flag is 0
+                        if (~v_flag)    // BVC is taken if V flag is 0
                             state <= BranchTaken;
-                        else
-                            state <= Fetch;
                     OP_BVS:
-                        // BVS
-                        if (v_flag)
-                            // BVS is taken if V flag is 1
+                        if (v_flag)     // BVS is taken if V flag is 1
                             state <= BranchTaken; 
-                        else
-                            state <= Fetch;
                     default:
-                        // Default: branch not taken
                         state <= Fetch;
                 endcase
+            end
             BranchTaken:
-                if (v)
-                    // Cross page if pc_l sum overflows
+                // Cross page if pc_l sum overflows
+                if (v) begin
                     if (c)
                         // Increment page if branch up
                         state <= BranchPageInc;
                     else
                         // Decrement page if branch down
                         state <= BranchPageDec;
-                else
+                end else
                     // Branch not crossing page
                     state <= Fetch;
             default:
@@ -921,10 +897,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 1;         // write instruction
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -995,10 +970,9 @@ module main_fsm (
                 w_n = 1;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 1;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_s = 0;
                 w_mem = 0;
@@ -1091,10 +1065,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1180,10 +1153,9 @@ module main_fsm (
                 w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
@@ -1287,10 +1259,9 @@ module main_fsm (
                 w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1372,10 +1343,9 @@ module main_fsm (
                 w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1432,10 +1402,9 @@ module main_fsm (
                 w_n = 1;            // write N flag
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1546,10 +1515,9 @@ module main_fsm (
                 w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
@@ -1573,10 +1541,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 1;    // write high byte of absolute address
                 w_low_byte = 1;     // write low byte of absolute address
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1644,9 +1611,8 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 1;    // write high byte of absolute address
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1674,10 +1640,8 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 1; // write low byte of indirect address from mem
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1706,10 +1670,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1738,10 +1702,8 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write updated low byte
-                w_temp = 1;         // write low byte of indirect address from mem
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1770,10 +1732,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 1;    // write high byte of indirect address
                 w_low_byte = 1;     // write updated low byte
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1803,10 +1765,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 1;    // write high byte of indirect address
                 w_low_byte = 1;     // write updated low byte
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1872,10 +1834,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of absolute address
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1903,10 +1865,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of vector
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1935,10 +1897,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1967,10 +1929,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 1;    // write high byte of ALU result
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2023,10 +1985,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2054,10 +2016,10 @@ module main_fsm (
                 w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2086,10 +2048,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2118,10 +2080,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2150,10 +2112,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 1;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 1;     // write updated low byte
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2182,10 +2144,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2214,10 +2176,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2245,10 +2207,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte - branch offset
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2277,10 +2239,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2309,10 +2271,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2341,10 +2303,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2416,10 +2378,10 @@ module main_fsm (
                 w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 0;
@@ -2444,10 +2406,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2476,10 +2438,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2508,10 +2470,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2549,10 +2511,10 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2581,10 +2543,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2636,10 +2597,10 @@ module main_fsm (
                 w_n = 1;                // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
+                
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_x = 0;
                 w_y = 0;
                 w_s = 0;
@@ -2666,10 +2627,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 1;     // write low byte of PC
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2698,10 +2658,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2730,10 +2689,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2762,10 +2720,9 @@ module main_fsm (
                 w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                w_inst = 0;
                 w_high_byte = 0;
                 w_low_byte = 0;
-                w_temp = 0;
+                
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
