@@ -18,7 +18,7 @@ module ff_status (
     output logic [7:0] q
 );
 
-    parameter RESET_VALUE = 8'b00110110;
+    parameter FLAGS_RESET_VALUE = 8'b00110110;
     parameter C_FLAG = 0;
     parameter Z_FLAG = 1;
     parameter I_FLAG = 2;
@@ -30,7 +30,7 @@ module ff_status (
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst)
-            q <= RESET_VALUE;
+            q <= FLAGS_RESET_VALUE;
         else begin
             if (w_c)
                 q[C_FLAG] <= c;
