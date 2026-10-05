@@ -5,16 +5,10 @@ module main_fsm (
     input logic         rst,
     input logic [7:0]   imm,
     input logic [7:0]   alu_result,
-    input logic [7:0]   flags,
     input logic         c,
     input logic         v,
-    output logic        w_c,
-    output logic        w_z,
-    output logic        w_i,
-    output logic        w_d,
-    output logic        w_b,
-    output logic        w_v,
-    output logic        w_n,
+    input logic         z,
+    input logic         n,
     output logic        w_next_pc_h,
     output logic        w_next_pc_l,
     output logic        w_a,
@@ -30,10 +24,11 @@ module main_fsm (
     output logic [2:0]  src_addr_l,
     output logic [3:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
-    output logic [4:0]  alu_op,
+    output logic [3:0]  alu_op,
     output logic [7:0]  temp,
     output logic [7:0]  high_byte,
     output logic [7:0]  low_byte,
+    output logic [7:0]  flags,
     output logic        undef
 );
   typedef enum logic [5:0] {
@@ -90,10 +85,19 @@ module main_fsm (
 
     logic [7:0] inst;
 
-    assign c_flag = flags[0];
-    assign z_flag = flags[1];
-    assign v_flag = flags[6];
-    assign n_flag = flags[7];
+    parameter FLAGS_RESET_VALUE = 8'b00110110;
+    parameter C_FLAG = 0;
+    parameter Z_FLAG = 1;
+    parameter I_FLAG = 2;
+    parameter D_FLAG = 3;
+    parameter B_FLAG = 4;
+    parameter V_FLAG = 6;
+    parameter N_FLAG = 7;
+
+    assign c_flag = flags[C_FLAG];
+    assign z_flag = flags[Z_FLAG];
+    assign v_flag = flags[V_FLAG];
+    assign n_flag = flags[N_FLAG];
 
     parameter OP_BRK        = 8'h00;
     parameter OP_ORA_IND_X  = 8'h01;
@@ -251,6 +255,7 @@ module main_fsm (
         if (!rst) begin
             state <= Fetch;
             undef <= 0;
+            flags <= FLAGS_RESET_VALUE;
         end else
             case (state)
             Fetch: begin
@@ -426,8 +431,10 @@ module main_fsm (
                     end
                 endcase
             end
-            BrkFlags:
+            BrkFlags: begin
+                flags[B_FLAG] <= 1;
                 state <= PushPCHigh;
+            end
             Skip:
                 case (inst)
                     OP_ASL_ABS_X,
@@ -486,13 +493,35 @@ module main_fsm (
                     default:
                         state <= Fetch;
                 endcase
-            Pull:
+            Pull: begin
                 case (inst)
-                    OP_RTI:
+                    OP_RTI: begin
+                        flags[D_FLAG] <= imm[D_FLAG];
+                        flags[V_FLAG] <= imm[V_FLAG];
+                        flags[C_FLAG] <= imm[C_FLAG];
+                        flags[Z_FLAG] <= imm[Z_FLAG];
+                        flags[N_FLAG] <= imm[N_FLAG];
+                        flags[I_FLAG] <= imm[I_FLAG];
                         state <= PullInc2;
+                    end
+                    OP_PLP: begin
+                        flags[D_FLAG] <= imm[D_FLAG];
+                        flags[V_FLAG] <= imm[V_FLAG];
+                        flags[C_FLAG] <= imm[C_FLAG];
+                        flags[Z_FLAG] <= imm[Z_FLAG];
+                        flags[N_FLAG] <= imm[N_FLAG];
+                        flags[I_FLAG] <= imm[I_FLAG];
+                        state <= Fetch;
+                    end
+                    OP_PLA: begin
+                        flags[Z_FLAG] <= z;
+                        flags[N_FLAG] <= n;
+                        state <= Fetch;
+                    end
                     default:
                         state <= Fetch;
                 endcase
+            end
             PullInc2:
                 state <= PullPCLow;
             PullPCLow: begin
@@ -907,6 +936,154 @@ module main_fsm (
                 end else
                     // Branch not crossing page
                     state <= Fetch;
+            LoadFlags: begin
+                state <= Fetch;
+                case (inst)
+                    OP_CLC:
+                        flags[C_FLAG] <= 0;  // clear C flag
+                    OP_SEC:
+                        flags[C_FLAG] <= 1;  // set C flag
+                    OP_CLI:
+                        flags[I_FLAG] <= 0;  // clear I flag
+                    OP_SEI:
+                        flags[I_FLAG] <= 1;  // set I flag
+                    OP_CLV:
+                        flags[V_FLAG] <= 0;  // clear V flag
+                    OP_CLD:
+                        flags[D_FLAG] <= 0;  // clear D flag
+                    OP_SED:
+                        flags[D_FLAG] <= 1;  // set D flag
+                    default:
+                        ;  // do nothing for unrecognized instructions
+                endcase
+            end
+            FetchVectorHigh: begin
+                flags[I_FLAG] <= 1;
+                state <= Fetch;
+            end
+            AluImm: begin
+                case (inst)
+                    OP_SBC_IMM,
+                    OP_ADC_IMM: begin
+                        flags[C_FLAG] <= c;
+                        flags[V_FLAG] <= v;
+                    end
+                    default:
+                        ;
+                endcase
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            AluAcc: begin
+                case (inst)
+                    OP_ADC_IND_Y,
+                    OP_ADC_IND_X,
+                    OP_ADC_ABS_Y,
+                    OP_ADC_ABS_X,
+                    OP_ADC_ZP_X,
+                    OP_ADC_ABS,
+                    OP_ADC_ZP,
+                    OP_SBC_IND_Y,
+                    OP_SBC_IND_X,
+                    OP_SBC_ABS_Y,
+                    OP_SBC_ABS_X,
+                    OP_SBC_ZP_X,
+                    OP_SBC_ABS,
+                    OP_SBC_ZP: begin
+                        flags[C_FLAG] <= c;
+                        flags[V_FLAG] <= v;
+                    end
+                    OP_ASL,
+                    OP_LSR,
+                    OP_ROR,
+                    OP_ROL:
+                        flags[C_FLAG] <= c;
+                    default: 
+                        ;
+                endcase
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            AluTemp: begin
+                  // Logic for handling arithmetic with temp
+                case (inst)
+                    OP_ASL_ABS,
+                    OP_ASL_ZP,
+                    OP_ASL_ZP_X,
+                    OP_ASL_ABS_X,
+                    OP_LSR_ABS,
+                    OP_LSR_ZP,
+                    OP_LSR_ZP_X,
+                    OP_LSR_ABS_X,
+                    OP_ROR_ABS,
+                    OP_ROR_ZP,
+                    OP_ROR_ZP_X,
+                    OP_ROR_ABS_X,
+                    OP_ROL_ABS,
+                    OP_ROL_ZP,
+                    OP_ROL_ZP_X,
+                    OP_ROL_ABS_X: begin
+                        flags[C_FLAG] <= c;
+                    end
+                    default: 
+                        ;
+                endcase
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            Bit: begin
+                flags[N_FLAG] <= imm[7];
+                flags[V_FLAG] <= imm[6];
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            LoadCmpImm: begin
+                case (inst)
+                    OP_CMP_IMM,
+                    OP_CPX_IMM,
+                    OP_CPY_IMM:
+                        flags[C_FLAG] <= c;
+                    default:
+                        ;
+                endcase
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            LoadCmp: begin
+                case (inst)
+                    OP_CMP_IND_X,
+                    OP_CMP_IND_Y,
+                    OP_CMP_ZP,
+                    OP_CMP_ZP_X,
+                    OP_CMP_ABS_X,
+                    OP_CMP_ABS_Y,
+                    OP_CMP_ABS,
+                    OP_CPX_ZP,
+                    OP_CPX_ABS,
+                    OP_CPY_ZP,
+                    OP_CPY_ABS: 
+                        flags[C_FLAG] <= c;
+                    default: 
+                        ;
+                endcase
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            IncDec: begin
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
+            Transfer: begin
+                flags[N_FLAG] <= n;
+                flags[Z_FLAG] <= z;
+                state <= Fetch;
+            end
             default:
                 state <= Fetch;
         endcase
@@ -916,16 +1093,8 @@ module main_fsm (
         case (state)
             Fetch: begin
                 // Fetch state logic
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
-
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -943,7 +1112,7 @@ module main_fsm (
             end
             IncDec: begin
                 // IncDec state logic
-                casez (inst)
+                case (inst)
                     OP_DEX: begin
                         // DEX
                         src_c_in = 2;   // carry 1 for decrement
@@ -985,13 +1154,6 @@ module main_fsm (
                         w_y = 0;
                     end
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 1;
-                w_n = 1;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1004,105 +1166,10 @@ module main_fsm (
                 src_addr_l = 0;
                 src_alu_b = 3;      // source ALU B is 1
             end
-            LoadFlags: begin
-                // LoadFlags state logic
-                casez (inst)
-                    OP_CLC: begin
-                        // CLC
-                        src_alu_b = 2;  // source ALU B is 0
-                        alu_op = 8;     // ALU operation is SET_C
-                        w_c = 1;        // write C flag
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 0;
-                    end
-                    OP_SEC: begin
-                        // SEC
-                        src_alu_b = 3;  // source ALU B is 1
-                        alu_op = 8;     // ALU operation is SET_C
-                        w_c = 1;        // write C flag
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 0;
-                    end
-                    OP_CLI: begin
-                        // CLI
-                        src_alu_b = 2;  // source ALU B is 0
-                        alu_op = 11;    // ALU operation is SET_I
-                        w_c = 0;
-                        w_i = 1;        // write I flag
-                        w_v = 0;
-                        w_d = 0;
-                    end
-                    OP_SEI: begin
-                        // SEI
-                        src_alu_b = 3;  // source ALU B is 1
-                        alu_op = 11;    // ALU operation is SET_I
-                        w_c = 0;
-                        w_i = 1;        // write I flag
-                        w_v = 0;
-                        w_d = 0;
-                    end
-                    OP_CLV: begin
-                        // CLV
-                        src_alu_b = 2;  // source ALU B is 0
-                        alu_op = 10;    // ALU operation is SET_V
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 1;        // write V flag
-                        w_d = 0;
-                    end
-                    OP_CLD: begin
-                        // CLD
-                        src_alu_b = 2;  // source ALU B is 0
-                        alu_op = 9;     // ALU operation is SET_D
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 1;        // write D flag
-                    end
-                    OP_SED: begin
-                        // SED
-                        src_alu_b = 3;  // source ALU B is 1
-                        alu_op = 9;     // ALU operation is SET_D
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 1;        // write D flag
-                    end
-                    default: begin
-                        src_alu_b = 0;
-                        alu_op = 0;
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 0;
-                    end
-                endcase
-                w_b = 0;
-                w_z = 0;
-                w_n = 0;
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
-                
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
-                src_addr_h = 0;
-                src_addr_l = 0;
-                src_alu_a = 0;
-            end
             LoadCmpImm: begin
                 case (inst)
                     OP_LDA_IMM: begin
                         // Load Accumulator with Immediate
-                        w_c = 0;
                         w_a = 1;        // write A register
                         w_x = 0;
                         w_y = 0;
@@ -1111,7 +1178,6 @@ module main_fsm (
                     end
                     OP_LDX_IMM: begin
                         // Load X register with Immediate
-                        w_c = 0;
                         w_a = 0;
                         w_x = 1;        // write X register
                         w_y = 0;
@@ -1120,7 +1186,6 @@ module main_fsm (
                     end
                     OP_LDY_IMM: begin
                         // Load Y register with Immediate
-                        w_c = 0;
                         w_a = 0;
                         w_x = 0;
                         w_y = 1;        // write Y register
@@ -1128,7 +1193,6 @@ module main_fsm (
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_CMP_IMM: begin
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1136,7 +1200,6 @@ module main_fsm (
                         alu_op = 1;     // ALU operation is SUB
                     end
                     OP_CPX_IMM: begin
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1144,7 +1207,6 @@ module main_fsm (
                         alu_op = 1;     // ALU operation is SUB
                     end
                     OP_CPY_IMM: begin
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1152,7 +1214,6 @@ module main_fsm (
                         alu_op = 1;     // ALU operation is SUB
                     end
                     default: begin
-                        w_c = 0;
                         w_a = 0;                  
                         w_x = 0;
                         w_y = 0; 
@@ -1160,15 +1221,8 @@ module main_fsm (
                         alu_op = 0; 
                     end
                 endcase
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 1;            // write Z flag from ALU
-                w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                
+                w_next_pc_l = 1;    // write next PC low byte          
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
@@ -1188,89 +1242,53 @@ module main_fsm (
                     OP_ADC_ABS_X,
                     OP_ADC_ZP_X,
                     OP_ADC_ABS,
-                    OP_ADC_ZP: begin
-                        w_c = 1;        // write C flag
-                        w_v = 1;        // write V flag
+                    OP_ADC_ZP:
                         alu_op = 0;     // ALU operation is ADD
-                    end
                     OP_SBC_IND_Y,
                     OP_SBC_IND_X,
                     OP_SBC_ABS_Y,
                     OP_SBC_ABS_X,
                     OP_SBC_ZP_X,
                     OP_SBC_ABS,
-                    OP_SBC_ZP: begin
-                        w_c = 1;        // write C flag
-                        w_v = 1;        // write V flag
+                    OP_SBC_ZP:
                         alu_op = 1;     // ALU operation is SUB
-                    end
                     OP_AND_IND_Y,
                     OP_AND_IND_X,
                     OP_AND_ABS_Y,
                     OP_AND_ABS_X,
                     OP_AND_ZP_X,
                     OP_AND_ABS,
-                    OP_AND_ZP: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_AND_ZP:
                         alu_op = 4;     // ALU operation is AND
-                    end
                     OP_ORA_IND_Y,
                     OP_ORA_IND_X,
                     OP_ORA_ABS_Y,
                     OP_ORA_ABS_X,
                     OP_ORA_ZP_X,
                     OP_ORA_ABS,
-                    OP_ORA_ZP: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_ORA_ZP:
                         alu_op = 5;     // ALU operation is OR
-                    end
                     OP_EOR_IND_Y,
                     OP_EOR_IND_X,
                     OP_EOR_ABS_Y,
                     OP_EOR_ABS_X,
                     OP_EOR_ZP_X,
                     OP_EOR_ABS,
-                    OP_EOR_ZP: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_EOR_ZP:
                         alu_op = 6;     // ALU operation is EOR
-                    end
-                    OP_ASL: begin
-                        w_c = 1;        // write C flag
-                        w_v = 0;
-                        alu_op = 15;    // ALU operation is ASL
-                    end
-                    OP_LSR: begin
-                        w_c = 1;        // write C flag
-                        w_v = 0;
-                        alu_op = 16;    // ALU operation is LSR
-                    end
-                    OP_ROR: begin
-                        w_c = 1;        // write C flag
-                        w_v = 0;
-                        alu_op = 17;    // ALU operation is ROR
-                    end
-                    OP_ROL: begin
-                        w_c = 1;        // write C flag
-                        w_v = 0;
-                        alu_op = 18;    // ALU operation is ROL
-                    end
-                    default: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_ASL:
+                        alu_op = 8;    // ALU operation is ASL
+                    OP_LSR:
+                        alu_op = 9;    // ALU operation is LSR
+                    OP_ROR:
+                        alu_op = 10;    // ALU operation is ROR
+                    OP_ROL:
+                        alu_op = 11;    // ALU operation is ROL
+                    default:
                         alu_op = 0;
-                    end
                 endcase
-                w_i = 0;
-                w_d = 0;
-                w_b = 0;
-                w_z = 1;            // write Z flag
-                w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
-                
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1292,7 +1310,6 @@ module main_fsm (
                     OP_DEC_ZP,
                     OP_DEC_ZP_X,
                     OP_DEC_ABS_X: begin
-                        w_c = 0;
                         src_c_in = 2;   // carry 1 for ALU SUB operation
                         alu_op = 1;     // ALU operation is SUB
                     end
@@ -1300,7 +1317,6 @@ module main_fsm (
                     OP_INC_ZP,
                     OP_INC_ZP_X,
                     OP_INC_ABS_X: begin
-                        w_c = 0;
                         src_c_in = 1;   // carry 0 for ALU ADD operation
                         alu_op = 0;     // ALU operation is ADD
                     end
@@ -1308,46 +1324,35 @@ module main_fsm (
                     OP_ASL_ZP,
                     OP_ASL_ZP_X,
                     OP_ASL_ABS_X: begin
-                        w_c = 1;        // write C flag
                         src_c_in = 0;   // carry from flags
-                        alu_op = 15;    // ALU operation is ASL
+                        alu_op = 8;    // ALU operation is ASL
                     end
                     OP_LSR_ABS,
                     OP_LSR_ZP,
                     OP_LSR_ZP_X,
                     OP_LSR_ABS_X: begin
-                        w_c = 1;        // write C flag
                         src_c_in = 0;   // carry from flags
-                        alu_op = 16;    // ALU operation is LSR
+                        alu_op = 9;    // ALU operation is LSR
                     end
                     OP_ROR_ABS,
                     OP_ROR_ZP,
                     OP_ROR_ZP_X,
                     OP_ROR_ABS_X: begin
-                        w_c = 1;        // write C flag
                         src_c_in = 0;   // carry from flags
-                        alu_op = 17;    // ALU operation is ROR
+                        alu_op = 10;    // ALU operation is ROR
                     end
                     OP_ROL_ABS,
                     OP_ROL_ZP,
                     OP_ROL_ZP_X,
                     OP_ROL_ABS_X: begin
-                        w_c = 1;        // write C flag
                         src_c_in = 0;   // carry from flags
-                        alu_op = 18;    // ALU operation is ROL
+                        alu_op = 11;    // ALU operation is ROL
                     end
                     default: begin
-                        w_c = 0;
                         src_c_in = 0;
                         alu_op = 0;
                     end
                 endcase
-                w_i = 0;
-                w_v = 0;
-                w_d = 0;
-                w_b = 0;
-                w_z = 1;            // write Z flag
-                w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1366,42 +1371,19 @@ module main_fsm (
             AluImm: begin
                 // Logic for handling arithmetic immediate instruction
                 case (inst)
-                    OP_ADC_IMM: begin
-                        w_c = 1;    // write C flag
-                        w_v = 1;    // write V flag
+                    OP_ADC_IMM:
                         alu_op = 0; // ALU operation is ADD
-                    end
-                    OP_SBC_IMM: begin
-                        w_c = 1;    // write C flag
-                        w_v = 1;    // write V flag
+                    OP_SBC_IMM:
                         alu_op = 1; // ALU operation is SUB
-                    end
-                    OP_AND_IMM: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_AND_IMM:
                         alu_op = 4; // ALU operation is AND
-                    end
-                    OP_ORA_IMM: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_ORA_IMM:
                         alu_op = 5; // ALU operation is OR
-                    end
-                    OP_EOR_IMM: begin
-                        w_c = 0;
-                        w_v = 0;
+                    OP_EOR_IMM:
                         alu_op = 6; // ALU operation is EOR
-                    end
-                    default: begin
-                        w_c = 0;
-                        w_v = 0;
+                    default:
                         alu_op = 0;
-                    end
                 endcase
-                w_i = 0;
-                w_d = 0;
-                w_b = 0;
-                w_z = 1;            // write Z flag
-                w_n = 1;            // write N flag
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 1;
@@ -1429,7 +1411,6 @@ module main_fsm (
                     OP_LDA_ABS_Y,
                     OP_LDA_ABS: begin
                         // Load Accumulator from memory
-                        w_c = 0;
                         w_a = 1;        // write A register
                         w_x = 0;
                         w_y = 0;
@@ -1441,7 +1422,6 @@ module main_fsm (
                     OP_LDX_ABS_Y,
                     OP_LDX_ABS: begin
                         // Load X register from memory
-                        w_c = 0;
                         w_a = 0;
                         w_x = 1;        // write X register
                         w_y = 0;
@@ -1453,7 +1433,6 @@ module main_fsm (
                     OP_LDY_ABS_X,
                     OP_LDY_ABS: begin
                         // Load Y register from memory
-                        w_c = 0;
                         w_a = 0;
                         w_x = 0;
                         w_y = 1;        // write Y register
@@ -1468,7 +1447,6 @@ module main_fsm (
                     OP_CMP_ABS_Y,
                     OP_CMP_ABS: begin
                         // Compare Accumulator with memory
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1478,7 +1456,6 @@ module main_fsm (
                     OP_CPX_ZP,
                     OP_CPX_ABS: begin
                         // Compare X register with memory
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1488,7 +1465,6 @@ module main_fsm (
                     OP_CPY_ZP,
                     OP_CPY_ABS: begin
                         // Compare Y register with memory
-                        w_c = 1;        // write C flag
                         w_a = 0;
                         w_x = 0;
                         w_y = 0;
@@ -1496,7 +1472,6 @@ module main_fsm (
                         alu_op = 1;     // ALU operation is SUB
                     end
                     default: begin
-                        w_c = 0;
                         w_a = 0;                  
                         w_x = 0;
                         w_y = 0; 
@@ -1504,12 +1479,6 @@ module main_fsm (
                         alu_op = 0; 
                     end
                 endcase
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 1;            // write Z flag from ALU
-                w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_s = 0;
@@ -1524,13 +1493,6 @@ module main_fsm (
             end
             FetchLoByte: begin
                 // Logic for handling low byte of absolute
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -1586,13 +1548,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -1611,13 +1566,6 @@ module main_fsm (
             end
             FetchData: begin
                 // Logic for handling fetch data
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1637,13 +1585,6 @@ module main_fsm (
             end
             WriteFakeData: begin
                 // Logic for handling fetch data
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1663,13 +1604,6 @@ module main_fsm (
             end
             FetchLoByteInd: begin
                 // Logic for handling low byte of indirect address
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1689,13 +1623,6 @@ module main_fsm (
             end
             FetchHiByteInd: begin
                 // Logic for handling high byte of indirect address
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1716,13 +1643,6 @@ module main_fsm (
             FetchHiByteIndY: begin
                 // Logic for handling high byte of indirect address
                 // also addition Y to low byte of absolute address
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1779,13 +1699,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1804,13 +1717,6 @@ module main_fsm (
             end
             FetchVectorLow: begin
                 // Logic for handling low byte of interrupt vector
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1830,13 +1736,6 @@ module main_fsm (
             end
             FetchVectorHigh: begin
                 // Logic for handling high byte of interrupt vector
-                w_c = 0;
-                w_i = 1;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -1851,18 +1750,11 @@ module main_fsm (
                 src_addr_h = 3;     // source addr is high byte of irq address high byte
                 src_addr_l = 3;     // source addr is low byte of irq address high byte
                 src_alu_a = 0;
-                src_alu_b = 3;      // source ALU B is 1
-                alu_op = 11;        // ALU operation is SET_I
+                src_alu_b = 0;
+                alu_op = 0;
             end
             PageInc: begin
                 // Logic for handling +1 page
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1906,13 +1798,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1931,13 +1816,6 @@ module main_fsm (
             end
             Bit: begin
                 // Logic for handling BIT absolute
-                w_c = 0;
-                w_i = 0;
-                w_v = 1;            // write V flag
-                w_b = 0;
-                w_d = 0;
-                w_z = 1;            // write Z flag from ALU
-                w_n = 1;            // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -1953,17 +1831,10 @@ module main_fsm (
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_a = 0;      // source ALU A is A register
                 src_alu_b = 0;      // source ALU B is data_in
-                alu_op = 7;         // ALU operation is BIT
+                alu_op = 4;         // ALU operation is AND
             end
             BrkFlags: begin
                 // Logic for handling BRK instruction flags
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 1;            // write B flag
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -1978,18 +1849,11 @@ module main_fsm (
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_a = 0;
-                src_alu_b = 3;  // source ALU B is 1
-                alu_op = 14;    // ALU operation is SET_B
+                src_alu_b = 0;
+                alu_op = 0;
             end
             JmpAbs: begin
                 // Logic for handling high byte of JMP absolute
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -2009,13 +1873,6 @@ module main_fsm (
             end
             JmpIndLowByte: begin
                 // Logic for handling low byte of JMP indirect
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 1;
                 w_a = 0;
@@ -2035,13 +1892,6 @@ module main_fsm (
             end
             JmpInd: begin
                 // Logic for handling high byte of JMP indirect
-                w_c = 0;
-                w_i = 0;
-                w_b = 0;
-                w_v = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2061,13 +1911,6 @@ module main_fsm (
             end
             Jsr: begin
                 // Logic for handling high byte of Jsr
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;
                 w_a = 0;
@@ -2086,13 +1929,6 @@ module main_fsm (
                 alu_op = 0;
             end
             Branch: begin
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -2112,13 +1948,6 @@ module main_fsm (
             end
             BranchTaken: begin
                 // Logic for handling branch taken
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -2134,17 +1963,10 @@ module main_fsm (
                 src_addr_l = 0;
                 src_alu_a = 4;      // source ALU A is PC low byte
                 src_alu_b = 1;      // source ALU B is low byte
-                alu_op = 12;        // ALU operation: CORR
+                alu_op = 7;        // ALU operation: CORR
             end
             BranchPageInc: begin
                 // Logic for handling branch taken with +1 page
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2164,13 +1986,6 @@ module main_fsm (
             end
             BranchPageDec: begin
                 // Logic for handling branch taken with -1 page
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2233,13 +2048,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 1;            // write Z flag from ALU
-                w_n = 1;            // write N flag from ALU
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_s = 0;
@@ -2255,13 +2063,6 @@ module main_fsm (
             end
             TransferStack: begin
                 // TXS
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2281,13 +2082,6 @@ module main_fsm (
             end
             PushPCHigh: begin
                 // Push PC high byte onto the stack
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2307,13 +2101,6 @@ module main_fsm (
             end
             PushPCLow: begin
                 // Push PC low byte onto the stack
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2342,13 +2129,6 @@ module main_fsm (
                     default: 
                         src_data_out = 0;
                 endcase
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2368,13 +2148,6 @@ module main_fsm (
             PullInc2,
             PullInc: begin
                 // Increment S register before pull
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2397,33 +2170,18 @@ module main_fsm (
                 case (inst)
                     OP_PLA: begin
                         w_a = 1;        // write A register
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 0;
                         alu_op = 3;     // ALU operation is pass B
                     end
                     OP_RTI,
                     OP_PLP: begin
                         w_a = 0;
-                        w_c = 1;        // write C flag
-                        w_i = 1;        // write I flag
-                        w_v = 1;        // write V flag
-                        w_d = 1;        // write D flag
-                        alu_op = 13;    // ALU operation is set FLAGS
+                        alu_op = 0;
                     end
                     default: begin
                         w_a = 0;
-                        w_c = 0;
-                        w_i = 0;
-                        w_v = 0;
-                        w_d = 0;
                         alu_op = 0;
                     end
                 endcase
-                w_b = 0;
-                w_z = 1;                // write Z flag
-                w_n = 1;                // write N flag
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_x = 0;
@@ -2441,13 +2199,6 @@ module main_fsm (
             end
             PullPCLow: begin
                 // RTS, PC low byte
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
@@ -2467,13 +2218,6 @@ module main_fsm (
             end
             PullPCHigh: begin
                 // RTS, PC high byte
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -2493,13 +2237,6 @@ module main_fsm (
             end
             PCInc: begin
                 // PC increment logic
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 1;    // write next PC high byte
                 w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
@@ -2519,13 +2256,6 @@ module main_fsm (
             end
             default: begin
                 // Default state logic
-                w_c = 0;
-                w_i = 0;
-                w_v = 0;
-                w_b = 0;
-                w_d = 0;
-                w_z = 0;
-                w_n = 0;
                 w_next_pc_h = 0;
                 w_next_pc_l = 0;
                 w_a = 0;
