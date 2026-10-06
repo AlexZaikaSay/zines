@@ -8,6 +8,7 @@ module main_fsm #
     input logic         clk,
     input logic         rst,
     input logic         nmi,
+    input logic         irq,
     input logic [7:0]   imm,
     input logic [7:0]   alu_result,
     input logic         c,
@@ -87,6 +88,7 @@ module main_fsm #
     logic z_flag;
     logic v_flag;
     logic n_flag;
+    logic i_flag;
 
     logic [7:0] inst;
     logic nmi_request;
@@ -102,6 +104,7 @@ module main_fsm #
 
     assign c_flag = flags[C_FLAG];
     assign z_flag = flags[Z_FLAG];
+    assign i_flag = flags[I_FLAG];
     assign v_flag = flags[V_FLAG];
     assign n_flag = flags[N_FLAG];
 
@@ -295,6 +298,12 @@ module main_fsm #
                         inst <= OP_BRK;
                         state <= Skip;
                     end
+                    else if (!irq && !i_flag) begin
+                        irq_type <= 2;      // IRQ/BRK
+                        flags[B_FLAG] <= 0;
+                        inst <= OP_BRK;
+                        state <= Skip;
+                    end
                     else begin
                         inst <= imm;
                         {pc_h, pc_l} <= {pc_h, pc_l} + 1;
@@ -472,7 +481,7 @@ module main_fsm #
                 end
                 BrkFlags: begin
                     flags[B_FLAG] <= 1;
-                    irq_type <= 2;      // IRQ
+                    irq_type <= 2;      // IRQ/BRK
                     {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                     state <= PushPCHigh;
                 end

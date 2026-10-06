@@ -5,12 +5,13 @@
 
 
 
-module tb_070_nmi;
+module tb_071_irq;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/070_nmi.tv";
+    parameter MEM_FILE = "./tests/071_irq.tv";
     logic clk;
     logic rst;
     logic nmi;
+    logic irq;
 
     devboard #(
         .MEM_FILE(MEM_FILE),
@@ -20,17 +21,19 @@ module tb_070_nmi;
     (
         .clk(clk),
         .rst(rst),
-        .nmi(nmi)
+        .nmi(nmi),
+        .irq(irq)
     );
 
     initial begin
-        $dumpfile("tb_070_nmi.vcd");
-        $dumpvars(0, tb_070_nmi);
+        $dumpfile("tb_071_irq.vcd");
+        $dumpvars(0, tb_071_irq);
+        irq = 1;
         nmi = 1;
         #1 rst = 0; #2; rst = 1;
-        #51; nmi = 0; #1; nmi = 1;
-        #200; nmi = 0; #1; nmi = 1;
-        #160; nmi = 0; #1; nmi = 1;
+        #51; irq = 0; #18; irq = 1;
+        #170; irq = 0; #20; irq = 1;
+        #160; irq = 0; #15; irq = 1;
     end
 
     initial begin
@@ -41,7 +44,7 @@ module tb_070_nmi;
                 13: begin
                     // first int
                     if (db_device.cpu.pc_l !== 8'h0d  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha4)
-                        $error("TEST FAILED: NMI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
+                        $error("TEST FAILED: IRQ, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
                 21: begin
                     // first rti
@@ -51,7 +54,7 @@ module tb_070_nmi;
                 32: begin
                     // second int
                     if (db_device.cpu.pc_l !== 8'h0d  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha4)
-                        $error("TEST FAILED: NMI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
+                        $error("TEST FAILED: IRQ, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
                 40: begin
                     // second rti
@@ -61,7 +64,7 @@ module tb_070_nmi;
                 49: begin
                     // third int
                     if (db_device.cpu.pc_l !== 8'h0d  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha4)
-                        $error("TEST FAILED: NMI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
+                        $error("TEST FAILED: IRQ, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
                 47: begin
                     // third rti
