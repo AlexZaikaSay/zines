@@ -28,7 +28,7 @@ module tb_070_nmi;
         $dumpvars(0, tb_070_nmi);
         nmi = 1;
         #1 rst = 0; #2; rst = 1;
-        #51; nmi = 0; #1; nmi = 1;
+        #31; nmi = 0; #1; nmi = 1;  // 2 clk earlier: nmi is synchronized in the CPU
         #200; nmi = 0; #1; nmi = 1;
         #160; nmi = 0; #1; nmi = 1;
     end
@@ -63,7 +63,7 @@ module tb_070_nmi;
                     if (db_device.cpu.pc_l !== 8'h0d  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha4)
                         $error("TEST FAILED: NMI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
-                47: begin
+                57: begin
                     // third rti
                     if (db_device.cpu.pc_l !== 8'h07  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha0)
                         $error("TEST FAILED: RTI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
