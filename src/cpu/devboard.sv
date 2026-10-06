@@ -10,8 +10,8 @@ module devboard
 (
     input logic clk,
     input logic rst,
-    input logic nmi,
-    input logic irq
+    input logic nmi = 1'b1,
+    input logic irq = 1'b1
 );
 
     logic [15:0] addr;

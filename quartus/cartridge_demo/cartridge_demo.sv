@@ -31,7 +31,7 @@ module cartridge_demo (
         .sd_cmd(SD_CMD),
         .sd_dat0(SD_DAT0),
         .sd_cs_n(SD_CS_N),
-        .sd_cd_n(SD_CD),
+        .sd_cd(SD_CD),
         // First PRG-ROM byte is at $8000.
         .cpu_addr(16'h8000),
         .cpu_data_in(8'h00),

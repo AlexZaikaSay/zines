@@ -261,9 +261,12 @@ module main_fsm #
     parameter OP_INC_ABS_X  = 8'hFE;
 
 
-    // The falling edge of nmi toggles nmi_edge; Fetch copies it into nmi_seen.
+    // The falling edge of nmi toggles nmi_edge (asynchronous to clk); it is passed through a
+    // two-flop synchronizer before Fetch copies it into nmi_seen.
     // nmi_request is high from the edge until Fetch consumes it, and a held-low nmi does not re-trigger it.
     logic nmi_edge;
+    logic nmi_edge_sync1;
+    logic nmi_edge_sync2;
     logic nmi_seen;
 
     always_ff @(negedge nmi or negedge rst) begin
@@ -274,13 +277,24 @@ module main_fsm #
     end
 
     always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            nmi_edge_sync1 <= 0;
+            nmi_edge_sync2 <= 0;
+        end
+        else begin
+            nmi_edge_sync1 <= nmi_edge;
+            nmi_edge_sync2 <= nmi_edge_sync1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
         if (!rst)
             nmi_seen <= 0;
         else if (state == Fetch)
-            nmi_seen <= nmi_edge;
+            nmi_seen <= nmi_edge_sync2;
     end
 
-    assign nmi_request = nmi_edge != nmi_seen;
+    assign nmi_request = nmi_edge_sync2 != nmi_seen;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin

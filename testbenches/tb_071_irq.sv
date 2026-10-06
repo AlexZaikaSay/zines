@@ -66,7 +66,7 @@ module tb_071_irq;
                     if (db_device.cpu.pc_l !== 8'h0d  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha4)
                         $error("TEST FAILED: IRQ, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
-                47: begin
+                57: begin
                     // third rti
                     if (db_device.cpu.pc_l !== 8'h07  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'ha0)
                         $error("TEST FAILED: RTI, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 

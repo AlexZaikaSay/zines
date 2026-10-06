@@ -32,10 +32,10 @@ module tb_072_irq_nmi;
         irq = 1;
         #1 rst = 0; #2; rst = 1;
         #51; irq = 0; #18; irq = 1;
-        #170; nmi = 0; #1; nmi = 1;
+        #150; nmi = 0; #1; nmi = 1;  // 2 clk earlier: nmi is synchronized in the CPU
         #160; nmi = 0; #1; nmi = 1;
-        #30; irq = 0; #128; irq = 1;
-        #20; nmi = 0; #1; nmi = 1;
+        #50; irq = 0; #127; irq = 1;
+        #1; nmi = 0; #1; nmi = 1;
     end
 
     initial begin
