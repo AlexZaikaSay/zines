@@ -1,6 +1,10 @@
 
 
-module main_fsm (
+module main_fsm # 
+(
+    parameter PC_START = 16'h0000
+)
+(
     input logic         clk,
     input logic         rst,
     input logic [7:0]   imm,
@@ -9,8 +13,6 @@ module main_fsm (
     input logic         v,
     input logic         z,
     input logic         n,
-    output logic        w_next_pc_h,
-    output logic        w_next_pc_l,
     output logic        w_a,
     output logic        w_x,
     output logic        w_y,
@@ -18,14 +20,14 @@ module main_fsm (
     output logic        w_mem,
     output logic [1:0]  src_c_in, // TODO: check later if it really needs
     output logic [2:0]  src_data_out,
-    output logic [1:0]  src_next_pc_h,
-    output logic [1:0]  src_next_pc_l,
     output logic [2:0]  src_addr_h,
     output logic [2:0]  src_addr_l,
     output logic [3:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
     output logic [3:0]  alu_op,
     output logic [7:0]  temp,
+    output logic [7:0]  pc_h,
+    output logic [7:0]  pc_l,
     output logic [7:0]  high_byte,
     output logic [7:0]  low_byte,
     output logic [7:0]  flags,
@@ -256,10 +258,12 @@ module main_fsm (
             state <= Fetch;
             undef <= 0;
             flags <= FLAGS_RESET_VALUE;
+            {pc_h, pc_l} <= PC_START;
         end else
             case (state)
             Fetch: begin
                 inst <= imm;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 case (imm)
                     OP_ROR,
                     OP_ROL,
@@ -433,6 +437,7 @@ module main_fsm (
             end
             BrkFlags: begin
                 flags[B_FLAG] <= 1;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 state <= PushPCHigh;
             end
             Skip:
@@ -528,16 +533,19 @@ module main_fsm (
                 low_byte <= imm;
                 state <= PullPCHigh;
             end
-            PullPCHigh:
+            PullPCHigh: begin
+                {pc_h, pc_l} <= {imm, low_byte};
                 case (inst)
                     OP_RTI:
                         state <= Fetch;
                     default:
                         state <= PCInc;
                 endcase
+            end
             FetchLoByte: begin
                 high_byte <= 0;
                 low_byte <= imm;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 case (inst)
                     OP_ASL_ZP,
                     OP_LSR_ZP,
@@ -664,6 +672,7 @@ module main_fsm (
                 state <= AluTemp;
             FetchHiByte: begin
                 high_byte <= imm;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 case (inst)
                     OP_ASL_ABS_X,
                     OP_LSR_ABS_X,
@@ -888,11 +897,17 @@ module main_fsm (
                 endcase
             end
             JmpIndLowByte: begin
+                pc_l <= imm;
                 low_byte <= alu_result;
                 state <= JmpInd;
             end
+            JmpInd: begin
+                pc_h <= imm;
+                state <= Fetch;
+            end
             Branch: begin
                 low_byte <= imm;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 state <= Fetch;
                 case (inst)
                     OP_BNE:
@@ -924,8 +939,9 @@ module main_fsm (
                         state <= Fetch;
                 endcase
             end
-            BranchTaken:
+            BranchTaken: begin
                 // Cross page if pc_l sum overflows
+                pc_l <= alu_result;
                 if (v) begin
                     if (c)
                         // Increment page if branch up
@@ -936,6 +952,12 @@ module main_fsm (
                 end else
                     // Branch not crossing page
                     state <= Fetch;
+            end
+            BranchPageDec,
+            BranchPageInc: begin
+                pc_h <= alu_result;
+                state <= Fetch;
+            end
             LoadFlags: begin
                 state <= Fetch;
                 case (inst)
@@ -959,6 +981,7 @@ module main_fsm (
             end
             FetchVectorHigh: begin
                 flags[I_FLAG] <= 1;
+                {pc_h, pc_l} <= {imm, low_byte};
                 state <= Fetch;
             end
             AluImm: begin
@@ -973,6 +996,7 @@ module main_fsm (
                 endcase
                 flags[N_FLAG] <= n;
                 flags[Z_FLAG] <= z;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 state <= Fetch;
             end
             AluAcc: begin
@@ -1051,6 +1075,7 @@ module main_fsm (
                 endcase
                 flags[N_FLAG] <= n;
                 flags[Z_FLAG] <= z;
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 state <= Fetch;
             end
             LoadCmp: begin
@@ -1074,14 +1099,19 @@ module main_fsm (
                 flags[Z_FLAG] <= z;
                 state <= Fetch;
             end
+            Transfer,
             IncDec: begin
                 flags[N_FLAG] <= n;
                 flags[Z_FLAG] <= z;
                 state <= Fetch;
             end
-            Transfer: begin
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
+            Jsr,
+            JmpAbs: begin
+                {pc_h, pc_l} <= {imm, low_byte};
+                state <= Fetch;
+            end
+            PCInc: begin
+                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
                 state <= Fetch;
             end
             default:
@@ -1091,25 +1121,6 @@ module main_fsm (
 
     always_comb begin 
         case (state)
-            Fetch: begin
-                // Fetch state logic
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;  
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
             IncDec: begin
                 // IncDec state logic
                 case (inst)
@@ -1154,14 +1165,10 @@ module main_fsm (
                         w_y = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;  
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_b = 3;      // source ALU B is 1
@@ -1220,15 +1227,11 @@ module main_fsm (
                         src_alu_a = 0;
                         alu_op = 0; 
                     end
-                endcase
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte          
+                endcase    
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_b = 0;      // source ALU B is data_in
@@ -1287,8 +1290,6 @@ module main_fsm (
                     default:
                         alu_op = 0;
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1296,8 +1297,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;       // carry from flags for ALU ADC/SBC operations
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source address is 
                 src_addr_l = 1;     // source address is low_byte
                 src_alu_a = 0;      // source ALU A is A
@@ -1353,16 +1352,12 @@ module main_fsm (
                         alu_op = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
                 w_s = 0;
                 w_mem = 1;
                 src_data_out = 0;   // source for data_out is ALU result
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_a = 8;      // source ALU A is temp
@@ -1384,8 +1379,6 @@ module main_fsm (
                     default:
                         alu_op = 0;
                 endcase
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
                 w_a = 1;
                 w_x = 0;
                 w_y = 0;
@@ -1393,8 +1386,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;       // carry from flags for ALU ADC/SBC operations
                 src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_a = 0;      // source ALU A is A
@@ -1479,36 +1470,13 @@ module main_fsm (
                         alu_op = 0; 
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;  
                 src_addr_h = 1;     // source address high byte is from memory
                 src_addr_l = 1;     // source address low byte is from memory
                 src_alu_b = 0;      // source ALU B is data_in
-            end
-            FetchLoByte: begin
-                // Logic for handling low byte of absolute
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
             end
             FetchHiByte: begin
                 // Logic for handling high byte of absolute
@@ -1548,8 +1516,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1557,8 +1523,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_b = 1;      // source ALU B is low byte of absolute address
@@ -1566,8 +1530,6 @@ module main_fsm (
             end
             FetchData: begin
                 // Logic for handling fetch data
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1575,8 +1537,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 0;
@@ -1585,8 +1545,6 @@ module main_fsm (
             end
             WriteFakeData: begin
                 // Logic for handling fetch data
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1594,8 +1552,6 @@ module main_fsm (
                 w_mem = 1;
                 src_c_in = 0;
                 src_data_out = 0;   // source data out is ALU result
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 8;      // source ALU A is temp
@@ -1604,8 +1560,6 @@ module main_fsm (
             end
             FetchLoByteInd: begin
                 // Logic for handling low byte of indirect address
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1613,8 +1567,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 6;      // source ALU A is low byte
@@ -1623,8 +1575,6 @@ module main_fsm (
             end
             FetchHiByteInd: begin
                 // Logic for handling high byte of indirect address
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1632,8 +1582,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 0;
@@ -1643,8 +1591,6 @@ module main_fsm (
             FetchHiByteIndY: begin
                 // Logic for handling high byte of indirect address
                 // also addition Y to low byte of absolute address
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1652,8 +1598,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte
                 src_addr_l = 1;     // source addr is low byte
                 src_alu_a = 2;      // source ALU A is Y
@@ -1699,8 +1643,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1708,8 +1650,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_b = 1;      // source ALU B is low byte of absolute address
@@ -1717,8 +1657,6 @@ module main_fsm (
             end
             FetchVectorLow: begin
                 // Logic for handling low byte of interrupt vector
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1726,8 +1664,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 4;     // source addr is high byte of irq address low byte
                 src_addr_l = 4;     // source addr is low byte of irq address low byte
                 src_alu_a = 0;
@@ -1736,8 +1672,6 @@ module main_fsm (
             end
             FetchVectorHigh: begin
                 // Logic for handling high byte of interrupt vector
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1745,8 +1679,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 1;  // source next PC high byte is imm
-                src_next_pc_l = 1;  // source next PC low byte is low_byte
                 src_addr_h = 3;     // source addr is high byte of irq address high byte
                 src_addr_l = 3;     // source addr is low byte of irq address high byte
                 src_alu_a = 0;
@@ -1755,8 +1687,6 @@ module main_fsm (
             end
             PageInc: begin
                 // Logic for handling +1 page
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1764,8 +1694,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;  
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_a = 7;      // source ALU A is 
@@ -1798,8 +1726,6 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1807,8 +1733,6 @@ module main_fsm (
                 w_mem = 1;          // write to memory ALU result
                 src_c_in = 0;
                 src_data_out = 0;   // source data out is ALU result
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_b = 0;
@@ -1816,8 +1740,6 @@ module main_fsm (
             end
             Bit: begin
                 // Logic for handling BIT absolute
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1825,56 +1747,14 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_a = 0;      // source ALU A is A register
                 src_alu_b = 0;      // source ALU B is data_in
                 alu_op = 4;         // ALU operation is AND
             end
-            BrkFlags: begin
-                // Logic for handling BRK instruction flags
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
-                src_addr_h = 0;
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
-            JmpAbs: begin
-                // Logic for handling high byte of JMP absolute
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 1;  // source next PC high byte is imm
-                src_next_pc_l = 1;  // source next PC low byte is low_byte
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
             JmpIndLowByte: begin
                 // Logic for handling low byte of JMP indirect
-                w_next_pc_h = 0;
-                w_next_pc_l = 1;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1882,8 +1762,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 3;  // source next PC low byte is data_in
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_a = 6;      // source ALU A is low_byte
@@ -1892,8 +1770,6 @@ module main_fsm (
             end
             JmpInd: begin
                 // Logic for handling high byte of JMP indirect
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1901,55 +1777,14 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 1;  // source next PC high byte is imm
-                src_next_pc_l = 0;
                 src_addr_h = 1;     // source addr is high byte of absolute address
                 src_addr_l = 1;     // source addr is low byte of absolute address
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
             end
-            Jsr: begin
-                // Logic for handling high byte of Jsr
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 1;  // source next PC high byte is imm
-                src_next_pc_l = 1;  // source next PC low byte is low_byte
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
-            Branch: begin
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;
-                src_addr_h = 0;     // source addr is PC
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
             BranchTaken: begin
                 // Logic for handling branch taken
-                w_next_pc_h = 0;
-                w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1957,8 +1792,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 2;  // source next PC low byte is ALU result
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_a = 4;      // source ALU A is PC low byte
@@ -1967,8 +1800,6 @@ module main_fsm (
             end
             BranchPageInc: begin
                 // Logic for handling branch taken with +1 page
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1976,8 +1807,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for ALU ADD operation
                 src_data_out = 0;
-                src_next_pc_h = 2;  // source next PC low byte is ALU result
-                src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_a = 5;      // source ALU A is PC hi byte
@@ -1986,8 +1815,6 @@ module main_fsm (
             end
             BranchPageDec: begin
                 // Logic for handling branch taken with -1 page
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -1995,8 +1822,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 0;
-                src_next_pc_h = 2;  // source next PC low byte is ALU result
-                src_next_pc_l = 0;  
                 src_addr_h = 0;     // source addr is PC
                 src_addr_l = 0;
                 src_alu_a = 5;      // source ALU A is PC hi byte
@@ -2048,14 +1873,10 @@ module main_fsm (
                         src_alu_a = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_b = 0;
@@ -2063,8 +1884,6 @@ module main_fsm (
             end
             TransferStack: begin
                 // TXS
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2072,8 +1891,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_a = 1;     // source ALU A is X register
@@ -2082,8 +1899,6 @@ module main_fsm (
             end
             PushPCHigh: begin
                 // Push PC high byte onto the stack
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2091,8 +1906,6 @@ module main_fsm (
                 w_mem = 1;          // write memory 
                 src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 3;    // source data out is PC high byte
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 3;      // source ALU A is S register
@@ -2101,8 +1914,6 @@ module main_fsm (
             end
             PushPCLow: begin
                 // Push PC low byte onto the stack
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2110,8 +1921,6 @@ module main_fsm (
                 w_mem = 1;          // write memory 
                 src_c_in = 2;       // carry 1 for ALU SUB operation
                 src_data_out = 4;    // source data out is PC low byte
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 3;      // source ALU A is S register
@@ -2129,16 +1938,12 @@ module main_fsm (
                     default: 
                         src_data_out = 0;
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
                 w_s = 1;            // write S register from ALU
                 w_mem = 1;          // write memory 
                 src_c_in = 2;       // carry 1 for ALU SUB operation
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 3;      // source ALU A is S register
@@ -2148,8 +1953,6 @@ module main_fsm (
             PullInc2,
             PullInc: begin
                 // Increment S register before pull
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2157,8 +1960,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for increment
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_a = 3;      // source ALU A is S register
@@ -2182,16 +1983,12 @@ module main_fsm (
                         alu_op = 0;
                     end
                 endcase
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_x = 0;
                 w_y = 0;
                 w_s = 0;
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 0;
@@ -2199,8 +1996,6 @@ module main_fsm (
             end
             PullPCLow: begin
                 // RTS, PC low byte
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2208,8 +2003,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 1;       // carry 0 for increment
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 3;      // source ALU A is S register
@@ -2218,8 +2011,6 @@ module main_fsm (
             end
             PullPCHigh: begin
                 // RTS, PC high byte
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2227,37 +2018,14 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 1;  // source next PC high byte is imm
-                src_next_pc_l = 1;  // source next PC low byte is low_byte
                 src_addr_h = 2;     // source address high is 8'h01
                 src_addr_l = 2;     // source address low is S register
                 src_alu_a = 0;
                 src_alu_b = 0;
                 alu_op = 0;
             end
-            PCInc: begin
-                // PC increment logic
-                w_next_pc_h = 1;    // write next PC high byte
-                w_next_pc_l = 1;    // write next PC low byte
-                w_a = 0;
-                w_x = 0;
-                w_y = 0;
-                w_s = 0;
-                w_mem = 0;
-                src_c_in = 0;
-                src_data_out = 0;
-                src_next_pc_h = 0;  // source next PC is PC+1
-                src_next_pc_l = 0;  
-                src_addr_h = 0;
-                src_addr_l = 0;
-                src_alu_a = 0;
-                src_alu_b = 0;
-                alu_op = 0;
-            end
             default: begin
                 // Default state logic
-                w_next_pc_h = 0;
-                w_next_pc_l = 0;
                 w_a = 0;
                 w_x = 0;
                 w_y = 0;
@@ -2265,8 +2033,6 @@ module main_fsm (
                 w_mem = 0;
                 src_c_in = 0;
                 src_data_out = 0;
-                src_next_pc_h = 0;
-                src_next_pc_l = 0;
                 src_addr_h = 0;
                 src_addr_l = 0;
                 src_alu_a = 0;
