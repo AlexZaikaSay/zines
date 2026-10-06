@@ -12,6 +12,7 @@ module mos6502 #(
 ) (
     input logic rst,
     input logic clk,
+    input logic nmi,
     input logic [7:0] data_in,
     output logic [7:0] data_out,
     output logic [15:0] addr,
@@ -55,10 +56,12 @@ module mos6502 #(
     logic [1:0] src_c_in;
     logic [2:0] src_data_out;
 
+    logic [1:0] irq_type;
+
     logic [3:0] alu_op;
 
     int_control int_control_inst(
-        .sel(2'b10),
+        .sel(irq_type),
         .irq_addr_h(irq_addr_h),
         .irq_addr_l(irq_addr_l)
     );
@@ -132,6 +135,7 @@ module mos6502 #(
     (
         .clk(clk),
         .rst(rst),
+        .nmi(nmi),
         .imm(data_in),
         .alu_result(alu_result),
         .c(c),
@@ -149,6 +153,7 @@ module mos6502 #(
         .src_addr_l(src_addr_l),
         .src_alu_a(src_alu_a),
         .src_alu_b(src_alu_b),
+        .irq_type(irq_type),
         .alu_op(alu_op),
         .temp(temp),
         .pc_h(pc_h),

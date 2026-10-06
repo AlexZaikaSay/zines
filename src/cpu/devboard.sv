@@ -9,7 +9,8 @@ module devboard
 )
 (
     input logic clk,
-    input logic rst
+    input logic rst,
+    input logic nmi
 );
 
     logic [15:0] addr;
@@ -26,7 +27,8 @@ module devboard
         .addr(addr),
         .data_out(data_out),
         .data_in(data_in),
-        .we(we)
+        .we(we),
+        .nmi(nmi)
     );
 
     mem #(
