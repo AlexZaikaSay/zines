@@ -7,6 +7,7 @@ module main_fsm #
 (
     input logic         clk,
     input logic         rst,
+    input logic         nmi,
     input logic [7:0]   imm,
     input logic [7:0]   alu_result,
     input logic         c,
@@ -24,6 +25,7 @@ module main_fsm #
     output logic [2:0]  src_addr_l,
     output logic [3:0]  src_alu_a,
     output logic [2:0]  src_alu_b,
+    output logic [1:0]  irq_type,
     output logic [3:0]  alu_op,
     output logic [7:0]  temp,
     output logic [7:0]  pc_h,
@@ -35,6 +37,7 @@ module main_fsm #
 );
   typedef enum logic [5:0] {
         Fetch,          // Fetch
+        Nmi,            // Handle Non-Maskable Interrupt (NMI)
         FetchData,      // Fetch data from memory to tmp register
         WriteFakeData,  // Write fake data to memory
         LoadFlags,      // LoadFlags for CLC, SEC, CLI, SEI, CLV, CLD, SED
@@ -86,6 +89,7 @@ module main_fsm #
     logic n_flag;
 
     logic [7:0] inst;
+    logic nmi_request;
 
     parameter FLAGS_RESET_VALUE = 8'b00110110;
     parameter C_FLAG = 0;
@@ -253,870 +257,904 @@ module main_fsm #
     parameter OP_SBC_ABS_X  = 8'hFD;
     parameter OP_INC_ABS_X  = 8'hFE;
 
+
+    // The falling edge of nmi toggles nmi_edge; Fetch copies it into nmi_seen.
+    // nmi_request is high from the edge until Fetch consumes it, and a held-low nmi does not re-trigger it.
+    logic nmi_edge;
+    logic nmi_seen;
+
+    always_ff @(negedge nmi or negedge rst) begin
+        if (!rst)
+            nmi_edge <= 0;
+        else
+            nmi_edge <= ~nmi_edge;
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst)
+            nmi_seen <= 0;
+        else if (state == Fetch)
+            nmi_seen <= nmi_edge;
+    end
+
+    assign nmi_request = nmi_edge != nmi_seen;
+
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             state <= Fetch;
             undef <= 0;
             flags <= FLAGS_RESET_VALUE;
             {pc_h, pc_l} <= PC_START;
-        end else
+        end 
+        else begin
             case (state)
-            Fetch: begin
-                inst <= imm;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                case (imm)
-                    OP_ROR,
-                    OP_ROL,
-                    OP_LSR,
-                    OP_ASL: 
-                        state <= AluAcc;
-                    OP_CLC,
-                    OP_SEC,
-                    OP_CLI,
-                    OP_SEI,
-                    OP_CLV,
-                    OP_CLD,
-                    OP_SED: 
-                        state <= LoadFlags;
-                    OP_CMP_IMM,
-                    OP_CPX_IMM,
-                    OP_CPY_IMM,
-                    OP_LDA_IMM,
-                    OP_LDX_IMM,
-                    OP_LDY_IMM:
-                        state <= LoadCmpImm;
-                    OP_AND_IMM,
-                    OP_ORA_IMM,
-                    OP_EOR_IMM,
-                    OP_ADC_IMM,
-                    OP_SBC_IMM:
-                        state <= AluImm;
-                    OP_NOP:
-                        state <= Nothing;
-                    OP_BNE,
-                    OP_BEQ,
-                    OP_BPL,
-                    OP_BMI,
-                    OP_BCC,
-                    OP_BCS,
-                    OP_BVC,
-                    OP_BVS:
-                        state <= Branch;
-                    OP_TXS:
-                        state <= TransferStack;
-                    OP_TSX,
-                    OP_TAX,
-                    OP_TXA,
-                    OP_TAY,
-                    OP_TYA:
-                        state <= Transfer;
-                    OP_ADC_IND_X,
-                    OP_SBC_IND_X,
-                    OP_AND_IND_X,
-                    OP_ORA_IND_X,
-                    OP_EOR_IND_X,
-                    OP_CMP_IND_X,
-                    OP_LDA_IND_X,
-                    OP_STA_IND_X,
-                    OP_ADC_IND_Y,
-                    OP_SBC_IND_Y,
-                    OP_AND_IND_Y,
-                    OP_ORA_IND_Y,
-                    OP_EOR_IND_Y,
-                    OP_CMP_IND_Y,
-                    OP_LDA_IND_Y,
-                    OP_STA_IND_Y,
-                    OP_ASL_ZP,
-                    OP_LSR_ZP,
-                    OP_ROL_ZP,
-                    OP_ROR_ZP,
-                    OP_DEC_ZP,
-                    OP_INC_ZP,
-                    OP_ADC_ZP,
-                    OP_SBC_ZP,
-                    OP_AND_ZP,
-                    OP_ORA_ZP,
-                    OP_EOR_ZP,
-                    OP_BIT_ZP,
-                    OP_CMP_ZP,
-                    OP_CPX_ZP,
-                    OP_CPY_ZP,
-                    OP_LDA_ZP,
-                    OP_LDX_ZP,
-                    OP_LDY_ZP,
-                    OP_STA_ZP,
-                    OP_STX_ZP,
-                    OP_STY_ZP,
-                    OP_STX_ZP_Y,
-                    OP_LDX_ZP_Y,
-                    OP_ASL_ZP_X,
-                    OP_LSR_ZP_X,
-                    OP_DEC_ZP_X,
-                    OP_INC_ZP_X,
-                    OP_ROL_ZP_X,
-                    OP_ROR_ZP_X,
-                    OP_ADC_ZP_X,
-                    OP_SBC_ZP_X,
-                    OP_AND_ZP_X,
-                    OP_ORA_ZP_X,
-                    OP_EOR_ZP_X,
-                    OP_CMP_ZP_X,
-                    OP_LDA_ZP_X,
-                    OP_LDY_ZP_X,
-                    OP_STA_ZP_X,
-                    OP_STY_ZP_X,
-                    OP_JSR,
-                    OP_ASL_ABS,
-                    OP_LSR_ABS,
-                    OP_ROL_ABS,
-                    OP_ROR_ABS,
-                    OP_ADC_ABS,
-                    OP_SBC_ABS,
-                    OP_AND_ABS,
-                    OP_ORA_ABS,
-                    OP_EOR_ABS,
-                    OP_DEC_ABS,
-                    OP_INC_ABS,
-                    OP_CMP_ABS,
-                    OP_CPX_ABS,
-                    OP_CPY_ABS,
-                    OP_BIT_ABS,
-                    OP_LDA_ABS,
-                    OP_LDX_ABS,
-                    OP_LDY_ABS,
-                    OP_STA_ABS,
-                    OP_STX_ABS,
-                    OP_STY_ABS,
-                    OP_CMP_ABS_Y,
-                    OP_LDA_ABS_Y,
-                    OP_LDX_ABS_Y,
-                    OP_STA_ABS_Y,
-                    OP_ADC_ABS_Y,
-                    OP_SBC_ABS_Y,
-                    OP_AND_ABS_Y,
-                    OP_ORA_ABS_Y,
-                    OP_EOR_ABS_Y,
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS_X,
-                    OP_ROL_ABS_X,
-                    OP_ROR_ABS_X,
-                    OP_ADC_ABS_X,
-                    OP_SBC_ABS_X,
-                    OP_AND_ABS_X,
-                    OP_ORA_ABS_X,
-                    OP_EOR_ABS_X,
-                    OP_DEC_ABS_X,
-                    OP_INC_ABS_X,
-                    OP_CMP_ABS_X,
-                    OP_LDA_ABS_X,
-                    OP_LDY_ABS_X,
-                    OP_STA_ABS_X,
-                    OP_JMP_IND,
-                    OP_JMP_ABS:
-                        state <= FetchLoByte;
-                    OP_DEX,
-                    OP_INX,
-                    OP_DEY,
-                    OP_INY:
-                        state <= IncDec;
-                    OP_RTI:
-                        state <= PullInc;
-                    OP_BRK:
-                        state <= BrkFlags;
-                    OP_RTS,
-                    OP_PLA,
-                    OP_PLP,
-                    OP_PHA,
-                    OP_PHP:
+                Fetch: begin
+                    if (nmi_request) begin
+                        irq_type <= 0;      // NMI
+                        flags[B_FLAG] <= 0;
+                        inst <= OP_BRK;
                         state <= Skip;
-                    default: begin
-                        undef <= 1;
-                        state <= Fetch;
                     end
-                endcase
-            end
-            BrkFlags: begin
-                flags[B_FLAG] <= 1;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                state <= PushPCHigh;
-            end
-            Skip:
-                case (inst)
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS_X,
-                    OP_ROL_ABS_X,
-                    OP_ROR_ABS_X,
-                    OP_DEC_ABS_X,
-                    OP_INC_ABS_X:
-                        state <= FetchData;
-                    OP_STA_IND_Y,
-                    OP_STA_ABS_X,
-                    OP_STA_ABS_Y:
-                        state <= Store;
-                    OP_JSR:
-                        state <= PushPCHigh;
-                    OP_RTS,
-                    OP_PLA,
-                    OP_PLP:
-                        state <= PullInc;
-                    OP_PHA,
-                    OP_PHP: 
-                        state <= Push;
-                    default:
-                        state <= Fetch;
-                endcase
-            PushPCHigh:
-                state <= PushPCLow;
-            PushPCLow:
-                case (inst)
-                    OP_BRK:
-                        state <= Push;
-                    OP_JSR:
-                        state <= Jsr;
-                    default:
-                        state <= Fetch;
-                endcase
-            Push:
-                case (inst)
-                    OP_BRK:
-                        state <= FetchVectorLow;
-                    default:
-                        state <= Fetch;
-                endcase
-            FetchVectorLow: begin
-                low_byte <= imm;
-                state <= FetchVectorHigh;
-            end
-            PullInc:
-                case (inst)
-                    OP_RTS:
-                        state <= PullPCLow;
-                    OP_RTI,
-                    OP_PLA,
-                    OP_PLP:
-                        state <= Pull;
-                    default:
-                        state <= Fetch;
-                endcase
-            Pull: begin
-                case (inst)
-                    OP_RTI: begin
-                        flags[D_FLAG] <= imm[D_FLAG];
-                        flags[V_FLAG] <= imm[V_FLAG];
-                        flags[C_FLAG] <= imm[C_FLAG];
-                        flags[Z_FLAG] <= imm[Z_FLAG];
-                        flags[N_FLAG] <= imm[N_FLAG];
-                        flags[I_FLAG] <= imm[I_FLAG];
-                        state <= PullInc2;
+                    else begin
+                        inst <= imm;
+                        {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                        case (imm)
+                            OP_ROR,
+                            OP_ROL,
+                            OP_LSR,
+                            OP_ASL: 
+                                state <= AluAcc;
+                            OP_CLC,
+                            OP_SEC,
+                            OP_CLI,
+                            OP_SEI,
+                            OP_CLV,
+                            OP_CLD,
+                            OP_SED: 
+                                state <= LoadFlags;
+                            OP_CMP_IMM,
+                            OP_CPX_IMM,
+                            OP_CPY_IMM,
+                            OP_LDA_IMM,
+                            OP_LDX_IMM,
+                            OP_LDY_IMM:
+                                state <= LoadCmpImm;
+                            OP_AND_IMM,
+                            OP_ORA_IMM,
+                            OP_EOR_IMM,
+                            OP_ADC_IMM,
+                            OP_SBC_IMM:
+                                state <= AluImm;
+                            OP_NOP:
+                                state <= Nothing;
+                            OP_BNE,
+                            OP_BEQ,
+                            OP_BPL,
+                            OP_BMI,
+                            OP_BCC,
+                            OP_BCS,
+                            OP_BVC,
+                            OP_BVS:
+                                state <= Branch;
+                            OP_TXS:
+                                state <= TransferStack;
+                            OP_TSX,
+                            OP_TAX,
+                            OP_TXA,
+                            OP_TAY,
+                            OP_TYA:
+                                state <= Transfer;
+                            OP_ADC_IND_X,
+                            OP_SBC_IND_X,
+                            OP_AND_IND_X,
+                            OP_ORA_IND_X,
+                            OP_EOR_IND_X,
+                            OP_CMP_IND_X,
+                            OP_LDA_IND_X,
+                            OP_STA_IND_X,
+                            OP_ADC_IND_Y,
+                            OP_SBC_IND_Y,
+                            OP_AND_IND_Y,
+                            OP_ORA_IND_Y,
+                            OP_EOR_IND_Y,
+                            OP_CMP_IND_Y,
+                            OP_LDA_IND_Y,
+                            OP_STA_IND_Y,
+                            OP_ASL_ZP,
+                            OP_LSR_ZP,
+                            OP_ROL_ZP,
+                            OP_ROR_ZP,
+                            OP_DEC_ZP,
+                            OP_INC_ZP,
+                            OP_ADC_ZP,
+                            OP_SBC_ZP,
+                            OP_AND_ZP,
+                            OP_ORA_ZP,
+                            OP_EOR_ZP,
+                            OP_BIT_ZP,
+                            OP_CMP_ZP,
+                            OP_CPX_ZP,
+                            OP_CPY_ZP,
+                            OP_LDA_ZP,
+                            OP_LDX_ZP,
+                            OP_LDY_ZP,
+                            OP_STA_ZP,
+                            OP_STX_ZP,
+                            OP_STY_ZP,
+                            OP_STX_ZP_Y,
+                            OP_LDX_ZP_Y,
+                            OP_ASL_ZP_X,
+                            OP_LSR_ZP_X,
+                            OP_DEC_ZP_X,
+                            OP_INC_ZP_X,
+                            OP_ROL_ZP_X,
+                            OP_ROR_ZP_X,
+                            OP_ADC_ZP_X,
+                            OP_SBC_ZP_X,
+                            OP_AND_ZP_X,
+                            OP_ORA_ZP_X,
+                            OP_EOR_ZP_X,
+                            OP_CMP_ZP_X,
+                            OP_LDA_ZP_X,
+                            OP_LDY_ZP_X,
+                            OP_STA_ZP_X,
+                            OP_STY_ZP_X,
+                            OP_JSR,
+                            OP_ASL_ABS,
+                            OP_LSR_ABS,
+                            OP_ROL_ABS,
+                            OP_ROR_ABS,
+                            OP_ADC_ABS,
+                            OP_SBC_ABS,
+                            OP_AND_ABS,
+                            OP_ORA_ABS,
+                            OP_EOR_ABS,
+                            OP_DEC_ABS,
+                            OP_INC_ABS,
+                            OP_CMP_ABS,
+                            OP_CPX_ABS,
+                            OP_CPY_ABS,
+                            OP_BIT_ABS,
+                            OP_LDA_ABS,
+                            OP_LDX_ABS,
+                            OP_LDY_ABS,
+                            OP_STA_ABS,
+                            OP_STX_ABS,
+                            OP_STY_ABS,
+                            OP_CMP_ABS_Y,
+                            OP_LDA_ABS_Y,
+                            OP_LDX_ABS_Y,
+                            OP_STA_ABS_Y,
+                            OP_ADC_ABS_Y,
+                            OP_SBC_ABS_Y,
+                            OP_AND_ABS_Y,
+                            OP_ORA_ABS_Y,
+                            OP_EOR_ABS_Y,
+                            OP_ASL_ABS_X,
+                            OP_LSR_ABS_X,
+                            OP_ROL_ABS_X,
+                            OP_ROR_ABS_X,
+                            OP_ADC_ABS_X,
+                            OP_SBC_ABS_X,
+                            OP_AND_ABS_X,
+                            OP_ORA_ABS_X,
+                            OP_EOR_ABS_X,
+                            OP_DEC_ABS_X,
+                            OP_INC_ABS_X,
+                            OP_CMP_ABS_X,
+                            OP_LDA_ABS_X,
+                            OP_LDY_ABS_X,
+                            OP_STA_ABS_X,
+                            OP_JMP_IND,
+                            OP_JMP_ABS:
+                                state <= FetchLoByte;
+                            OP_DEX,
+                            OP_INX,
+                            OP_DEY,
+                            OP_INY:
+                                state <= IncDec;
+                            OP_RTI:
+                                state <= PullInc;
+                            OP_BRK:
+                                state <= BrkFlags;
+                            OP_RTS,
+                            OP_PLA,
+                            OP_PLP,
+                            OP_PHA,
+                            OP_PHP:
+                                state <= Skip;
+                            default: begin
+                                undef <= 1;
+                                state <= Fetch;
+                            end
+                        endcase
                     end
-                    OP_PLP: begin
-                        flags[D_FLAG] <= imm[D_FLAG];
-                        flags[V_FLAG] <= imm[V_FLAG];
-                        flags[C_FLAG] <= imm[C_FLAG];
-                        flags[Z_FLAG] <= imm[Z_FLAG];
-                        flags[N_FLAG] <= imm[N_FLAG];
-                        flags[I_FLAG] <= imm[I_FLAG];
-                        state <= Fetch;
-                    end
-                    OP_PLA: begin
-                        flags[Z_FLAG] <= z;
-                        flags[N_FLAG] <= n;
-                        state <= Fetch;
-                    end
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            PullInc2:
-                state <= PullPCLow;
-            PullPCLow: begin
-                low_byte <= imm;
-                state <= PullPCHigh;
-            end
-            PullPCHigh: begin
-                {pc_h, pc_l} <= {imm, low_byte};
-                case (inst)
-                    OP_RTI:
-                        state <= Fetch;
-                    default:
-                        state <= PCInc;
-                endcase
-            end
-            FetchLoByte: begin
-                high_byte <= 0;
-                low_byte <= imm;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                case (inst)
-                    OP_ASL_ZP,
-                    OP_LSR_ZP,
-                    OP_ROL_ZP,
-                    OP_ROR_ZP,
-                    OP_DEC_ZP,
-                    OP_INC_ZP:
-                        state <= FetchData;
-                    OP_ADC_IND_Y,
-                    OP_SBC_IND_Y,
-                    OP_AND_IND_Y,
-                    OP_ORA_IND_Y,
-                    OP_EOR_IND_Y,
-                    OP_STA_IND_Y,
-                    OP_LDA_IND_Y,
-                    OP_CMP_IND_Y:
-                        state <= FetchLoByteInd;
-                    OP_ADC_IND_X,
-                    OP_SBC_IND_X,
-                    OP_AND_IND_X,
-                    OP_ORA_IND_X,
-                    OP_EOR_IND_X,
-                    OP_STA_IND_X,
-                    OP_CMP_IND_X,
-                    OP_LDA_IND_X,
-                    OP_ASL_ZP_X,
-                    OP_LSR_ZP_X,
-                    OP_ROL_ZP_X,
-                    OP_ROR_ZP_X,
-                    OP_ADC_ZP_X,
-                    OP_SBC_ZP_X,
-                    OP_AND_ZP_X,
-                    OP_ORA_ZP_X,
-                    OP_EOR_ZP_X,
-                    OP_DEC_ZP_X,
-                    OP_INC_ZP_X,
-                    OP_STA_ZP_X,
-                    OP_STY_ZP_X,
-                    OP_CMP_ZP_X,
-                    OP_LDA_ZP_X,
-                    OP_LDY_ZP_X,
-                    OP_STX_ZP_Y,
-                    OP_LDX_ZP_Y: 
-                        state <= AddXY;
-                    OP_JSR: 
-                        state <= Skip;
-                    OP_JMP_ABS:
-                        state <= JmpAbs;
-                    OP_STA_ZP,
-                    OP_STX_ZP,
-                    OP_STY_ZP:
-                        state <= Store;
-                    OP_BIT_ZP:
-                        state <= Bit;
-                    OP_ADC_ZP,
-                    OP_SBC_ZP,
-                    OP_AND_ZP,
-                    OP_ORA_ZP,
-                    OP_EOR_ZP:
-                        state <= AluAcc;
-                    OP_CMP_ZP,
-                    OP_CPX_ZP,
-                    OP_CPY_ZP,
-                    OP_LDA_ZP,
-                    OP_LDX_ZP,
-                    OP_LDY_ZP: 
-                        state <= LoadCmp;
-                    OP_JMP_IND, 
-                    OP_ASL_ABS,
-                    OP_LSR_ABS,
-                    OP_ROL_ABS,
-                    OP_ROR_ABS,
-                    OP_DEC_ABS,
-                    OP_INC_ABS,
-                    OP_ADC_ABS,
-                    OP_SBC_ABS,
-                    OP_AND_ABS,
-                    OP_ORA_ABS,
-                    OP_EOR_ABS,
-                    OP_CMP_ABS,
-                    OP_CPX_ABS,
-                    OP_CPY_ABS,
-                    OP_BIT_ABS,
-                    OP_LDA_ABS,
-                    OP_LDX_ABS,
-                    OP_LDY_ABS,
-                    OP_STA_ABS,
-                    OP_STX_ABS,
-                    OP_STY_ABS,
-                    OP_CMP_ABS_Y,
-                    OP_LDA_ABS_Y,
-                    OP_LDX_ABS_Y,
-                    OP_STA_ABS_Y,
-                    OP_ADC_ABS_Y,
-                    OP_SBC_ABS_Y,
-                    OP_AND_ABS_Y,
-                    OP_ORA_ABS_Y,
-                    OP_EOR_ABS_Y,
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS_X,
-                    OP_ROL_ABS_X,
-                    OP_ROR_ABS_X,
-                    OP_ADC_ABS_X,
-                    OP_SBC_ABS_X,
-                    OP_AND_ABS_X,
-                    OP_ORA_ABS_X,
-                    OP_EOR_ABS_X,
-                    OP_DEC_ABS_X,
-                    OP_INC_ABS_X,
-                    OP_CMP_ABS_X,
-                    OP_LDA_ABS_X,
-                    OP_LDY_ABS_X,
-                    OP_STA_ABS_X:
-                        state <= FetchHiByte;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            FetchData: begin
-                temp <= imm;
-                state <= WriteFakeData;
-            end
-            WriteFakeData:
-                state <= AluTemp;
-            FetchHiByte: begin
-                high_byte <= imm;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                case (inst)
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS_X,
-                    OP_ROL_ABS_X,
-                    OP_ROR_ABS_X,
-                    OP_DEC_ABS_X,
-                    OP_INC_ABS_X,
-                    OP_STA_ABS_X,
-                    OP_STA_ABS_Y: begin
-                        low_byte <= alu_result;
-                        if (c)
-                            state <= PageInc; // Increment page if page boundary is crossed
-                        else
+                end
+                BrkFlags: begin
+                    flags[B_FLAG] <= 1;
+                    irq_type <= 2;      // IRQ
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    state <= PushPCHigh;
+                end
+                Skip:
+                    case (inst)
+                        OP_ASL_ABS_X,
+                        OP_LSR_ABS_X,
+                        OP_ROL_ABS_X,
+                        OP_ROR_ABS_X,
+                        OP_DEC_ABS_X,
+                        OP_INC_ABS_X:
+                            state <= FetchData;
+                        OP_STA_IND_Y,
+                        OP_STA_ABS_X,
+                        OP_STA_ABS_Y:
+                            state <= Store;
+                        OP_BRK,     // IRQ or NMI handling
+                        OP_JSR:
+                            state <= PushPCHigh;
+                        OP_RTS,
+                        OP_PLA,
+                        OP_PLP:
+                            state <= PullInc;
+                        OP_PHA,
+                        OP_PHP: 
+                            state <= Push;
+                        default:
+                            state <= Fetch;
+                    endcase
+                PushPCHigh:
+                    state <= PushPCLow;
+                PushPCLow:
+                    case (inst)
+                        OP_BRK: // BRK, IRQ or NMI handling
+                            state <= Push;
+                        OP_JSR:
+                            state <= Jsr;
+                        default:
+                            state <= Fetch;
+                    endcase
+                Push:
+                    case (inst)
+                        OP_BRK:
+                            state <= FetchVectorLow;
+                        default:
+                            state <= Fetch;
+                    endcase
+                FetchVectorLow: begin
+                    low_byte <= imm;
+                    state <= FetchVectorHigh;
+                end
+                PullInc:
+                    case (inst)
+                        OP_RTS:
+                            state <= PullPCLow;
+                        OP_RTI,
+                        OP_PLA,
+                        OP_PLP:
+                            state <= Pull;
+                        default:
+                            state <= Fetch;
+                    endcase
+                Pull: begin
+                    case (inst)
+                        OP_RTI: begin
+                            flags[D_FLAG] <= imm[D_FLAG];
+                            flags[V_FLAG] <= imm[V_FLAG];
+                            flags[C_FLAG] <= imm[C_FLAG];
+                            flags[Z_FLAG] <= imm[Z_FLAG];
+                            flags[N_FLAG] <= imm[N_FLAG];
+                            flags[I_FLAG] <= imm[I_FLAG];
+                            state <= PullInc2;
+                        end
+                        OP_PLP: begin
+                            flags[D_FLAG] <= imm[D_FLAG];
+                            flags[V_FLAG] <= imm[V_FLAG];
+                            flags[C_FLAG] <= imm[C_FLAG];
+                            flags[Z_FLAG] <= imm[Z_FLAG];
+                            flags[N_FLAG] <= imm[N_FLAG];
+                            flags[I_FLAG] <= imm[I_FLAG];
+                            state <= Fetch;
+                        end
+                        OP_PLA: begin
+                            flags[Z_FLAG] <= z;
+                            flags[N_FLAG] <= n;
+                            state <= Fetch;
+                        end
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                PullInc2:
+                    state <= PullPCLow;
+                PullPCLow: begin
+                    low_byte <= imm;
+                    state <= PullPCHigh;
+                end
+                PullPCHigh: begin
+                    {pc_h, pc_l} <= {imm, low_byte};
+                    case (inst)
+                        OP_RTI:
+                            state <= Fetch;
+                        default:
+                            state <= PCInc;
+                    endcase
+                end
+                FetchLoByte: begin
+                    high_byte <= 0;
+                    low_byte <= imm;
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    case (inst)
+                        OP_ASL_ZP,
+                        OP_LSR_ZP,
+                        OP_ROL_ZP,
+                        OP_ROR_ZP,
+                        OP_DEC_ZP,
+                        OP_INC_ZP:
+                            state <= FetchData;
+                        OP_ADC_IND_Y,
+                        OP_SBC_IND_Y,
+                        OP_AND_IND_Y,
+                        OP_ORA_IND_Y,
+                        OP_EOR_IND_Y,
+                        OP_STA_IND_Y,
+                        OP_LDA_IND_Y,
+                        OP_CMP_IND_Y:
+                            state <= FetchLoByteInd;
+                        OP_ADC_IND_X,
+                        OP_SBC_IND_X,
+                        OP_AND_IND_X,
+                        OP_ORA_IND_X,
+                        OP_EOR_IND_X,
+                        OP_STA_IND_X,
+                        OP_CMP_IND_X,
+                        OP_LDA_IND_X,
+                        OP_ASL_ZP_X,
+                        OP_LSR_ZP_X,
+                        OP_ROL_ZP_X,
+                        OP_ROR_ZP_X,
+                        OP_ADC_ZP_X,
+                        OP_SBC_ZP_X,
+                        OP_AND_ZP_X,
+                        OP_ORA_ZP_X,
+                        OP_EOR_ZP_X,
+                        OP_DEC_ZP_X,
+                        OP_INC_ZP_X,
+                        OP_STA_ZP_X,
+                        OP_STY_ZP_X,
+                        OP_CMP_ZP_X,
+                        OP_LDA_ZP_X,
+                        OP_LDY_ZP_X,
+                        OP_STX_ZP_Y,
+                        OP_LDX_ZP_Y: 
+                            state <= AddXY;
+                        OP_JSR: 
                             state <= Skip;
-                    end
-                    OP_ADC_ABS_Y,
-                    OP_SBC_ABS_Y,
-                    OP_AND_ABS_Y,
-                    OP_ORA_ABS_Y,
-                    OP_EOR_ABS_Y,
-                    OP_ADC_ABS_X,
-                    OP_SBC_ABS_X,
-                    OP_AND_ABS_X,
-                    OP_ORA_ABS_X,
-                    OP_EOR_ABS_X: begin
-                        low_byte <= alu_result;
-                        if (c)
-                            state <= PageInc; // Increment page if page boundary is crossed
-                        else
+                        OP_JMP_ABS:
+                            state <= JmpAbs;
+                        OP_STA_ZP,
+                        OP_STX_ZP,
+                        OP_STY_ZP:
+                            state <= Store;
+                        OP_BIT_ZP:
+                            state <= Bit;
+                        OP_ADC_ZP,
+                        OP_SBC_ZP,
+                        OP_AND_ZP,
+                        OP_ORA_ZP,
+                        OP_EOR_ZP:
                             state <= AluAcc;
-                    end
-                    OP_CMP_ABS_X,
-                    OP_LDA_ABS_X,
-                    OP_LDY_ABS_X,
-                    OP_CMP_ABS_Y,
-                    OP_LDA_ABS_Y,
-                    OP_LDX_ABS_Y: begin
-                        low_byte <= alu_result;
-                        if (c)
-                            state <= PageInc; // Increment page if page boundary is crossed
-                        else
+                        OP_CMP_ZP,
+                        OP_CPX_ZP,
+                        OP_CPY_ZP,
+                        OP_LDA_ZP,
+                        OP_LDX_ZP,
+                        OP_LDY_ZP: 
                             state <= LoadCmp;
-                    end
-                    OP_ASL_ABS,
-                    OP_LSR_ABS,
-                    OP_ROL_ABS,
-                    OP_ROR_ABS,
-                    OP_DEC_ABS,
-                    OP_INC_ABS:
-                        state <= FetchData;
-                    OP_CMP_ABS,
-                    OP_CPX_ABS,
-                    OP_CPY_ABS,
-                    OP_LDA_ABS,
-                    OP_LDX_ABS,
-                    OP_LDY_ABS: 
-                        state <= LoadCmp;
-                    OP_JMP_IND: 
-                        state <= JmpIndLowByte;
-                    OP_STA_ABS,
-                    OP_STX_ABS,
-                    OP_STY_ABS:
-                        state <= Store;
-                    OP_BIT_ABS:
-                        state <= Bit;
-                    OP_ADC_ABS,
-                    OP_SBC_ABS,
-                    OP_AND_ABS,
-                    OP_ORA_ABS,
-                    OP_EOR_ABS:
-                        state <= AluAcc;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            FetchLoByteInd: begin
-                temp <= imm;
-                low_byte <= alu_result;
-                case (inst)
-                    OP_ADC_IND_Y,
-                    OP_SBC_IND_Y,
-                    OP_AND_IND_Y,
-                    OP_ORA_IND_Y,
-                    OP_EOR_IND_Y,
-                    OP_STA_IND_Y,
-                    OP_CMP_IND_Y,
-                    OP_LDA_IND_Y:
-                        state <= FetchHiByteIndY;
-                    OP_ADC_IND_X,
-                    OP_SBC_IND_X,
-                    OP_AND_IND_X,
-                    OP_ORA_IND_X,
-                    OP_EOR_IND_X,
-                    OP_STA_IND_X,
-                    OP_CMP_IND_X,
-                    OP_LDA_IND_X: 
-                        state <= FetchHiByteInd;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            FetchHiByteIndY: begin
-                high_byte <= imm;
-                low_byte <= alu_result;
-                if (c)
-                    state <= PageInc; // Increment page if page boundary is crossed
-                else
+                        OP_JMP_IND, 
+                        OP_ASL_ABS,
+                        OP_LSR_ABS,
+                        OP_ROL_ABS,
+                        OP_ROR_ABS,
+                        OP_DEC_ABS,
+                        OP_INC_ABS,
+                        OP_ADC_ABS,
+                        OP_SBC_ABS,
+                        OP_AND_ABS,
+                        OP_ORA_ABS,
+                        OP_EOR_ABS,
+                        OP_CMP_ABS,
+                        OP_CPX_ABS,
+                        OP_CPY_ABS,
+                        OP_BIT_ABS,
+                        OP_LDA_ABS,
+                        OP_LDX_ABS,
+                        OP_LDY_ABS,
+                        OP_STA_ABS,
+                        OP_STX_ABS,
+                        OP_STY_ABS,
+                        OP_CMP_ABS_Y,
+                        OP_LDA_ABS_Y,
+                        OP_LDX_ABS_Y,
+                        OP_STA_ABS_Y,
+                        OP_ADC_ABS_Y,
+                        OP_SBC_ABS_Y,
+                        OP_AND_ABS_Y,
+                        OP_ORA_ABS_Y,
+                        OP_EOR_ABS_Y,
+                        OP_ASL_ABS_X,
+                        OP_LSR_ABS_X,
+                        OP_ROL_ABS_X,
+                        OP_ROR_ABS_X,
+                        OP_ADC_ABS_X,
+                        OP_SBC_ABS_X,
+                        OP_AND_ABS_X,
+                        OP_ORA_ABS_X,
+                        OP_EOR_ABS_X,
+                        OP_DEC_ABS_X,
+                        OP_INC_ABS_X,
+                        OP_CMP_ABS_X,
+                        OP_LDA_ABS_X,
+                        OP_LDY_ABS_X,
+                        OP_STA_ABS_X:
+                            state <= FetchHiByte;
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                FetchData: begin
+                    temp <= imm;
+                    state <= WriteFakeData;
+                end
+                WriteFakeData:
+                    state <= AluTemp;
+                FetchHiByte: begin
+                    high_byte <= imm;
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    case (inst)
+                        OP_ASL_ABS_X,
+                        OP_LSR_ABS_X,
+                        OP_ROL_ABS_X,
+                        OP_ROR_ABS_X,
+                        OP_DEC_ABS_X,
+                        OP_INC_ABS_X,
+                        OP_STA_ABS_X,
+                        OP_STA_ABS_Y: begin
+                            low_byte <= alu_result;
+                            if (c)
+                                state <= PageInc; // Increment page if page boundary is crossed
+                            else
+                                state <= Skip;
+                        end
+                        OP_ADC_ABS_Y,
+                        OP_SBC_ABS_Y,
+                        OP_AND_ABS_Y,
+                        OP_ORA_ABS_Y,
+                        OP_EOR_ABS_Y,
+                        OP_ADC_ABS_X,
+                        OP_SBC_ABS_X,
+                        OP_AND_ABS_X,
+                        OP_ORA_ABS_X,
+                        OP_EOR_ABS_X: begin
+                            low_byte <= alu_result;
+                            if (c)
+                                state <= PageInc; // Increment page if page boundary is crossed
+                            else
+                                state <= AluAcc;
+                        end
+                        OP_CMP_ABS_X,
+                        OP_LDA_ABS_X,
+                        OP_LDY_ABS_X,
+                        OP_CMP_ABS_Y,
+                        OP_LDA_ABS_Y,
+                        OP_LDX_ABS_Y: begin
+                            low_byte <= alu_result;
+                            if (c)
+                                state <= PageInc; // Increment page if page boundary is crossed
+                            else
+                                state <= LoadCmp;
+                        end
+                        OP_ASL_ABS,
+                        OP_LSR_ABS,
+                        OP_ROL_ABS,
+                        OP_ROR_ABS,
+                        OP_DEC_ABS,
+                        OP_INC_ABS:
+                            state <= FetchData;
+                        OP_CMP_ABS,
+                        OP_CPX_ABS,
+                        OP_CPY_ABS,
+                        OP_LDA_ABS,
+                        OP_LDX_ABS,
+                        OP_LDY_ABS: 
+                            state <= LoadCmp;
+                        OP_JMP_IND: 
+                            state <= JmpIndLowByte;
+                        OP_STA_ABS,
+                        OP_STX_ABS,
+                        OP_STY_ABS:
+                            state <= Store;
+                        OP_BIT_ABS:
+                            state <= Bit;
+                        OP_ADC_ABS,
+                        OP_SBC_ABS,
+                        OP_AND_ABS,
+                        OP_ORA_ABS,
+                        OP_EOR_ABS:
+                            state <= AluAcc;
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                FetchLoByteInd: begin
+                    temp <= imm;
+                    low_byte <= alu_result;
                     case (inst)
                         OP_ADC_IND_Y,
                         OP_SBC_IND_Y,
                         OP_AND_IND_Y,
                         OP_ORA_IND_Y,
-                        OP_EOR_IND_Y:
-                            state <= AluAcc;
-                        OP_STA_IND_Y:
-                            state <= Skip;
+                        OP_EOR_IND_Y,
+                        OP_STA_IND_Y,
                         OP_CMP_IND_Y,
-                        OP_LDA_IND_Y: 
+                        OP_LDA_IND_Y:
+                            state <= FetchHiByteIndY;
+                        OP_ADC_IND_X,
+                        OP_SBC_IND_X,
+                        OP_AND_IND_X,
+                        OP_ORA_IND_X,
+                        OP_EOR_IND_X,
+                        OP_STA_IND_X,
+                        OP_CMP_IND_X,
+                        OP_LDA_IND_X: 
+                            state <= FetchHiByteInd;
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                FetchHiByteIndY: begin
+                    high_byte <= imm;
+                    low_byte <= alu_result;
+                    if (c)
+                        state <= PageInc; // Increment page if page boundary is crossed
+                    else
+                        case (inst)
+                            OP_ADC_IND_Y,
+                            OP_SBC_IND_Y,
+                            OP_AND_IND_Y,
+                            OP_ORA_IND_Y,
+                            OP_EOR_IND_Y:
+                                state <= AluAcc;
+                            OP_STA_IND_Y:
+                                state <= Skip;
+                            OP_CMP_IND_Y,
+                            OP_LDA_IND_Y: 
+                                state <= LoadCmp;
+                            default:
+                                state <= Fetch;
+                        endcase
+                end
+                FetchHiByteInd: begin
+                    high_byte <= imm;
+                    low_byte <= alu_result;
+                    case (inst)
+                        OP_ADC_IND_X,
+                        OP_SBC_IND_X,
+                        OP_AND_IND_X,
+                        OP_ORA_IND_X,
+                        OP_EOR_IND_X: 
+                            state <= AluAcc;
+                        OP_STA_IND_X:
+                            state <= Store;
+                        OP_CMP_IND_X,
+                        OP_LDA_IND_X: 
                             state <= LoadCmp;
                         default:
                             state <= Fetch;
                     endcase
-            end
-            FetchHiByteInd: begin
-                high_byte <= imm;
-                low_byte <= alu_result;
-                case (inst)
-                    OP_ADC_IND_X,
-                    OP_SBC_IND_X,
-                    OP_AND_IND_X,
-                    OP_ORA_IND_X,
-                    OP_EOR_IND_X: 
-                        state <= AluAcc;
-                    OP_STA_IND_X:
-                        state <= Store;
-                    OP_CMP_IND_X,
-                    OP_LDA_IND_X: 
-                        state <= LoadCmp;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            AddXY: begin
-                low_byte <= alu_result;
-                case (inst)
-                    OP_ADC_ZP_X,
-                    OP_SBC_ZP_X,
-                    OP_AND_ZP_X,
-                    OP_ORA_ZP_X,
-                    OP_EOR_ZP_X:
-                        state <= AluAcc;
-                    OP_ASL_ZP_X,
-                    OP_LSR_ZP_X,
-                    OP_ROL_ZP_X,
-                    OP_ROR_ZP_X,
-                    OP_DEC_ZP_X,
-                    OP_INC_ZP_X:
-                        state <= FetchData;
-                    OP_ADC_IND_X,
-                    OP_SBC_IND_X,
-                    OP_AND_IND_X,
-                    OP_ORA_IND_X,
-                    OP_EOR_IND_X,
-                    OP_STA_IND_X,
-                    OP_CMP_IND_X,
-                    OP_LDA_IND_X:
-                        state <= FetchLoByteInd;
-                    OP_STA_ZP_X,
-                    OP_STY_ZP_X,
-                    OP_STX_ZP_Y:
-                        state <= Store;
-                    OP_CMP_ZP_X,
-                    OP_LDA_ZP_X,
-                    OP_LDY_ZP_X,
-                    OP_LDX_ZP_Y: 
-                        state <= LoadCmp;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            PageInc: begin
-                high_byte <= alu_result;
-                case (inst)
-                    OP_ADC_IND_Y,
-                    OP_SBC_IND_Y,
-                    OP_AND_IND_Y,
-                    OP_ORA_IND_Y,
-                    OP_EOR_IND_Y,
-                    OP_ADC_ABS_Y,
-                    OP_SBC_ABS_Y,
-                    OP_AND_ABS_Y,
-                    OP_ORA_ABS_Y,
-                    OP_EOR_ABS_Y,
-                    OP_ADC_ABS_X,
-                    OP_SBC_ABS_X,
-                    OP_AND_ABS_X,
-                    OP_ORA_ABS_X,
-                    OP_EOR_ABS_X: 
-                        state <= AluAcc;
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS_X,
-                    OP_ROL_ABS_X,
-                    OP_ROR_ABS_X,
-                    OP_DEC_ABS_X,
-                    OP_INC_ABS_X:
-                        state <= FetchData;
-                    OP_STA_IND_Y,
-                    OP_STA_ABS_Y,
-                    OP_STA_ABS_X:
-                        state <= Store;
-                    OP_CMP_IND_Y,
-                    OP_LDA_IND_Y,
-                    OP_CMP_ABS_Y,
-                    OP_LDA_ABS_Y,
-                    OP_LDX_ABS_Y,
-                    OP_CMP_ABS_X,
-                    OP_LDA_ABS_X,
-                    OP_LDY_ABS_X:
-                        state <= LoadCmp;
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            JmpIndLowByte: begin
-                pc_l <= imm;
-                low_byte <= alu_result;
-                state <= JmpInd;
-            end
-            JmpInd: begin
-                pc_h <= imm;
-                state <= Fetch;
-            end
-            Branch: begin
-                low_byte <= imm;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                state <= Fetch;
-                case (inst)
-                    OP_BNE:
-                        if (~z_flag)    // BNE is taken if Z flag is 0
-                            state <= BranchTaken;
-                    OP_BEQ:
-                        // BEQ
-                        if (z_flag)     // BEQ is taken if Z flag is 1
-                            state <= BranchTaken;
-                    OP_BPL:
-                        if (~n_flag)    // BPL is taken if N flag is 0
-                            state <= BranchTaken;
-                    OP_BMI:
-                        if (n_flag)     // BMI is taken if N flag is 1
-                            state <= BranchTaken;
-                    OP_BCC:
-                        if (~c_flag)    // BCC is taken if C flag is 0
-                            state <= BranchTaken;
-                    OP_BCS:
-                        if (c_flag)     // BCS is taken if C flag is 1
-                            state <= BranchTaken; 
-                    OP_BVC:
-                        if (~v_flag)    // BVC is taken if V flag is 0
-                            state <= BranchTaken;
-                    OP_BVS:
-                        if (v_flag)     // BVS is taken if V flag is 1
-                            state <= BranchTaken; 
-                    default:
-                        state <= Fetch;
-                endcase
-            end
-            BranchTaken: begin
-                // Cross page if pc_l sum overflows
-                pc_l <= alu_result;
-                if (v) begin
-                    if (c)
-                        // Increment page if branch up
-                        state <= BranchPageInc;
-                    else
-                        // Decrement page if branch down
-                        state <= BranchPageDec;
-                end else
-                    // Branch not crossing page
+                end
+                AddXY: begin
+                    low_byte <= alu_result;
+                    case (inst)
+                        OP_ADC_ZP_X,
+                        OP_SBC_ZP_X,
+                        OP_AND_ZP_X,
+                        OP_ORA_ZP_X,
+                        OP_EOR_ZP_X:
+                            state <= AluAcc;
+                        OP_ASL_ZP_X,
+                        OP_LSR_ZP_X,
+                        OP_ROL_ZP_X,
+                        OP_ROR_ZP_X,
+                        OP_DEC_ZP_X,
+                        OP_INC_ZP_X:
+                            state <= FetchData;
+                        OP_ADC_IND_X,
+                        OP_SBC_IND_X,
+                        OP_AND_IND_X,
+                        OP_ORA_IND_X,
+                        OP_EOR_IND_X,
+                        OP_STA_IND_X,
+                        OP_CMP_IND_X,
+                        OP_LDA_IND_X:
+                            state <= FetchLoByteInd;
+                        OP_STA_ZP_X,
+                        OP_STY_ZP_X,
+                        OP_STX_ZP_Y:
+                            state <= Store;
+                        OP_CMP_ZP_X,
+                        OP_LDA_ZP_X,
+                        OP_LDY_ZP_X,
+                        OP_LDX_ZP_Y: 
+                            state <= LoadCmp;
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                PageInc: begin
+                    high_byte <= alu_result;
+                    case (inst)
+                        OP_ADC_IND_Y,
+                        OP_SBC_IND_Y,
+                        OP_AND_IND_Y,
+                        OP_ORA_IND_Y,
+                        OP_EOR_IND_Y,
+                        OP_ADC_ABS_Y,
+                        OP_SBC_ABS_Y,
+                        OP_AND_ABS_Y,
+                        OP_ORA_ABS_Y,
+                        OP_EOR_ABS_Y,
+                        OP_ADC_ABS_X,
+                        OP_SBC_ABS_X,
+                        OP_AND_ABS_X,
+                        OP_ORA_ABS_X,
+                        OP_EOR_ABS_X: 
+                            state <= AluAcc;
+                        OP_ASL_ABS_X,
+                        OP_LSR_ABS_X,
+                        OP_ROL_ABS_X,
+                        OP_ROR_ABS_X,
+                        OP_DEC_ABS_X,
+                        OP_INC_ABS_X:
+                            state <= FetchData;
+                        OP_STA_IND_Y,
+                        OP_STA_ABS_Y,
+                        OP_STA_ABS_X:
+                            state <= Store;
+                        OP_CMP_IND_Y,
+                        OP_LDA_IND_Y,
+                        OP_CMP_ABS_Y,
+                        OP_LDA_ABS_Y,
+                        OP_LDX_ABS_Y,
+                        OP_CMP_ABS_X,
+                        OP_LDA_ABS_X,
+                        OP_LDY_ABS_X:
+                            state <= LoadCmp;
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                JmpIndLowByte: begin
+                    pc_l <= imm;
+                    low_byte <= alu_result;
+                    state <= JmpInd;
+                end
+                JmpInd: begin
+                    pc_h <= imm;
                     state <= Fetch;
-            end
-            BranchPageDec,
-            BranchPageInc: begin
-                pc_h <= alu_result;
-                state <= Fetch;
-            end
-            LoadFlags: begin
-                state <= Fetch;
-                case (inst)
-                    OP_CLC:
-                        flags[C_FLAG] <= 0;  // clear C flag
-                    OP_SEC:
-                        flags[C_FLAG] <= 1;  // set C flag
-                    OP_CLI:
-                        flags[I_FLAG] <= 0;  // clear I flag
-                    OP_SEI:
-                        flags[I_FLAG] <= 1;  // set I flag
-                    OP_CLV:
-                        flags[V_FLAG] <= 0;  // clear V flag
-                    OP_CLD:
-                        flags[D_FLAG] <= 0;  // clear D flag
-                    OP_SED:
-                        flags[D_FLAG] <= 1;  // set D flag
-                    default:
-                        ;  // do nothing for unrecognized instructions
-                endcase
-            end
-            FetchVectorHigh: begin
-                flags[I_FLAG] <= 1;
-                {pc_h, pc_l} <= {imm, low_byte};
-                state <= Fetch;
-            end
-            AluImm: begin
-                case (inst)
-                    OP_SBC_IMM,
-                    OP_ADC_IMM: begin
-                        flags[C_FLAG] <= c;
-                        flags[V_FLAG] <= v;
-                    end
-                    default:
-                        ;
-                endcase
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                state <= Fetch;
-            end
-            AluAcc: begin
-                case (inst)
-                    OP_ADC_IND_Y,
-                    OP_ADC_IND_X,
-                    OP_ADC_ABS_Y,
-                    OP_ADC_ABS_X,
-                    OP_ADC_ZP_X,
-                    OP_ADC_ABS,
-                    OP_ADC_ZP,
-                    OP_SBC_IND_Y,
-                    OP_SBC_IND_X,
-                    OP_SBC_ABS_Y,
-                    OP_SBC_ABS_X,
-                    OP_SBC_ZP_X,
-                    OP_SBC_ABS,
-                    OP_SBC_ZP: begin
-                        flags[C_FLAG] <= c;
-                        flags[V_FLAG] <= v;
-                    end
-                    OP_ASL,
-                    OP_LSR,
-                    OP_ROR,
-                    OP_ROL:
-                        flags[C_FLAG] <= c;
-                    default: 
-                        ;
-                endcase
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                state <= Fetch;
-            end
-            AluTemp: begin
-                  // Logic for handling arithmetic with temp
-                case (inst)
-                    OP_ASL_ABS,
-                    OP_ASL_ZP,
-                    OP_ASL_ZP_X,
-                    OP_ASL_ABS_X,
-                    OP_LSR_ABS,
-                    OP_LSR_ZP,
-                    OP_LSR_ZP_X,
-                    OP_LSR_ABS_X,
-                    OP_ROR_ABS,
-                    OP_ROR_ZP,
-                    OP_ROR_ZP_X,
-                    OP_ROR_ABS_X,
-                    OP_ROL_ABS,
-                    OP_ROL_ZP,
-                    OP_ROL_ZP_X,
-                    OP_ROL_ABS_X: begin
-                        flags[C_FLAG] <= c;
-                    end
-                    default: 
-                        ;
-                endcase
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                state <= Fetch;
-            end
-            Bit: begin
-                flags[N_FLAG] <= imm[7];
-                flags[V_FLAG] <= imm[6];
-                flags[Z_FLAG] <= z;
-                state <= Fetch;
-            end
-            LoadCmpImm: begin
-                case (inst)
-                    OP_CMP_IMM,
-                    OP_CPX_IMM,
-                    OP_CPY_IMM:
-                        flags[C_FLAG] <= c;
-                    default:
-                        ;
-                endcase
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                state <= Fetch;
-            end
-            LoadCmp: begin
-                case (inst)
-                    OP_CMP_IND_X,
-                    OP_CMP_IND_Y,
-                    OP_CMP_ZP,
-                    OP_CMP_ZP_X,
-                    OP_CMP_ABS_X,
-                    OP_CMP_ABS_Y,
-                    OP_CMP_ABS,
-                    OP_CPX_ZP,
-                    OP_CPX_ABS,
-                    OP_CPY_ZP,
-                    OP_CPY_ABS: 
-                        flags[C_FLAG] <= c;
-                    default: 
-                        ;
-                endcase
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                state <= Fetch;
-            end
-            Transfer,
-            IncDec: begin
-                flags[N_FLAG] <= n;
-                flags[Z_FLAG] <= z;
-                state <= Fetch;
-            end
-            Jsr,
-            JmpAbs: begin
-                {pc_h, pc_l} <= {imm, low_byte};
-                state <= Fetch;
-            end
-            PCInc: begin
-                {pc_h, pc_l} <= {pc_h, pc_l} + 1;
-                state <= Fetch;
-            end
-            default:
-                state <= Fetch;
-        endcase
+                end
+                Branch: begin
+                    low_byte <= imm;
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    state <= Fetch;
+                    case (inst)
+                        OP_BNE:
+                            if (~z_flag)    // BNE is taken if Z flag is 0
+                                state <= BranchTaken;
+                        OP_BEQ:
+                            // BEQ
+                            if (z_flag)     // BEQ is taken if Z flag is 1
+                                state <= BranchTaken;
+                        OP_BPL:
+                            if (~n_flag)    // BPL is taken if N flag is 0
+                                state <= BranchTaken;
+                        OP_BMI:
+                            if (n_flag)     // BMI is taken if N flag is 1
+                                state <= BranchTaken;
+                        OP_BCC:
+                            if (~c_flag)    // BCC is taken if C flag is 0
+                                state <= BranchTaken;
+                        OP_BCS:
+                            if (c_flag)     // BCS is taken if C flag is 1
+                                state <= BranchTaken; 
+                        OP_BVC:
+                            if (~v_flag)    // BVC is taken if V flag is 0
+                                state <= BranchTaken;
+                        OP_BVS:
+                            if (v_flag)     // BVS is taken if V flag is 1
+                                state <= BranchTaken; 
+                        default:
+                            state <= Fetch;
+                    endcase
+                end
+                BranchTaken: begin
+                    // Cross page if pc_l sum overflows
+                    pc_l <= alu_result;
+                    if (v) begin
+                        if (c)
+                            // Increment page if branch up
+                            state <= BranchPageInc;
+                        else
+                            // Decrement page if branch down
+                            state <= BranchPageDec;
+                    end else
+                        // Branch not crossing page
+                        state <= Fetch;
+                end
+                BranchPageDec,
+                BranchPageInc: begin
+                    pc_h <= alu_result;
+                    state <= Fetch;
+                end
+                LoadFlags: begin
+                    state <= Fetch;
+                    case (inst)
+                        OP_CLC:
+                            flags[C_FLAG] <= 0;  // clear C flag
+                        OP_SEC:
+                            flags[C_FLAG] <= 1;  // set C flag
+                        OP_CLI:
+                            flags[I_FLAG] <= 0;  // clear I flag
+                        OP_SEI:
+                            flags[I_FLAG] <= 1;  // set I flag
+                        OP_CLV:
+                            flags[V_FLAG] <= 0;  // clear V flag
+                        OP_CLD:
+                            flags[D_FLAG] <= 0;  // clear D flag
+                        OP_SED:
+                            flags[D_FLAG] <= 1;  // set D flag
+                        default:
+                            ;  // do nothing for unrecognized instructions
+                    endcase
+                end
+                FetchVectorHigh: begin
+                    flags[I_FLAG] <= 1;
+                    {pc_h, pc_l} <= {imm, low_byte};
+                    state <= Fetch;
+                end
+                AluImm: begin
+                    case (inst)
+                        OP_SBC_IMM,
+                        OP_ADC_IMM: begin
+                            flags[C_FLAG] <= c;
+                            flags[V_FLAG] <= v;
+                        end
+                        default:
+                            ;
+                    endcase
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    state <= Fetch;
+                end
+                AluAcc: begin
+                    case (inst)
+                        OP_ADC_IND_Y,
+                        OP_ADC_IND_X,
+                        OP_ADC_ABS_Y,
+                        OP_ADC_ABS_X,
+                        OP_ADC_ZP_X,
+                        OP_ADC_ABS,
+                        OP_ADC_ZP,
+                        OP_SBC_IND_Y,
+                        OP_SBC_IND_X,
+                        OP_SBC_ABS_Y,
+                        OP_SBC_ABS_X,
+                        OP_SBC_ZP_X,
+                        OP_SBC_ABS,
+                        OP_SBC_ZP: begin
+                            flags[C_FLAG] <= c;
+                            flags[V_FLAG] <= v;
+                        end
+                        OP_ASL,
+                        OP_LSR,
+                        OP_ROR,
+                        OP_ROL:
+                            flags[C_FLAG] <= c;
+                        default: 
+                            ;
+                    endcase
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    state <= Fetch;
+                end
+                AluTemp: begin
+                    // Logic for handling arithmetic with temp
+                    case (inst)
+                        OP_ASL_ABS,
+                        OP_ASL_ZP,
+                        OP_ASL_ZP_X,
+                        OP_ASL_ABS_X,
+                        OP_LSR_ABS,
+                        OP_LSR_ZP,
+                        OP_LSR_ZP_X,
+                        OP_LSR_ABS_X,
+                        OP_ROR_ABS,
+                        OP_ROR_ZP,
+                        OP_ROR_ZP_X,
+                        OP_ROR_ABS_X,
+                        OP_ROL_ABS,
+                        OP_ROL_ZP,
+                        OP_ROL_ZP_X,
+                        OP_ROL_ABS_X: begin
+                            flags[C_FLAG] <= c;
+                        end
+                        default: 
+                            ;
+                    endcase
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    state <= Fetch;
+                end
+                Bit: begin
+                    flags[N_FLAG] <= imm[7];
+                    flags[V_FLAG] <= imm[6];
+                    flags[Z_FLAG] <= z;
+                    state <= Fetch;
+                end
+                LoadCmpImm: begin
+                    case (inst)
+                        OP_CMP_IMM,
+                        OP_CPX_IMM,
+                        OP_CPY_IMM:
+                            flags[C_FLAG] <= c;
+                        default:
+                            ;
+                    endcase
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    state <= Fetch;
+                end
+                LoadCmp: begin
+                    case (inst)
+                        OP_CMP_IND_X,
+                        OP_CMP_IND_Y,
+                        OP_CMP_ZP,
+                        OP_CMP_ZP_X,
+                        OP_CMP_ABS_X,
+                        OP_CMP_ABS_Y,
+                        OP_CMP_ABS,
+                        OP_CPX_ZP,
+                        OP_CPX_ABS,
+                        OP_CPY_ZP,
+                        OP_CPY_ABS: 
+                            flags[C_FLAG] <= c;
+                        default: 
+                            ;
+                    endcase
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    state <= Fetch;
+                end
+                Transfer,
+                IncDec: begin
+                    flags[N_FLAG] <= n;
+                    flags[Z_FLAG] <= z;
+                    state <= Fetch;
+                end
+                Jsr,
+                JmpAbs: begin
+                    {pc_h, pc_l} <= {imm, low_byte};
+                    state <= Fetch;
+                end
+                PCInc: begin
+                    {pc_h, pc_l} <= {pc_h, pc_l} + 1;
+                    state <= Fetch;
+                end
+                default:
+                    state <= Fetch;
+            endcase
+        end
     end
 
     always_comb begin 

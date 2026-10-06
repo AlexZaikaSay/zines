@@ -9,8 +9,8 @@ module int_control(
     mux3_1 #(
         .WIDTH(16)
     ) h_mux3_1 (
-        .a(16'hFFFA),
-        .b(16'hFFFC),
+        .a(16'hFFFB),
+        .b(16'hFFFD),
         .c(16'hFFFF),
         .sel(sel),
         .y(irq_addr_h)
@@ -19,8 +19,8 @@ module int_control(
     mux3_1 #(
         .WIDTH(16)
     ) l_mux3_1 (
-        .a(16'hFFFB),
-        .b(16'hFFFD),
+        .a(16'hFFFA),
+        .b(16'hFFFC),
         .c(16'hFFFE),
         .sel(sel),
         .y(irq_addr_l)
