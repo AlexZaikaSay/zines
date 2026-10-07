@@ -1,5 +1,8 @@
 set(TESTBENCH_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(TEST_ASSETS ${CMAKE_SOURCE_DIR}/assets/SMB.nes)
+set(TEST_ASSETS
+    ${CMAKE_SOURCE_DIR}/assets/SMB.nes
+    ${CMAKE_SOURCE_DIR}/assets/color_test.nes
+)
 
 file(GLOB TESTBENCHS
     "${TESTBENCH_DIR}/tb_*.sv"
@@ -64,6 +67,7 @@ foreach(TB_FILE ${TESTBENCHS})
             -I ${CPU_SOURCE_DIR}
             -I ${SD_CARD_SOURCE_DIR}
             -I ${CARTRIDGE_SOURCE_DIR}
+            -I ${PPU_SOURCE_DIR}
             ${TB_FILE}
         DEPENDS
             ${RTL_SOURCES}
@@ -87,7 +91,10 @@ foreach(TB_FILE ${TESTBENCHS})
         add_dependencies(sim_${TB_NAME} ${TEST_NAME})
     endif()
 
-    add_dependencies(sim_all sim_${TB_NAME})
+    # PPU testbenches (tb_2xx) are run on demand, not as part of sim_all.
+    if(NOT TB_NAME MATCHES "^tb_2")
+        add_dependencies(sim_all sim_${TB_NAME})
+    endif()
 endforeach()
 
 set_property(DIRECTORY APPEND PROPERTY
