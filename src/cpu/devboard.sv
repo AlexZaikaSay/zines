@@ -15,9 +15,9 @@ module devboard
 );
 
     logic [15:0] addr;
-    logic [7:0] data_in;
-    logic [7:0] data_out;
-    logic we;
+    logic [7:0] cpu_data;
+    logic [7:0] mem_data;
+    logic rw;
 
     mos6502 #(
         .PC_START(PC_START)
@@ -26,9 +26,9 @@ module devboard
         .clk,
         .rst_n,
         .addr(addr),
-        .data_out(data_out),
-        .data_in(data_in),
-        .we(we),
+        .data_out(cpu_data),
+        .data_in(mem_data),
+        .rw(rw),
         .nmi_n,
         .irq_n
     );
@@ -38,9 +38,9 @@ module devboard
     ) memory (
         .clk,
         .addr(addr),
-        .rd(data_in),
-        .wd(data_out),
-        .we(we)
+        .data_out(mem_data),
+        .data_in(cpu_data),
+        .rw(rw)
     );
 
 endmodule

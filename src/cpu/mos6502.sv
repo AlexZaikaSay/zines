@@ -17,7 +17,7 @@ module mos6502 #(
     input logic [7:0] data_in,
     output logic [7:0] data_out,
     output logic [15:0] addr,
-    output logic we,
+    output logic rw,
     output logic undef
 );
     logic [7:0] pc_h;
@@ -33,6 +33,7 @@ module mos6502 #(
     logic [7:0] x;
     logic [7:0] y;
     logic [7:0] s;
+    logic w_mem;
 
     logic [15:0] irq_addr_h;
     logic [15:0] irq_addr_l;
@@ -60,6 +61,8 @@ module mos6502 #(
     logic [1:0] irq_type;
 
     logic [3:0] alu_op;
+
+    assign rw = !w_mem;
 
     int_control int_control_inst(
         .sel(irq_type),
@@ -148,7 +151,7 @@ module mos6502 #(
         .w_x(w_x),
         .w_y(w_y),
         .w_s(w_s),
-        .w_mem(we),
+        .w_mem(w_mem),
         .src_c_in(src_c_in),
         .src_data_out(src_data_out),
         .src_addr_h(src_addr_h),

@@ -42,7 +42,7 @@ module tb_200_color_test2;
     logic [15:0] cpu_addr;
     logic [7:0]  cpu_data_out;
     logic [7:0]  cpu_data_in;
-    logic        cpu_we;
+    logic        cpu_rw;
     logic        cpu_undef;
     logic        nmi_n;
 
@@ -54,14 +54,14 @@ module tb_200_color_test2;
         .data_in(cpu_data_in),
         .data_out(cpu_data_out),
         .addr(cpu_addr),
-        .we(cpu_we),
+        .rw(cpu_rw),
         .undef(cpu_undef)
     );
 
     // 2 KiB internal RAM, mirrored through $1FFF
     logic [7:0] ram [0:2047];
     always_ff @(posedge cpu_clk)
-        if (cpu_we && cpu_addr[15:13] == 3'b000)
+        if (!cpu_rw && cpu_addr[15:13] == 3'b000)
             ram[cpu_addr[10:0]] <= cpu_data_out;
 
     wire sel_ram = (cpu_addr[15:13] == 3'b000);
@@ -83,7 +83,7 @@ module tb_200_color_test2;
     wire ppu_acc    = sel_ppu && ppu_strobe;
 
     // The PPU treats cpu_rw = 1 as a write; cpu_addr 0 with cpu_rw = 0 is a no-op.
-    wire       ppu_cpu_rw   = dma_active ? 1'b1 : (ppu_acc && cpu_we);
+    wire       ppu_cpu_rw   = dma_active ? 1'b1 : (ppu_acc && !cpu_rw);
     wire [2:0] ppu_cpu_addr = dma_active ? 3'd4 : (ppu_acc ? cpu_addr[2:0] : 3'd0);
     wire [7:0] ppu_cpu_din  = dma_active ? ram[{dma_page[2:0], dma_cnt}] : cpu_data_out;
 
@@ -93,7 +93,7 @@ module tb_200_color_test2;
             dma_active <= 1'b0;
             dma_cnt    <= 8'd0;
         end else begin
-            if (ppu_strobe && cpu_we && cpu_addr == 16'h4014) begin
+            if (ppu_strobe && !cpu_rw && cpu_addr == 16'h4014) begin
                 dma_start <= 1'b1;
                 dma_page  <= cpu_data_out;
             end
@@ -151,7 +151,7 @@ module tb_200_color_test2;
         .cpu_addr(cpu_addr),
         .cpu_data_in(cpu_data_out),
         .cpu_data_out(cart_cpu_data),
-        .cpu_rw(!cpu_we),
+        .cpu_rw(cpu_rw),
         .cpu_ce(sel_cart),
         .ppu_addr(ppu_addr),
         .ppu_rd(ppu_rd),

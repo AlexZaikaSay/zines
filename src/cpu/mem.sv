@@ -5,9 +5,9 @@ module mem #(
 ) (
     input logic clk,
     input logic [15:0] addr,
-    output logic [7:0] rd,
-    input logic [7:0] wd,
-    input logic we
+    output logic [7:0] data_out,
+    input logic [7:0] data_in,
+    input logic rw
 );
     logic [7:0] data [0:65535];
     
@@ -18,11 +18,11 @@ module mem #(
     end
 
     always_ff @(posedge clk) begin
-        if (we) begin
-            data[addr] <= wd;
+        if (!rw) begin
+            data[addr] <= data_in;
         end
     end
 
-    assign rd = data[addr];
+    assign data_out = data[addr];
 
 endmodule

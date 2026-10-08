@@ -42,7 +42,7 @@ module tb_6502_functional_test;
     always @(negedge clk)
     begin
         // Check for specific memory write conditions here
-        if (db_device.cpu.we && db_device.cpu.addr == 16'h0200 && db_device.cpu.data_in == 8'h28)
+        if (!db_device.cpu.rw && db_device.cpu.addr == 16'h0200 && db_device.cpu.data_in == 8'h28)
         begin
             $display("Memory write: data = %h at address = %h (clk = %0d)", db_device.cpu.data_in, db_device.cpu.addr, i);
             $finish;
