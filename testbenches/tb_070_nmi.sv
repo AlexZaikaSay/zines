@@ -14,8 +14,7 @@ module tb_070_nmi;
     logic nmi_n;
 
     devboard #(
-        .MEM_FILE(MEM_FILE),
-        .PC_START(16'h0400)
+        .MEM_FILE(MEM_FILE)
     )
     db_device
     (

@@ -1,9 +1,6 @@
 
 
-module main_fsm # 
-(
-    parameter PC_START = 16'h0000
-)
+module main_fsm 
 (
     input logic         clk,
     input logic         rst_n,

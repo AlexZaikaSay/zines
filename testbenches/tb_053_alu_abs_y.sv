@@ -13,8 +13,7 @@ module tb_053_alu_abs_y;
     logic rst_n;
 
     devboard #(
-        .MEM_FILE(MEM_FILE),
-        .PC_START(16'h0400)
+        .MEM_FILE(MEM_FILE)
     )
     db_device
     (

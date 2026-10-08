@@ -77,9 +77,12 @@ foreach(TB_FILE ${TESTBENCHS})
             -g2012
             -o ${OUTPUT_FILE}
             -I ${SOURCE_DIR}
+            -I ${TESTBENCH_DIR}
             ${TB_FILE}
         DEPENDS
             ${RTL_SOURCES}
+            ${SOURCE_DIR}/nes_sim.sv
+            ${TESTBENCH_DIR}/utils/nes_video_capture.sv
             ${TB_FILE}
             ${TESTVECTORS}
             ${TEST_ASSETS}

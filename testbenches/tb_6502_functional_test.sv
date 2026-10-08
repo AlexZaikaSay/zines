@@ -15,7 +15,6 @@ module tb_6502_functional_test;
     logic rst_n;
 
     devboard #(
-        .PC_START(16'h0400),
         .MEM_FILE(MEM_FILE)
     )
     db_device

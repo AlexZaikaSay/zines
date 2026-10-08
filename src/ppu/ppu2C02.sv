@@ -1,8 +1,10 @@
+`include "ppu/palette_ram.sv"
+
 // NES PPU (2C02) - simplified, dot-based implementation.
 //
 // Conventions
 //  * One `clk` = one PPU dot. `cycle` (0..340) / `scanline` (0..261, 261 = pre-render).
-//  * CPU port: cpu_rw = 1 is a write, 0 is a read. Every access must be presented for
+//  * CPU port: cpu_rw = 1 is a read, 0 is a write. Every access must be presented for
 //    exactly one clk. Reads of $2000/$2001/$2003/$2005/$2006 and writes to $2002 are no-ops.
 //  * The external VRAM bus (ppu_addr/ppu_data_out/ppu_rd_n/ppu_wr_n) is owned by this
 //    module only. A read is two clocks: the address and ppu_rd_n = 0 are registered on
@@ -13,19 +15,47 @@
 module ppu2C02 (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        ppu_cs_n,
     input  logic        cpu_rw,
     input  logic [2:0]  cpu_addr,
     input  logic [7:0]  cpu_data_in,
-    input  logic [7:0]  ppu_data_in,
+    input  logic [7:0]  ppu_data_in,   // external VRAM data bus
     output logic [7:0]  cpu_data_out,
     output logic [13:0] ppu_addr,
     output logic [7:0]  ppu_data_out,
     output logic        nmi_n,
     output logic        ppu_rd_n,
     output logic        ppu_wr_n,
-    output logic        ppu_cs_n,
-    output logic [4:0]  video
+    output logic [4:0]  video,
+    output logic [7:0]  pixel_color
 );
+
+    // Palette RAM lives inside the PPU: $3F00-$3FFF never reaches the external bus
+    logic        rd_n_q;
+    logic        wr_n_q;
+    logic [7:0]  palette_data;
+    wire         palette_sel = (ppu_addr[13:8] == 6'h3F);
+    wire  [7:0]  bus_data_in = palette_sel ? palette_data : ppu_data_in;
+
+    assign ppu_rd_n = rd_n_q || palette_sel;
+    assign ppu_wr_n = wr_n_q || palette_sel;
+
+    // $3F10/14/18/1C mirror $3F00/04/08/0C
+    function automatic [4:0] mirror_palette_addr(input [4:0] addr);
+        mirror_palette_addr = (addr[1:0] == 2'b00) ? {1'b0, addr[3:0]} : addr;
+    endfunction
+
+    palette_ram u_palette_ram (
+        .clk(clk),
+        .addr(mirror_palette_addr(ppu_addr[4:0])),
+        .data_in(ppu_data_out),
+        .rw(wr_n_q),
+        .cs_n(!palette_sel),
+        .oe_n(rd_n_q),
+        .pixel_addr(mirror_palette_addr(video)),
+        .data_out(palette_data),
+        .pixel_data_out(pixel_color)
+    );
 
     localparam PPUCTRL   = 0;
     localparam PPUMASK   = 1;
@@ -249,6 +279,10 @@ module ppu2C02 (
     wire status_rd = !cpu_rw && (cpu_addr == PPUSTATUS);
     wire [14:0] v_step = ppu_ctrl[CTRL_INC] ? 32 : 1;
 
+    wire ppu_selected = !ppu_cs_n;
+    wire internal_wren = cpu_rw && ppu_selected;
+    wire internal_rden = !cpu_rw && ppu_selected;
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             v_addr       <= 0;
@@ -262,19 +296,19 @@ module ppu2C02 (
             write_toggle <= 1'b0;
             ppu_addr     <= 0;
             ppu_data_out <= 0;
-            ppu_rd_n     <= 1'b1;
-            ppu_wr_n     <= 1'b1;
+            rd_n_q     <= 1'b1;
+            wr_n_q     <= 1'b1;
             cpu_data_out <= 0;
             bg_nt        <= 0;
             bg_lo        <= 0;
             bg_at        <= 0;
         end else begin
-            ppu_rd_n <= 1'b1;
-            ppu_wr_n <= 1'b1;
+            rd_n_q <= 1'b1;
+            wr_n_q <= 1'b1;
 
             if (rd_cnt != 0) begin
                 rd_cnt <= rd_cnt - 1;
-                if (rd_cnt == 1) read_buffer <= ppu_data_in;
+                if (rd_cnt == 1) read_buffer <= bus_data_in;
             end
 
             if (rendering_active) begin
@@ -296,22 +330,22 @@ module ppu2C02 (
                     case (ph)
                         0: begin
                             ppu_addr <= 14'h2000 | ((tile_edge ? inc_x(v_addr) : v_addr) & 15'h0FFF);
-                            ppu_rd_n <= 1'b0;
+                            rd_n_q <= 1'b0;
                         end
                         2: begin
-                            bg_nt    <= ppu_data_in;
+                            bg_nt    <= bus_data_in;
                             ppu_addr <= {2'b10, v_addr[11:10], 4'b1111, v_addr[9:7], v_addr[4:2]};
-                            ppu_rd_n <= 1'b0;
+                            rd_n_q <= 1'b0;
                         end
                         4: begin
-                            bg_at    <= (ppu_data_in >> {v_addr[6], v_addr[1], 1'b0});
+                            bg_at    <= (bus_data_in >> {v_addr[6], v_addr[1], 1'b0});
                             ppu_addr <= {1'b0, ppu_ctrl[CTRL_BG], bg_nt, 1'b0, v_addr[14:12]};
-                            ppu_rd_n <= 1'b0;
+                            rd_n_q <= 1'b0;
                         end
                         6: begin
-                            bg_lo    <= ppu_data_in;
+                            bg_lo    <= bus_data_in;
                             ppu_addr <= {1'b0, ppu_ctrl[CTRL_BG], bg_nt, 1'b1, v_addr[14:12]};
-                            ppu_rd_n <= 1'b0;
+                            rd_n_q <= 1'b0;
                         end
                         default: ;
                     endcase
@@ -321,16 +355,16 @@ module ppu2C02 (
                 if (spr_fetch_win) begin
                     if (ph == 4) begin
                         ppu_addr <= spr_addr_lo;
-                        ppu_rd_n <= 1'b0;
+                        rd_n_q <= 1'b0;
                     end else if (ph == 6) begin
                         ppu_addr <= spr_addr_lo | 14'h0008;
-                        ppu_rd_n <= 1'b0;
+                        rd_n_q <= 1'b0;
                     end
                 end
             end
 
             // ---- CPU register access (wins over the render-side v updates)
-            if (cpu_rw) begin
+            if (internal_rden) begin
                 case (cpu_addr)
                     PPUCTRL: begin
                         ppu_ctrl      <= cpu_data_in;
@@ -365,13 +399,14 @@ module ppu2C02 (
                         if (!rendering_active) begin
                             ppu_addr     <= v_addr[13:0];
                             ppu_data_out <= cpu_data_in;
-                            ppu_wr_n     <= 1'b0;
+                            wr_n_q     <= 1'b0;
                             v_addr       <= v_addr + v_step;
                         end
                     end
                     default: ;
                 endcase
-            end else begin
+            end
+            else if (internal_wren) begin
                 case (cpu_addr)
                     PPUSTATUS: begin
                         write_toggle <= 1'b0;
@@ -382,7 +417,7 @@ module ppu2C02 (
                         cpu_data_out <= read_buffer;
                         if (!rendering_active) begin
                             ppu_addr <= v_addr[13:0];
-                            ppu_rd_n <= 1'b0;
+                            rd_n_q <= 1'b0;
                             rd_cnt   <= 2;
                             v_addr   <= v_addr + v_step;
                         end
@@ -390,10 +425,10 @@ module ppu2C02 (
                     default: ;
                 endcase
             end
+            else
+                cpu_data_out <= 8'bz;
         end
     end
-
-    assign ppu_cs_n = ppu_rd_n & ppu_wr_n;
 
     // ------------------------------------------------------------------ status flags / NMI
     always_ff @(posedge clk or negedge rst_n) begin
@@ -442,7 +477,7 @@ module ppu2C02 (
             end
             if (tile_edge) begin
                 pat_lo[7:0] <= bg_lo;
-                pat_hi[7:0] <= ppu_data_in;
+                pat_hi[7:0] <= bus_data_in;
                 att_lo[7:0] <= {8{bg_at[0]}};
                 att_hi[7:0] <= {8{bg_at[1]}};
             end
@@ -470,7 +505,7 @@ module ppu2C02 (
         end else if (rendering_active) begin
             if (spr_fetch_win && ph == 6) begin
                 if (({1'b0, slot}) < spr_count) begin
-                    spr_lo[slot*8 +: 8] <= cur_attr[6] ? reverse_byte(ppu_data_in) : ppu_data_in;
+                    spr_lo[slot*8 +: 8] <= cur_attr[6] ? reverse_byte(bus_data_in) : bus_data_in;
                     spr_cnt[slot*8 +: 8]  <= sec_x[slot];
                     spr_attr[slot*8 +: 8] <= cur_attr;
                     spr_is0[slot]         <= sec_is0[slot];
@@ -480,7 +515,7 @@ module ppu2C02 (
             end else if (spr_cap_hi) begin
                 if (({1'b0, cap_slot_hi}) < spr_count)
                     spr_hi[cap_slot_hi*8 +: 8] <=
-                        sec_attr[cap_slot_hi][6] ? reverse_byte(ppu_data_in) : ppu_data_in;
+                        sec_attr[cap_slot_hi][6] ? reverse_byte(bus_data_in) : bus_data_in;
                 else
                     spr_hi[cap_slot_hi*8 +: 8] <= 0;
             end else if (visible_line && cycle >= 1 && cycle <= 256) begin

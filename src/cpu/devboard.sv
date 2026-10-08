@@ -4,8 +4,7 @@
 
 module devboard 
 #(
-    parameter MEM_FILE = "",
-    parameter PC_START = 16'h0000
+    parameter MEM_FILE = ""
 )
 (
     input logic clk,
@@ -19,10 +18,7 @@ module devboard
     logic [7:0] mem_data;
     logic rw;
 
-    mos6502 #(
-        .PC_START(PC_START)
-    )
-    cpu (
+    mos6502 cpu (
         .clk,
         .rst_n,
         .addr(addr),
@@ -34,6 +30,7 @@ module devboard
     );
 
     mem #(
+        .ADDR_WIDTH(16),
         .MEM_FILE(MEM_FILE)
     ) memory (
         .clk,

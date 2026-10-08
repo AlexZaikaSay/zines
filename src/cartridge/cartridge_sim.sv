@@ -11,16 +11,16 @@ module cartridge_sim #(
     input  logic [7:0]  cpu_data_in,
     output logic [7:0]  cpu_data_out,
     input  logic        cpu_rw,       // 1 = read, 0 = write
-    input  logic        cpu_ce,
+    input  logic        cpu_ce_n,     // active low: CPU access to cartridge PRG-ROM
 
     // PPU side
     input  logic [13:0] ppu_addr,
-    input  logic        ppu_rd,
-    input  logic        ppu_wr,
+    input  logic        ppu_rd_n,
+    input  logic        ppu_wr_n,
     input  logic [7:0]  ppu_data_in,
     output logic [7:0]  ppu_data_out,
     output logic        ciram_a10,
-    output logic        ciram_ce,     // active high: PPU access to nametable RAM
+    output logic        ciram_ce_n,     // active low: PPU access to nametable RAM
 
     // Status
     output logic        loaded,
@@ -108,21 +108,21 @@ module cartridge_sim #(
     wire [14:0] prg_addr = (prg_banks == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
 
     always_ff @(posedge clk) begin
-        if (cpu_ce && cpu_rw && cpu_addr[15])
+        if (!cpu_ce_n && cpu_rw && cpu_addr[15])
             cpu_data_out <= prg_mem[prg_addr];
     end
 
     wire chr_sel = !ppu_addr[13];
 
     always_ff @(posedge clk) begin
-        if (chr_sel && ppu_wr && chr_is_ram)
+        if (chr_sel && !ppu_wr_n && chr_is_ram)
             chr_mem[ppu_addr[12:0]] <= ppu_data_in;
-        if (chr_sel && ppu_rd)
+        if (chr_sel && !ppu_rd_n)
             ppu_data_out <= chr_mem[ppu_addr[12:0]];
     end
 
     assign ciram_a10 = vertical ? ppu_addr[10] : ppu_addr[11];
-    assign ciram_ce  = ppu_addr[13];
+    assign ciram_ce_n  = ~ppu_addr[13];
 
     wire unused = &{1'b0, cpu_data_in};
 endmodule

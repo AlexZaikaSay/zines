@@ -7,9 +7,7 @@
 `include "cpu/int_control.sv"
 
 
-module mos6502 #(
-    parameter PC_START = 16'h0000
-) (
+module mos6502 (
     input logic rst_n,
     input logic clk,
     input logic nmi_n,
@@ -18,6 +16,7 @@ module mos6502 #(
     output logic [7:0] data_out,
     output logic [15:0] addr,
     output logic rw,
+    output logic m2,
     output logic undef
 );
     logic [7:0] pc_h;
@@ -63,6 +62,7 @@ module mos6502 #(
     logic [3:0] alu_op;
 
     assign rw = !w_mem;
+    assign m2 = !clk;
 
     int_control int_control_inst(
         .sel(irq_type),
@@ -131,11 +131,7 @@ module mos6502 #(
         .y(c_in)
     );
 
-    main_fsm #
-    (
-        .PC_START(PC_START)
-    )
-    fsm 
+    main_fsm fsm 
     (
         .clk,
         .rst_n,
