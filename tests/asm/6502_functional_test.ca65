@@ -6120,6 +6120,6 @@ vec_bss equ $fffa
         .segment "VECTORS"
         .org $fffa       ;vectors
         .word   nmi_trap
-        .word   res_trap
+        .word   start
         .word   irq_trap
     .endif

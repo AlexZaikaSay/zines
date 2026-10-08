@@ -1,5 +1,5 @@
 
-`include "devboard.sv"
+`include "cpu/devboard.sv"
 
 /* verilator lint_off STMTDLY */
 
@@ -12,7 +12,7 @@ module tb_6502_functional_test;
 
     integer i = 0;
     logic clk;
-    logic rst;
+    logic rst_n;
 
     devboard #(
         .PC_START(16'h0400),
@@ -21,13 +21,13 @@ module tb_6502_functional_test;
     db_device
     (
         .clk(clk),
-        .rst(rst)
+        .rst_n(rst_n)
     );
 
     initial begin
         $dumpfile("tb_6502_functional_test.vcd");
         $dumpvars(0, tb_6502_functional_test);
-        #1; rst = 0; #(CYCLE_LEN * 2 + 1); rst = 1;
+        #1; rst_n = 0; #(CYCLE_LEN * 2 + 1); rst_n = 1;
     end
 
     initial begin

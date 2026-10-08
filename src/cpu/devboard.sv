@@ -1,6 +1,6 @@
 
-`include "mem.sv"
-`include "mos6502.sv"
+`include "cpu/mem.sv"
+`include "cpu/mos6502.sv"
 
 module devboard 
 #(
@@ -9,9 +9,9 @@ module devboard
 )
 (
     input logic clk,
-    input logic rst,
-    input logic nmi = 1'b1,
-    input logic irq = 1'b1
+    input logic rst_n,
+    input logic nmi_n = 1'b1,
+    input logic irq_n = 1'b1
 );
 
     logic [15:0] addr;
@@ -23,20 +23,20 @@ module devboard
         .PC_START(PC_START)
     )
     cpu (
-        .clk(clk),
-        .rst(rst),
+        .clk,
+        .rst_n,
         .addr(addr),
         .data_out(data_out),
         .data_in(data_in),
         .we(we),
-        .nmi(nmi),
-        .irq(irq)
+        .nmi_n,
+        .irq_n
     );
 
     mem #(
         .MEM_FILE(MEM_FILE)
     ) memory (
-        .clk(clk),
+        .clk,
         .addr(addr),
         .rd(data_in),
         .wd(data_out),

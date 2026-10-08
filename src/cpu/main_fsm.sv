@@ -6,9 +6,9 @@ module main_fsm #
 )
 (
     input logic         clk,
-    input logic         rst,
-    input logic         nmi,
-    input logic         irq,
+    input logic         rst_n,
+    input logic         nmi_n,
+    input logic         irq_n,
     input logic [7:0]   imm,
     input logic [7:0]   alu_result,
     input logic         c,
@@ -37,6 +37,7 @@ module main_fsm #
     output logic        undef
 );
   typedef enum logic [5:0] {
+        Reset,          // Handle reset state
         Fetch,          // Fetch
         Nmi,            // Handle Non-Maskable Interrupt (NMI)
         FetchData,      // Fetch data from memory to tmp register
@@ -93,7 +94,7 @@ module main_fsm #
     logic [7:0] inst;
     logic nmi_request;
 
-    parameter FLAGS_RESET_VALUE = 8'b00110110;
+    parameter FLAGS_RESET_VALUE = 8'b01100110;
     parameter C_FLAG = 0;
     parameter Z_FLAG = 1;
     parameter I_FLAG = 2;
@@ -269,15 +270,15 @@ module main_fsm #
     logic nmi_edge_sync2;
     logic nmi_seen;
 
-    always_ff @(negedge nmi or negedge rst) begin
-        if (!rst)
+    always_ff @(negedge nmi_n or negedge rst_n) begin
+        if (!rst_n)
             nmi_edge <= 0;
         else
             nmi_edge <= ~nmi_edge;
     end
 
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             nmi_edge_sync1 <= 0;
             nmi_edge_sync2 <= 0;
         end
@@ -287,24 +288,34 @@ module main_fsm #
         end
     end
 
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst)
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
             nmi_seen <= 0;
         else if (state == Fetch)
             nmi_seen <= nmi_edge_sync2;
     end
 
     assign nmi_request = nmi_edge_sync2 != nmi_seen;
+    logic [2:0] counter;
 
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            state <= Fetch;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= Reset;
+            low_byte <= 8'hFD;
+            counter <= 0;
             undef <= 0;
+            irq_type <= 1;                  // Reset
             flags <= FLAGS_RESET_VALUE;
-            {pc_h, pc_l} <= PC_START;
+            inst <= OP_BRK;
         end 
         else begin
             case (state)
+                Reset: begin
+                    // Handle the reset state
+                    counter <= counter + 1;
+                    if (counter == 3'd4)
+                        state <= FetchVectorLow;
+                end
                 Fetch: begin
                     if (nmi_request) begin
                         irq_type <= 0;      // NMI
@@ -312,7 +323,7 @@ module main_fsm #
                         inst <= OP_BRK;
                         state <= Skip;
                     end
-                    else if (!irq && !i_flag) begin
+                    else if (!irq_n && !i_flag) begin
                         irq_type <= 2;      // IRQ/BRK
                         flags[B_FLAG] <= 0;
                         inst <= OP_BRK;
@@ -483,9 +494,12 @@ module main_fsm #
                             OP_RTS,
                             OP_PLA,
                             OP_PLP,
-                            OP_PHA,
-                            OP_PHP:
+                            OP_PHA:
                                 state <= Skip;
+                            OP_PHP: begin
+                                flags[B_FLAG] <= 1;     // PHP always pushes B set
+                                state <= Skip;
+                            end
                             default: begin
                                 undef <= 1;
                                 state <= Fetch;
@@ -1182,6 +1196,21 @@ module main_fsm #
 
     always_comb begin 
         case (state)
+            Reset: begin
+                // Reset state logic
+                w_a = 0;
+                w_x = 0;
+                w_y = 0;
+                w_s = 1;        // write stack pointer
+                w_mem = 0;
+                src_c_in = 0;
+                src_data_out = 0;
+                src_addr_h = 0;
+                src_addr_l = 0;
+                src_alu_a = 0;
+                src_alu_b = 1;  // source ALU B is low_byte
+                alu_op = 3;     // ALU operation is pass B
+            end
             IncDec: begin
                 // IncDec state logic
                 case (inst)

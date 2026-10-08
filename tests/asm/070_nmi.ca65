@@ -32,5 +32,5 @@ nmi:    nop
         .segment "VECTORS"
         .org vect_segment
         .word   nmi
-        .word   $0000
+        .word   start
         .word   $0000

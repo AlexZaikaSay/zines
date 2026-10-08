@@ -1,4 +1,4 @@
-`include "cartridge_sim.sv"
+`include "cartridge/cartridge_sim.sv"
 
 `define ASSET_FILE "../assets/SMB.nes"
 

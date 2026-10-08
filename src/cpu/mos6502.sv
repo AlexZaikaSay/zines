@@ -1,19 +1,19 @@
 
-`include "alu.sv"
-`include "mux5_1.sv"
-`include "mux9_1.sv"
-`include "ff.sv"
-`include "main_fsm.sv"
-`include "int_control.sv"
+`include "cpu/alu.sv"
+`include "cpu/mux5_1.sv"
+`include "cpu/mux9_1.sv"
+`include "cpu/ff.sv"
+`include "cpu/main_fsm.sv"
+`include "cpu/int_control.sv"
 
 
 module mos6502 #(
     parameter PC_START = 16'h0000
 ) (
-    input logic rst,
+    input logic rst_n,
     input logic clk,
-    input logic nmi,
-    input logic irq,
+    input logic nmi_n,
+    input logic irq_n,
     input logic [7:0] data_in,
     output logic [7:0] data_out,
     output logic [15:0] addr,
@@ -88,16 +88,16 @@ module mos6502 #(
     );
 
     ff a_ff (
-        .clk(clk),
-        .rst(rst),
+        .clk,
+        .rst_n,
         .d(alu_result),
         .en(w_a),
         .q(a)
     );
 
     ff x_ff (
-        .clk(clk),
-        .rst(rst),
+        .clk,
+        .rst_n,
         .d(alu_result),
         .en(w_x),
         .q(x)
@@ -105,16 +105,16 @@ module mos6502 #(
 
 
     ff y_ff (
-        .clk(clk),
-        .rst(rst),
+        .clk,
+        .rst_n,
         .d(alu_result),
         .en(w_y),
         .q(y)
     );
 
     ff s_ff (
-        .clk(clk),
-        .rst(rst),
+        .clk,
+        .rst_n,
         .d(alu_result),
         .en(w_s),
         .q(s)
@@ -134,10 +134,10 @@ module mos6502 #(
     )
     fsm 
     (
-        .clk(clk),
-        .rst(rst),
-        .nmi(nmi),
-        .irq(irq),
+        .clk,
+        .rst_n,
+        .nmi_n,
+        .irq_n,
         .imm(data_in),
         .alu_result(alu_result),
         .c(c),

@@ -1,5 +1,5 @@
 
-`include "mux3_1.sv"
+`include "cpu/mux3_1.sv"
 
 module int_control(
     input  logic [1:0]  sel,

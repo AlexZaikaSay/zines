@@ -9,9 +9,9 @@
 // accesses are presented to the PPU for a single `clk` per CPU cycle because
 // the PPU has no chip-enable. $4014 (OAM DMA) is emulated here, stalling the CPU.
 `define ROM_FILE "../assets/color_test.nes"
-`define BMP_FILE "tb_200_color_test"
+`define BMP_FILE "tb_200_color_test2"
 
-module tb_200_color_test;
+module tb_200_color_test2;
 
     localparam string BMP_BASE   = `BMP_FILE;
     parameter [15:0] PC_START    = 16'h82C2; // RESET vector of color_test.nes
@@ -297,8 +297,8 @@ module tb_200_color_test;
     // ---------------------------------------------------------------- Reset / watchdog
     integer i;
     initial begin
-        $dumpfile("tb_200_color_test.vcd");
-        $dumpvars(0, tb_200_color_test);
+        $dumpfile("tb_200_color_test2.vcd");
+        $dumpvars(0, tb_200_color_test2);
         
         for (i = 0; i < 2048; i = i + 1) begin
             ram[i]   = 8'h00;

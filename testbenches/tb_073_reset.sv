@@ -5,10 +5,9 @@
 
 
 
-module tb_038_sta_ind_x;
+module tb_073_reset;
     parameter CYCLE_LEN = 10;
-    localparam RESET_CYCLES = 7; // reset sequence length before the first fetch
-    parameter MEM_FILE = "./tests/038_sta_ind_x.tv";
+    parameter MEM_FILE = "./tests/073_reset.tv";
     logic clk;
     logic rst_n;
 
@@ -23,20 +22,22 @@ module tb_038_sta_ind_x;
     );
 
     initial begin
-        $dumpfile("tb_038_sta_ind_x.vcd");
-        $dumpvars(0, tb_038_sta_ind_x);
+        $dumpfile("tb_073_reset.vcd");
+        $dumpvars(0, tb_073_reset);
         #1 rst_n = 0; #2; rst_n = 1;
+        #81; rst_n = 0; #2; rst_n = 1;
     end
 
     initial begin
-        for (integer i = 0; i < 20 + RESET_CYCLES; i++) begin
+        for (integer i = 0; i < 20; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
-            case (i - RESET_CYCLES)
-                10: begin
-                    // check STA (ind,x)
-                    if (db_device.memory.data[16'h0202] !== 8'h15)
-                        $error("TEST FAILED: STA (IND,X)"); 
+            case (i)
+                7,
+                15: begin
+                    // reset
+                    if (db_device.cpu.pc_l !== 8'h00  || db_device.cpu.pc_h !== 8'h04 || db_device.cpu.flags !== 8'h66)
+                        $error("TEST FAILED: RESET, pc_l=%h, pc_h=%h, flags=%h", db_device.cpu.pc_l, db_device.cpu.pc_h, db_device.cpu.flags); 
                 end
                 default: begin
                     // No specific check for this cycle
