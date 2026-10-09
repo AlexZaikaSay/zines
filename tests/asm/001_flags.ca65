@@ -18,5 +18,5 @@ start:  cld
         .segment "VECTORS"
         .org vect_segment
         .word   $0000
-        .word   $0000
+        .word   start
         .word   $0000

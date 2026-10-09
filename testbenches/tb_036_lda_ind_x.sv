@@ -1,5 +1,5 @@
 
-`include "devboard.sv"
+`include "cpu/devboard.sv"
 
 /* verilator lint_off STMTDLY */
 
@@ -7,31 +7,31 @@
 
 module tb_036_lda_ind_x;
     parameter CYCLE_LEN = 10;
+    localparam RESET_CYCLES = 7; // reset sequence length before the first fetch
     parameter MEM_FILE = "./tests/036_lda_ind_x.tv";
     logic clk;
-    logic rst;
+    logic rst_n;
 
     devboard #(
-        .MEM_FILE(MEM_FILE),
-        .PC_START(16'h0400)
+        .MEM_FILE(MEM_FILE)
     )
     db_device
     (
         .clk(clk),
-        .rst(rst)
+        .rst_n(rst_n)
     );
 
     initial begin
         $dumpfile("tb_036_lda_ind_x.vcd");
         $dumpvars(0, tb_036_lda_ind_x);
-        #1 rst = 0; #2; rst = 1;
+        #1 rst_n = 0; #2; rst_n = 1;
     end
 
     initial begin
-        for (integer i = 0; i < 10; i++) begin
+        for (integer i = 0; i < 10 + RESET_CYCLES; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
-            case (i)
+            case (i - RESET_CYCLES)
                 8: begin
                     // check LDA (ind,x)
                     if (db_device.cpu.a !== 8'h0e)

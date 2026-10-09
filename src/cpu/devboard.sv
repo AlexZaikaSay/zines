@@ -1,46 +1,43 @@
 
-`include "mem.sv"
-`include "mos6502.sv"
+`include "cpu/mem.sv"
+`include "cpu/mos6502.sv"
 
 module devboard 
 #(
-    parameter MEM_FILE = "",
-    parameter PC_START = 16'h0000
+    parameter MEM_FILE = ""
 )
 (
     input logic clk,
-    input logic rst,
-    input logic nmi = 1'b1,
-    input logic irq = 1'b1
+    input logic rst_n,
+    input logic nmi_n = 1'b1,
+    input logic irq_n = 1'b1
 );
 
     logic [15:0] addr;
-    logic [7:0] data_in;
-    logic [7:0] data_out;
-    logic we;
+    logic [7:0] cpu_data;
+    logic [7:0] mem_data;
+    logic rw;
 
-    mos6502 #(
-        .PC_START(PC_START)
-    )
-    cpu (
-        .clk(clk),
-        .rst(rst),
+    mos6502 cpu (
+        .clk,
+        .rst_n,
         .addr(addr),
-        .data_out(data_out),
-        .data_in(data_in),
-        .we(we),
-        .nmi(nmi),
-        .irq(irq)
+        .data_out(cpu_data),
+        .data_in(mem_data),
+        .rw(rw),
+        .nmi_n,
+        .irq_n
     );
 
     mem #(
+        .ADDR_WIDTH(16),
         .MEM_FILE(MEM_FILE)
     ) memory (
-        .clk(clk),
+        .clk,
         .addr(addr),
-        .rd(data_in),
-        .wd(data_out),
-        .we(we)
+        .data_out(mem_data),
+        .data_in(cpu_data),
+        .rw(rw)
     );
 
 endmodule

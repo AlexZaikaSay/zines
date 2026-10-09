@@ -1,5 +1,8 @@
 set(TESTBENCH_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(TEST_ASSETS ${CMAKE_SOURCE_DIR}/assets/SMB.nes)
+set(TEST_ASSETS
+    ${CMAKE_SOURCE_DIR}/assets/SMB.nes
+    ${CMAKE_SOURCE_DIR}/assets/color_test.nes
+)
 
 file(GLOB TESTBENCHS
     "${TESTBENCH_DIR}/tb_*.sv"
@@ -43,6 +46,18 @@ add_custom_target(sim_all ALL
     COMMENT "Running all testbenches"
 )
 
+add_custom_target(sim_cartridge ALL
+    COMMENT "Running cartridge testbenches"
+)
+
+add_custom_target(sim_ppu ALL
+    COMMENT "Running PPU testbenches"
+)
+
+add_custom_target(sim_cpu
+    COMMENT "Running all CPU-related testbenches"
+)
+
 foreach(TB_FILE ${TESTBENCHS})
     get_filename_component(TB_NAME ${TB_FILE} NAME_WE)
     string(REGEX REPLACE "^tb_" "" TEST_NAME ${TB_NAME})
@@ -61,12 +76,13 @@ foreach(TB_FILE ${TESTBENCHS})
             ${IVERILOG_EXECUTABLE}
             -g2012
             -o ${OUTPUT_FILE}
-            -I ${CPU_SOURCE_DIR}
-            -I ${SD_CARD_SOURCE_DIR}
-            -I ${CARTRIDGE_SOURCE_DIR}
+            -I ${SOURCE_DIR}
+            -I ${TESTBENCH_DIR}
             ${TB_FILE}
         DEPENDS
             ${RTL_SOURCES}
+            ${SOURCE_DIR}/nes_sim.sv
+            ${TESTBENCH_DIR}/utils/nes_video_capture.sv
             ${TB_FILE}
             ${TESTVECTORS}
             ${TEST_ASSETS}
@@ -88,6 +104,20 @@ foreach(TB_FILE ${TESTBENCHS})
     endif()
 
     add_dependencies(sim_all sim_${TB_NAME})
+
+    if(TB_NAME MATCHES "^tb_0" OR TB_NAME MATCHES "^tb_6502")
+        add_dependencies(sim_cpu sim_${TB_NAME})
+    endif()
+    
+    if(TB_NAME MATCHES "^tb_1")
+        add_dependencies(sim_cartridge sim_${TB_NAME})
+    endif()
+
+    if(TB_NAME MATCHES "^tb_2")
+        add_dependencies(sim_ppu sim_${TB_NAME})
+    endif()
+
+
 endforeach()
 
 set_property(DIRECTORY APPEND PROPERTY

@@ -1,4 +1,4 @@
-`include "sd_card.sv"
+`include "sd_card/sd_card.sv"
 
 module tb_101_sd_card;
     localparam integer ASSET_BYTES = 40976;

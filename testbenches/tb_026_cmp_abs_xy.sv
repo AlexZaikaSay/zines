@@ -1,5 +1,5 @@
 
-`include "devboard.sv"
+`include "cpu/devboard.sv"
 
 /* verilator lint_off STMTDLY */
 
@@ -7,31 +7,31 @@
 
 module tb_026_cmp_abs_xy;
     parameter CYCLE_LEN = 10;
+    localparam RESET_CYCLES = 7; // reset sequence length before the first fetch
     parameter MEM_FILE = "./tests/026_cmp_abs_xy.tv";
     logic clk;
-    logic rst;
+    logic rst_n;
 
     devboard #(
-        .MEM_FILE(MEM_FILE),
-        .PC_START(16'h0400)
+        .MEM_FILE(MEM_FILE)
     )
     db_device
     (
         .clk(clk),
-        .rst(rst)
+        .rst_n(rst_n)
     );
 
     initial begin
         $dumpfile("tb_026_cmp_abs_xy.vcd");
         $dumpvars(0, tb_026_cmp_abs_xy);
-        #1 rst = 0; #2; rst = 1;
+        #1 rst_n = 0; #2; rst_n = 1;
     end
 
     initial begin
-        for (integer i = 0; i < 30; i++) begin
+        for (integer i = 0; i < 30 + RESET_CYCLES; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
-            case (i)
+            case (i - RESET_CYCLES)
                 8: begin
                     // check CMP abs,x
                     if (db_device.cpu.flags[7] !== 1'b0 || db_device.cpu.flags[1] !== 1'b1 || db_device.cpu.flags[0] !== 1'b1)
