@@ -77,7 +77,7 @@ module ppu2C02 (
     localparam MASK_BG_EN    = 3;
     localparam MASK_SPR_EN   = 4;
 
-    // ------------------------------------------------------------------ state
+    // ------ state
     logic [7:0]  ppu_ctrl;
     logic [7:0]  ppu_mask;
     logic [7:0]  oam_addr;
@@ -105,24 +105,26 @@ module ppu2C02 (
         for (n = 0; n < 256; n = n + 1) oam[n] = 8'hFF;
     end
 
-    // ------------------------------------------------------------------ timing flags
-    wire rendering_enabled = ppu_mask[MASK_BG_EN] | ppu_mask[MASK_SPR_EN];
-    wire visible_line = (scanline < 240);
-    wire prerender_line = (scanline == 261);
-    wire rendering_active = rendering_enabled & (visible_line | prerender_line);
-    wire [2:0] ph = cycle[2:0];
+    // ------ timing flags
+    wire        rendering_enabled   = ppu_mask[MASK_BG_EN] | ppu_mask[MASK_SPR_EN];
+    wire        visible_cycle       = cycle >= 1 && cycle <= 256;
+    wire        visible_line        = scanline < 240;
+    wire        prerender_line      = scanline == 261;
+    wire        rendering_active    = rendering_enabled & (visible_line | prerender_line);
+    wire [2:0]  mod8_cycle          = cycle[2:0];
 
     // Edges where a background tile has been fetched completely and the shifters reload.
     // Coarse X is incremented on the same edges.
-    wire tile_edge = (ph == 0) &&
-                     ((cycle >= 8 && cycle <= 256) || cycle == 328 || cycle == 336);
-    wire bg_fetch_win = (cycle <= 255) || (cycle >= 320 && cycle <= 335);
-    wire bg_shift_win = (cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle <= 336);
-    wire spr_fetch_win = (cycle >= 256 && cycle <= 319);
-    wire spr_cap_hi = (ph == 0) && (cycle >= 264 && cycle <= 320);
+    wire        tile_edge           = (mod8_cycle == 0) &&
+                                      ((cycle >= 8 && cycle <= 256) || cycle == 328 || cycle == 336);
 
-    wire line_end = (cycle == 340) ||
-                    (cycle == 339 && prerender_line && odd_frame && rendering_enabled);
+    wire        bg_fetch_win        = (cycle <= 255) || (cycle >= 320 && cycle <= 335);
+    wire        bg_shift_win        = visible_cycle || (cycle >= 321 && cycle <= 336);
+    wire        spr_fetch_win       = (cycle >= 256 && cycle <= 319);
+    wire        spr_cap_hi          = (mod8_cycle == 0) && (cycle >= 264 && cycle <= 320);
+
+    wire        line_end            = (cycle == 340) ||
+                                      (cycle == 339 && prerender_line && odd_frame && rendering_enabled);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -142,7 +144,7 @@ module ppu2C02 (
         end
     end
 
-    // ------------------------------------------------------------------ scroll helpers
+    // ------ scroll helpers
     function automatic [14:0] inc_x(input [14:0] a);
         begin
             inc_x = a;
@@ -178,7 +180,7 @@ module ppu2C02 (
         reverse_byte = {b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]};
     endfunction
 
-    // ------------------------------------------------------------------ secondary OAM / sprite evaluation
+    // --- secondary OAM / sprite evaluation
     logic [7:0] sec_y    [0:7];
     logic [7:0] sec_tile [0:7];
     logic [7:0] sec_attr [0:7];
@@ -190,10 +192,10 @@ module ppu2C02 (
     logic       copying;
     logic [1:0] copy_b;
 
-    wire [7:0] eval_y = oam[{eval_n[5:0], 2'b00}];
-    wire [4:0] spr_h = ppu_ctrl[CTRL_SP_SIZE] ? 16 : 8;
-    wire [8:0] eval_dif = scanline - {1'b0, eval_y};
-    wire eval_hit = (scanline >= {1'b0, eval_y}) && (eval_dif < {4'b0, spr_h});
+    wire [7:0]  eval_y      = oam[{eval_n[5:0], 2'b00}];
+    wire [4:0]  spr_h       = ppu_ctrl[CTRL_SP_SIZE] ? 16 : 8;
+    wire [8:0]  eval_dif    = scanline - {1'b0, eval_y};
+    wire        eval_hit    = (scanline >= {1'b0, eval_y}) && (eval_dif < {4'b0, spr_h});
 
     integer k;
     always_ff @(posedge clk or negedge rst_n) begin
@@ -225,7 +227,8 @@ module ppu2C02 (
                     sec_x[k]    <= 8'hFF;
                     sec_is0[k]  <= 1'b0;
                 end
-            end else if (rendering_enabled && visible_line &&
+            end 
+            else if (rendering_enabled && visible_line &&
                          cycle >= 65 && cycle <= 256 && eval_n < 64) begin
                 if (!copying) begin
                     if (eval_hit) begin
@@ -258,30 +261,36 @@ module ppu2C02 (
         end
     end
 
-    // ------------------------------------------------------------------ sprite pattern address
-    wire [2:0] slot = cycle[5:3];
-    wire [7:0] cur_y = sec_y[slot];
-    wire [7:0] cur_tile = sec_tile[slot];
-    wire [7:0] cur_attr = sec_attr[slot];
-    wire [3:0] spr_row = scanline[3:0] - cur_y[3:0];
-    wire spr_vflip = cur_attr[7];
-    wire [2:0] fr8 = spr_vflip ? (7 - spr_row[2:0]) : spr_row[2:0];
-    wire [3:0] fr16 = spr_vflip ? (15 - spr_row) : spr_row;
-    wire [13:0] spr_addr_lo = ppu_ctrl[CTRL_SP_SIZE]
-        ? {1'b0, cur_tile[0], cur_tile[7:1], fr16[3], 1'b0, fr16[2:0]}
-        : {1'b0, ppu_ctrl[CTRL_SP_PAT], cur_tile, 1'b0, fr8};
+    // ------ sprite pattern address
+    wire [2:0]  slot        = cycle[5:3];
+    wire [7:0]  cur_y       = sec_y[slot];
+    wire [7:0]  cur_tile    = sec_tile[slot];
+    wire [7:0]  cur_attr    = sec_attr[slot];
+    wire [3:0]  spr_row     = scanline[3:0] - cur_y[3:0];
+    wire        spr_vflip   = cur_attr[7];
+    wire [2:0]  fr8         = spr_vflip
+                                ? (7 - spr_row[2:0]) 
+                                : spr_row[2:0];
 
-    // ------------------------------------------------------------------ CPU registers, v/t, VRAM bus
+    wire [3:0]  fr16        = spr_vflip 
+                                ? (15 - spr_row) 
+                                : spr_row;
+
+    wire [13:0] spr_addr_lo = ppu_ctrl[CTRL_SP_SIZE]
+                                ? {1'b0, cur_tile[0], cur_tile[7:1], fr16[3], 1'b0, fr16[2:0]}
+                                : {1'b0, ppu_ctrl[CTRL_SP_PAT], cur_tile, 1'b0, fr8};
+
+    // ------ CPU registers, v/t, VRAM bus
     logic [7:0] bg_nt;
     logic [7:0] bg_lo;
     logic [1:0] bg_at;
 
-    wire status_rd = !cpu_rw && (cpu_addr == PPUSTATUS);
-    wire [14:0] v_step = ppu_ctrl[CTRL_INC] ? 32 : 1;
+    wire        status_rd   = !cpu_rw && (cpu_addr == PPUSTATUS);
+    wire [14:0] v_step      = ppu_ctrl[CTRL_INC] ? 32 : 1;
 
-    wire ppu_selected = !ppu_cs_n;
-    wire internal_wren = cpu_rw && ppu_selected;
-    wire internal_rden = !cpu_rw && ppu_selected;
+    wire ppu_selected       = !ppu_cs_n;
+    wire internal_wren      = cpu_rw && ppu_selected;
+    wire internal_rden      = !cpu_rw && ppu_selected;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -327,7 +336,7 @@ module ppu2C02 (
 
                 // ---- background fetches (8 dots per tile)
                 if (bg_fetch_win) begin
-                    case (ph)
+                    case (mod8_cycle)
                         0: begin
                             ppu_addr <= 14'h2000 | ((tile_edge ? inc_x(v_addr) : v_addr) & 15'h0FFF);
                             rd_n_q <= 1'b0;
@@ -353,10 +362,10 @@ module ppu2C02 (
 
                 // ---- sprite pattern fetches (slot s at dots 256+8s .. 263+8s)
                 if (spr_fetch_win) begin
-                    if (ph == 4) begin
+                    if (mod8_cycle == 4) begin
                         ppu_addr <= spr_addr_lo;
                         rd_n_q <= 1'b0;
-                    end else if (ph == 6) begin
+                    end else if (mod8_cycle == 6) begin
                         ppu_addr <= spr_addr_lo | 14'h0008;
                         rd_n_q <= 1'b0;
                     end
@@ -399,7 +408,7 @@ module ppu2C02 (
                         if (!rendering_active) begin
                             ppu_addr     <= v_addr[13:0];
                             ppu_data_out <= cpu_data_in;
-                            wr_n_q     <= 1'b0;
+                            wr_n_q       <= 1'b0;
                             v_addr       <= v_addr + v_step;
                         end
                     end
@@ -428,7 +437,7 @@ module ppu2C02 (
         end
     end
 
-    // ------------------------------------------------------------------ status flags / NMI
+    // ------ status flags / NMI
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             vblank_flag      <= 1'b0;
@@ -454,7 +463,7 @@ module ppu2C02 (
 
     assign nmi_n = ~(ppu_ctrl[CTRL_NMI] & vblank_flag);
 
-    // ------------------------------------------------------------------ background shifters
+    // ------ background shifters
     logic [15:0] pat_lo;
     logic [15:0] pat_hi;
     logic [15:0] att_lo;
@@ -482,16 +491,16 @@ module ppu2C02 (
         end
     end
 
-    wire [3:0] bsel = 15 - {1'b0, fine_x};
-    wire [3:0] bg_pix = {att_hi[bsel], att_lo[bsel], pat_hi[bsel], pat_lo[bsel]};
+    wire [3:0]      bsel        = 15 - {1'b0, fine_x};
+    wire [3:0]      bg_pix      = {att_hi[bsel], att_lo[bsel], pat_hi[bsel], pat_lo[bsel]};
 
-    // ------------------------------------------------------------------ sprite shifters
-    logic [63:0] spr_lo;
-    logic [63:0] spr_hi;
-    logic [63:0] spr_cnt;     // X delay counters
-    logic [63:0] spr_attr;
-    logic [7:0]  spr_is0;
-    wire [2:0]  cap_slot_hi = cycle[5:3] - 1;
+    // ------ sprite shifters
+    logic [63:0]    spr_lo;
+    logic [63:0]    spr_hi;
+    logic [63:0]    spr_cnt;     // X delay counters
+    logic [63:0]    spr_attr;
+    logic [7:0]     spr_is0;
+    wire [2:0]      cap_slot_hi = cycle[5:3] - 1;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -501,7 +510,7 @@ module ppu2C02 (
             spr_attr <= 0;
             spr_is0  <= 0;
         end else if (rendering_active) begin
-            if (spr_fetch_win && ph == 6) begin
+            if (spr_fetch_win && mod8_cycle == 6) begin
                 if (({1'b0, slot}) < spr_count) begin
                     spr_lo[slot*8 +: 8] <= cur_attr[6] ? reverse_byte(bus_data_in) : bus_data_in;
                     spr_cnt[slot*8 +: 8]  <= sec_x[slot];
@@ -516,7 +525,7 @@ module ppu2C02 (
                         sec_attr[cap_slot_hi][6] ? reverse_byte(bus_data_in) : bus_data_in;
                 else
                     spr_hi[cap_slot_hi*8 +: 8] <= 0;
-            end else if (visible_line && cycle >= 1 && cycle <= 256) begin
+            end else if (visible_pixel) begin
                 for (k = 0; k < 8; k = k + 1) begin
                     if (spr_cnt[k*8 +: 8] != 0) begin
                         spr_cnt[k*8 +: 8] <= spr_cnt[k*8 +: 8] - 1;
@@ -529,7 +538,7 @@ module ppu2C02 (
         end
     end
 
-    // ------------------------------------------------------------------ pixel mixer
+    // ------ pixel mixer
     logic       spr_found;
     logic [3:0] spr_pix;       // {palette, color}
     logic       spr_behind;
@@ -537,7 +546,7 @@ module ppu2C02 (
 
     always_comb begin
         integer i;
-        logic [1:0] c;
+        logic[1:0] c;
         spr_found   = 1'b0;
         spr_pix     = 0;
         spr_behind  = 1'b0;
@@ -558,12 +567,12 @@ module ppu2C02 (
         end
     end
 
-    wire visible_pixel = visible_line && (cycle >= 1) && (cycle <= 256);
-    wire left8 = (cycle <= 8);
-    wire bg_en = ppu_mask[MASK_BG_EN]  && !(left8 && !ppu_mask[MASK_8_BG_EN]);
-    wire spr_en = ppu_mask[MASK_SPR_EN] && !(left8 && !ppu_mask[MASK_8_SPR_EN]);
-    wire bg_opaque = bg_en  && (bg_pix[1:0] != 2'b00);
-    wire spr_opaque = spr_en && spr_found;
+    wire visible_pixel  = visible_line && visible_cycle;
+    wire left8          = (cycle <= 8);
+    wire bg_en          = ppu_mask[MASK_BG_EN]  && !(left8 && !ppu_mask[MASK_8_BG_EN]);
+    wire spr_en         = ppu_mask[MASK_SPR_EN] && !(left8 && !ppu_mask[MASK_8_SPR_EN]);
+    wire bg_opaque      = bg_en  && (bg_pix[1:0] != 2'b00);
+    wire spr_opaque     = spr_en && spr_found;
 
     always_comb begin
         video = 0;

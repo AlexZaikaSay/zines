@@ -2,16 +2,12 @@
 `include "cartridge/cartridge_sim.sv"
 
 module tb_201_video;
-
-    localparam integer FRAME_CLK = 341 * 262;
-
-    logic clk = 1'b0;
     logic rst_n;
-    logic [1:0] phase = 2'd0;
-    logic cpu_clk = 1'b0;
+    logic [1:0] phase;
+    logic clk;
+    logic cpu_clk;
     logic [8:0] scanline;
     logic [8:0] cycle;
-    logic [4:0] video;
     logic [7:0] pixel_palette;
     logic [15:0] cpu_addr;
     logic cpu_undef;
@@ -42,7 +38,7 @@ module tb_201_video;
         .rst_n(rst_n),
         .scanline(scanline),
         .cycle(cycle),
-        .video(video),
+        .video(),
         .pixel_palette(pixel_palette),
         .cart_cpu_addr(cart_cpu_addr),
         .cart_cpu_data_out(cart_cpu_data_out),
@@ -86,7 +82,7 @@ module tb_201_video;
     assign cpu_undef = dut.cpu_undef;
 
     initial begin
-
+        clk = 1'b0;
         for (i = 0; i < 2048; i = i + 1) begin
             dut.u_cpu_ram.data[i] = 8'h00;
             dut.u_ciram.data[i] = 8'h00;
@@ -95,8 +91,8 @@ module tb_201_video;
             dut.u_ppu.u_palette_ram.data[i] = 8'h0F;
 
         rst_n = 1'b0;
-        repeat (10) @(posedge clk);
-        #1 rst_n = 1'b1;
+        #100;
+        rst_n = 1'b1;
     end
 
     import "DPI-C" function void sdl_display_init(input string title);

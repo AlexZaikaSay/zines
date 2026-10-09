@@ -92,6 +92,8 @@ foreach(TB_FILE ${TESTBENCHS})
         set(VERILATOR_FLAGS
             --binary
             --timing
+            -O3
+            -CFLAGS -O3
             --top-module ${TB_NAME}
             --Mdir ${OBJ_DIR}
             -Wall
