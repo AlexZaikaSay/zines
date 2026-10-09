@@ -425,8 +425,6 @@ module ppu2C02 (
                     default: ;
                 endcase
             end
-            else
-                cpu_data_out <= 8'bz;
         end
     end
 

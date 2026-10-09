@@ -103,7 +103,8 @@ module nes_sim (
     logic [13:0] ppu_addr;
     logic [7:0]  ppu_data_out;
     wire  [7:0]  ppu_data;
-    wire  [7:0]  ciram_data;      // shared PPU data bus
+    wire  [7:0]  ciram_raw;
+    logic [7:0]  ciram_data;      // registered like cartridge CHR: the PPU samples a clock after rd_n
     logic        ppu_rd_n;
     logic        ppu_wr_n;
 
@@ -138,9 +139,15 @@ module nes_sim (
     assign cart_ppu_data_out = ppu_data_out;
 
     // PPU drives the bus on writes, the cartridge CHR drives it while A13 is low
-    assign ppu_data = !ppu_wr_n ? ppu_data_out : 8'hzz;
-    assign ppu_data = ciram_data;
-    assign ppu_data = (cart_ciram_ce_n && ppu_wr_n) ? cart_ppu_data_in : 8'hzz;
+    // Resolved with a mux: Verilator is 2-state and cannot resolve multiple 'z' drivers
+    assign ppu_data = !ppu_wr_n          ? ppu_data_out :
+                      !cart_ciram_ce_n   ? ciram_data   :
+                                           cart_ppu_data_in;
+
+    always_ff @(posedge ppu_clk) begin
+        if (!cart_ciram_ce_n && !ppu_rd_n)
+            ciram_data <= ciram_raw;
+    end
 
     mem #(
         .ADDR_WIDTH(11)
@@ -148,7 +155,7 @@ module nes_sim (
         .clk(ppu_clk),
         .addr({cart_ciram_a10, ppu_addr[9:0]}),
         .data_in(ppu_data),
-        .data_out(ciram_data),
+        .data_out(ciram_raw),
         .rw(ppu_wr_n),
         .cs_n(cart_ciram_ce_n),
         .oe_n(ppu_rd_n)
