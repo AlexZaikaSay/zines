@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 
@@ -28,6 +29,23 @@ SDL_Texture* texture = nullptr;
 uint32_t framebuffer[WIDTH * HEIGHT];
 uint32_t last_frame_ticks = 0;
 uint32_t frame_count = 0;
+int pending = 0;
+
+// X = A, Z = B, Right Shift/Backspace = Select, Enter = Start, arrows = D-pad
+int pad_bit(int sc) {
+    switch (sc) {
+        case SDL_SCANCODE_M: return 0x01;
+        case SDL_SCANCODE_N: return 0x02;
+        case SDL_SCANCODE_RSHIFT: case SDL_SCANCODE_BACKSPACE: return 0x04;
+        case SDL_SCANCODE_RETURN: return 0x08;
+        case SDL_SCANCODE_W: return 0x10;
+        case SDL_SCANCODE_S: return 0x20;
+        case SDL_SCANCODE_A: return 0x40;
+        case SDL_SCANCODE_D: return 0x80;
+    }
+    return 0;
+}
+int pad_state = 0;  // bit order: A, B, Select, Start, Up, Down, Left, Right
 uint32_t fps_ticks = 0;
 
 }  // namespace
@@ -51,6 +69,7 @@ void sdl_display_init(const char* title) {
     SDL_RenderSetLogicalSize(renderer, WIDTH, HEIGHT);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
                                 SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+    SDL_RaiseWindow(window);
     last_frame_ticks = fps_ticks = SDL_GetTicks();
 }
 
@@ -67,7 +86,18 @@ int sdl_display_present(void) {
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) return 1;
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) return 1;
+        if (e.type == SDL_KEYDOWN && !e.key.repeat) pending |= pad_bit(e.key.keysym.scancode);
     }
+
+    // Held keys plus any key tapped since the last frame, so short taps are not missed.
+    const uint8_t* keys = SDL_GetKeyboardState(nullptr);
+    int held = 0;
+    for (int sc : {SDL_SCANCODE_M, SDL_SCANCODE_N, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_BACKSPACE,
+                   SDL_SCANCODE_RETURN, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A,
+                   SDL_SCANCODE_D})
+        if (keys[sc]) held |= pad_bit(sc);
+    pad_state = held | pending;
+    pending = 0;
 
     SDL_UpdateTexture(texture, nullptr, framebuffer, WIDTH * sizeof(uint32_t));
     SDL_RenderClear(renderer);
@@ -89,6 +119,8 @@ int sdl_display_present(void) {
     }
     return 0;
 }
+
+int sdl_display_buttons(void) { return pad_state; }
 
 void sdl_display_close(void) {
     if (texture) SDL_DestroyTexture(texture);

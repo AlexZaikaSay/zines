@@ -9,6 +9,9 @@ module tb_201_video;
     logic [8:0] scanline;
     logic [8:0] cycle;
     logic [7:0] pixel_palette;
+    logic       joy1_strob;
+    logic       joy1_oe_n;
+    logic [7:0] joy1_data;
     logic [15:0] cpu_addr;
     logic cpu_undef;
     logic [15:0] cart_cpu_addr;
@@ -40,6 +43,9 @@ module tb_201_video;
         .cycle(cycle),
         .video(),
         .pixel_palette(pixel_palette),
+        .joy1_strob(joy1_strob),
+        .joy1_oe_n(joy1_oe_n),
+        .joy1_data(joy1_data),
         .cart_cpu_addr(cart_cpu_addr),
         .cart_cpu_data_out(cart_cpu_data_out),
         .cart_cpu_data_in(cart_cpu_data_in),
@@ -56,7 +62,7 @@ module tb_201_video;
 
     cartridge_sim #
     (
-        .ROM_FILE("../assets/SMB.nes")
+        .ROM_FILE("../assets/full_nes_palette.nes")
     )
     u_cartridge (
         .clk(clk),
@@ -77,11 +83,22 @@ module tb_201_video;
         .error_code()
     );
 
+    logic [7:0] pad_buttons = 8'h00;
+
+    joystick_sim u_joystick (
+        .strob(joy1_strob),
+        .oe_n(joy1_oe_n),
+        .buttons(pad_buttons),
+        .data(joy1_data)
+    );
 
     assign cpu_addr = dut.cpu_addr;
     assign cpu_undef = dut.cpu_undef;
 
     initial begin
+        // $dumpfile("tb_201_video.vcd");
+        // $dumpvars(0, tb_201_video);
+        
         clk = 1'b0;
         for (i = 0; i < 2048; i = i + 1) begin
             dut.u_cpu_ram.data[i] = 8'h00;
@@ -99,6 +116,13 @@ module tb_201_video;
     import "DPI-C" function void sdl_display_pixel(input int x, input int y, input int palette_index);
     import "DPI-C" function int  sdl_display_present();
     import "DPI-C" function void sdl_display_close();
+    import "DPI-C" function int  sdl_display_buttons();
+
+    // Keyboard state sampled once per frame: A, B, Select, Start, Up, Down, Left, Right
+    always @(posedge clk)
+        if (scanline == 240 && cycle == 0) begin
+            pad_buttons <= 8'(sdl_display_buttons());
+        end
 
     initial sdl_display_init("zines NES");
 

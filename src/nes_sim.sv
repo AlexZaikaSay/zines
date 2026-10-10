@@ -2,6 +2,7 @@
 `include "cpu/mem.sv"
 `include "cpu/decoder2_4.sv"
 `include "ppu/ppu2C02.sv"
+`include "joystick_sim.sv"
 
 module nes_sim (
     input  logic       cpu_clk,
@@ -11,6 +12,11 @@ module nes_sim (
     output logic [8:0] cycle,
     output logic [4:0] video,
     output logic [7:0] pixel_palette,
+
+    // Joystick interface
+    output logic       joy1_strob,
+    output logic       joy1_oe_n,
+    input  logic [7:0] joy1_data,
 
     // Cartridge edge connector
     output logic [15:0] cart_cpu_addr,
@@ -32,7 +38,6 @@ module nes_sim (
     logic [7:0]  cpu_data_out;
     logic [7:0]  cpu_data_in;
     logic        cpu_rw;
-    logic        cpu_m2;
     logic        cpu_undef;
     logic        cpu_strobe;
     logic [7:0]  cpu_ram_data;
@@ -73,7 +78,8 @@ module nes_sim (
         .data_out(cpu_data_out),
         .addr(cpu_addr),
         .rw(cpu_rw),
-        .m2(cpu_m2),
+        .out0(joy1_strob),
+        .oe1_n(joy1_oe_n),
         .undef(cpu_undef)
     );
 
@@ -90,7 +96,9 @@ module nes_sim (
     );
 
     always_comb begin
-        if (cartridge_selected)
+        if (!joy1_oe_n)
+            cpu_data_in = joy1_data;
+        else if (cartridge_selected)
             cpu_data_in = cart_cpu_data_in;
         else if (cpu_ram_selected)
             cpu_data_in = cpu_ram_data;
