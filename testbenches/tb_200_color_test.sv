@@ -15,7 +15,6 @@ module tb_200_color_test;
     logic cpu_clk = 1'b0;
     logic [8:0] scanline;
     logic [8:0] cycle;
-    logic [4:0] video;
     logic [7:0] pixel_palette;
     logic [15:0] cpu_addr;
     logic cpu_undef;
@@ -46,7 +45,7 @@ module tb_200_color_test;
         .rst_n(rst_n),
         .scanline(scanline),
         .cycle(cycle),
-        .video(video),
+        .video(),
         .pixel_palette(pixel_palette),
         .cart_cpu_addr(cart_cpu_addr),
         .cart_cpu_data_out(cart_cpu_data_out),

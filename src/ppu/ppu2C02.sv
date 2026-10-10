@@ -109,6 +109,7 @@ module ppu2C02 (
     wire        rendering_enabled   = ppu_mask[MASK_BG_EN] | ppu_mask[MASK_SPR_EN];
     wire        visible_cycle       = cycle >= 1 && cycle <= 256;
     wire        visible_line        = scanline < 240;
+    wire        visible_pixel       = visible_line && visible_cycle;
     wire        prerender_line      = scanline == 261;
     wire        rendering_active    = rendering_enabled & (visible_line | prerender_line);
     wire [2:0]  mod8_cycle          = cycle[2:0];
@@ -193,9 +194,12 @@ module ppu2C02 (
     logic [1:0] copy_b;
 
     wire [7:0]  eval_y      = oam[{eval_n[5:0], 2'b00}];
-    wire [4:0]  spr_h       = ppu_ctrl[CTRL_SP_SIZE] ? 16 : 8;
+    wire [7:0]  eval_tile   = oam[{eval_n[5:0], 2'b01}];
+    wire [7:0]  eval_attr   = oam[{eval_n[5:0], 2'b10}];
+    wire [7:0]  eval_x      = oam[{eval_n[5:0], 2'b11}];
+    wire [8:0]  spr_size    = ppu_ctrl[CTRL_SP_SIZE] ? 16 : 8;
     wire [8:0]  eval_dif    = scanline - {1'b0, eval_y};
-    wire        eval_hit    = (scanline >= {1'b0, eval_y}) && (eval_dif < {4'b0, spr_h});
+    wire        eval_hit    = (scanline >= {1'b0, eval_y}) && (eval_dif < spr_size);
 
     integer k;
     always_ff @(posedge clk or negedge rst_n) begin
@@ -247,10 +251,10 @@ module ppu2C02 (
                 end else begin
                     copy_b <= copy_b + 1;
                     case (copy_b)
-                        1: sec_tile[spr_count[2:0]] <= oam[{eval_n[5:0], 2'b01}];
-                        2: sec_attr[spr_count[2:0]] <= oam[{eval_n[5:0], 2'b10}];
+                        1: sec_tile[spr_count[2:0]] <= eval_tile;
+                        2: sec_attr[spr_count[2:0]] <= eval_attr;
                         default: begin
-                            sec_x[spr_count[2:0]] <= oam[{eval_n[5:0], 2'b11}];
+                            sec_x[spr_count[2:0]] <= eval_x;
                             spr_count <= spr_count + 1;
                             eval_n    <= eval_n + 1;
                             copying   <= 1'b0;
@@ -263,7 +267,7 @@ module ppu2C02 (
 
     // ------ sprite pattern address
     wire [2:0]  slot        = cycle[5:3];
-    wire [7:0]  cur_y       = sec_y[slot];
+    wire [3:0]  cur_y       = sec_y[slot][3:0];
     wire [7:0]  cur_tile    = sec_tile[slot];
     wire [7:0]  cur_attr    = sec_attr[slot];
     wire [3:0]  spr_row     = scanline[3:0] - cur_y[3:0];
@@ -288,9 +292,9 @@ module ppu2C02 (
     wire        status_rd   = !cpu_rw && (cpu_addr == PPUSTATUS);
     wire [14:0] v_step      = ppu_ctrl[CTRL_INC] ? 32 : 1;
 
-    wire ppu_selected       = !ppu_cs_n;
-    wire internal_wren      = cpu_rw && ppu_selected;
-    wire internal_rden      = !cpu_rw && ppu_selected;
+    wire ppu_cs             = !ppu_cs_n;
+    wire cpu_read           = cpu_rw && ppu_cs;
+    wire cpu_write          = !cpu_rw && ppu_cs;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -338,7 +342,7 @@ module ppu2C02 (
                 if (bg_fetch_win) begin
                     case (mod8_cycle)
                         0: begin
-                            ppu_addr <= 14'h2000 | ((tile_edge ? inc_x(v_addr) : v_addr) & 15'h0FFF);
+                            ppu_addr <= 14'h2000 | {((tile_edge ? inc_x(v_addr) : v_addr) & 15'h0FFF)}[13:0];
                             rd_n_q <= 1'b0;
                         end
                         2: begin
@@ -347,7 +351,7 @@ module ppu2C02 (
                             rd_n_q <= 1'b0;
                         end
                         4: begin
-                            bg_at    <= (bus_data_in >> {v_addr[6], v_addr[1], 1'b0});
+                            bg_at    <= {(bus_data_in >> {v_addr[6], v_addr[1], 1'b0})}[1:0];
                             ppu_addr <= {1'b0, ppu_ctrl[CTRL_BG], bg_nt, 1'b0, v_addr[14:12]};
                             rd_n_q <= 1'b0;
                         end
@@ -373,7 +377,7 @@ module ppu2C02 (
             end
 
             // ---- CPU register access (wins over the render-side v updates)
-            if (internal_rden) begin
+            if (cpu_write) begin
                 case (cpu_addr)
                     PPUCTRL: begin
                         ppu_ctrl      <= cpu_data_in;
@@ -415,7 +419,7 @@ module ppu2C02 (
                     default: ;
                 endcase
             end
-            else if (internal_wren) begin
+            else if (cpu_read) begin
                 case (cpu_addr)
                     PPUSTATUS: begin
                         write_toggle <= 1'b0;
@@ -436,32 +440,7 @@ module ppu2C02 (
             end
         end
     end
-
-    // ------ status flags / NMI
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            vblank_flag      <= 1'b0;
-            sprite0_hit_flag <= 1'b0;
-            sprite_overflow  <= 1'b0;
-        end else begin
-            if (status_rd)
-                vblank_flag <= 1'b0;
-            if (ovf_pulse)
-                sprite_overflow <= 1'b1;
-            if (sprite0_hit_now)
-                sprite0_hit_flag <= 1'b1;
-
-            if (scanline == 241 && cycle == 1) begin
-                vblank_flag <= 1'b1;
-            end else if (prerender_line && cycle == 1) begin
-                vblank_flag      <= 1'b0;
-                sprite0_hit_flag <= 1'b0;
-                sprite_overflow  <= 1'b0;
-            end
-        end
-    end
-
-    assign nmi_n = ~(ppu_ctrl[CTRL_NMI] & vblank_flag);
+    
 
     // ------ background shifters
     logic [15:0] pat_lo;
@@ -495,43 +474,45 @@ module ppu2C02 (
     wire [3:0]      bg_pix      = {att_hi[bsel], att_lo[bsel], pat_hi[bsel], pat_lo[bsel]};
 
     // ------ sprite shifters
-    logic [63:0]    spr_lo;
-    logic [63:0]    spr_hi;
-    logic [63:0]    spr_cnt;     // X delay counters
-    logic [63:0]    spr_attr;
+    logic [7:0]     spr_lo[0:7];
+    logic [7:0]     spr_hi[0:7];
+    logic [7:0]     spr_cnt[0:7];     // X delay counters
+    logic [7:0]     spr_attr[0:7];
     logic [7:0]     spr_is0;
     wire [2:0]      cap_slot_hi = cycle[5:3] - 1;
 
+    integer j;
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            spr_lo   <= 0;
-            spr_hi   <= 0;
-            spr_cnt  <= 0;
-            spr_attr <= 0;
+            for (j = 0; j < 8; j = j + 1) begin
+                spr_lo[j] <= 0;
+                spr_hi[j] <= 0;
+                spr_cnt[j] <= 0;
+                spr_attr[j] <= 0;
+            end
             spr_is0  <= 0;
         end else if (rendering_active) begin
             if (spr_fetch_win && mod8_cycle == 6) begin
                 if (({1'b0, slot}) < spr_count) begin
-                    spr_lo[slot*8 +: 8] <= cur_attr[6] ? reverse_byte(bus_data_in) : bus_data_in;
-                    spr_cnt[slot*8 +: 8]  <= sec_x[slot];
-                    spr_attr[slot*8 +: 8] <= cur_attr;
-                    spr_is0[slot]         <= sec_is0[slot];
+                    spr_lo[slot]    <= cur_attr[6] ? reverse_byte(bus_data_in) : bus_data_in;
+                    spr_cnt[slot]   <= sec_x[slot];
+                    spr_attr[slot]  <= cur_attr;
+                    spr_is0[slot]   <= sec_is0[slot];
                 end else begin
-                    spr_lo[slot*8 +: 8] <= 0;
+                    spr_lo[slot] <= 0;
                 end
             end else if (spr_cap_hi) begin
                 if (({1'b0, cap_slot_hi}) < spr_count)
-                    spr_hi[cap_slot_hi*8 +: 8] <=
-                        sec_attr[cap_slot_hi][6] ? reverse_byte(bus_data_in) : bus_data_in;
+                    spr_hi[cap_slot_hi] <= sec_attr[cap_slot_hi][6] ? reverse_byte(bus_data_in) : bus_data_in;
                 else
-                    spr_hi[cap_slot_hi*8 +: 8] <= 0;
+                    spr_hi[cap_slot_hi] <= 0;
             end else if (visible_pixel) begin
-                for (k = 0; k < 8; k = k + 1) begin
-                    if (spr_cnt[k*8 +: 8] != 0) begin
-                        spr_cnt[k*8 +: 8] <= spr_cnt[k*8 +: 8] - 1;
+                for (j = 0; j < 8; j = j + 1) begin
+                    if (spr_cnt[j] != 0) begin
+                        spr_cnt[j] <= spr_cnt[j] - 1;
                     end else begin
-                        spr_lo[k*8 +: 8] <= {spr_lo[k*8 +: 7], 1'b0};
-                        spr_hi[k*8 +: 8] <= {spr_hi[k*8 +: 7], 1'b0};
+                        spr_lo[j] <= {spr_lo[j][6:0], 1'b0};
+                        spr_hi[j] <= {spr_hi[j][6:0], 1'b0};
                     end
                 end
             end
@@ -546,28 +527,26 @@ module ppu2C02 (
 
     always_comb begin
         integer i;
-        logic[1:0] c;
         spr_found   = 1'b0;
         spr_pix     = 0;
         spr_behind  = 1'b0;
         spr0_opaque = 1'b0;
         for (i = 0; i < 8; i = i + 1) begin
-            if (spr_cnt[i*8 +: 8] == 0) begin
-                c = {spr_hi[i*8 + 7], spr_lo[i*8 + 7]};
-                if (c != 2'b00) begin
+            if (spr_cnt[i] == 0) begin
+                if ({spr_hi[i][7], spr_lo[i][7]} != 2'b00) begin
                     if (spr_is0[i])
                         spr0_opaque = 1'b1;
                     if (!spr_found) begin
                         spr_found  = 1'b1;
-                        spr_pix    = {spr_attr[i*8 +: 2], c};
-                        spr_behind = spr_attr[i*8 + 5];
+                        spr_pix    = {spr_attr[i][1:0], spr_hi[i][7], spr_lo[i][7]};
+                        spr_behind = spr_attr[i][5];
                     end
                 end
             end
         end
     end
 
-    wire visible_pixel  = visible_line && visible_cycle;
+    
     wire left8          = (cycle <= 8);
     wire bg_en          = ppu_mask[MASK_BG_EN]  && !(left8 && !ppu_mask[MASK_8_BG_EN]);
     wire spr_en         = ppu_mask[MASK_SPR_EN] && !(left8 && !ppu_mask[MASK_8_SPR_EN]);
@@ -587,5 +566,31 @@ module ppu2C02 (
     // Sprite 0 hit never triggers at x = 255 (cycle 256)
     assign sprite0_hit_now = visible_pixel && bg_opaque && spr_en && spr0_opaque &&
                              (cycle != 256);
+
+    // ------ status flags / NMI
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            vblank_flag      <= 1'b0;
+            sprite0_hit_flag <= 1'b0;
+            sprite_overflow  <= 1'b0;
+        end else begin
+            if (status_rd)
+                vblank_flag <= 1'b0;
+            if (ovf_pulse)
+                sprite_overflow <= 1'b1;
+            if (sprite0_hit_now)
+                sprite0_hit_flag <= 1'b1;
+
+            if (scanline == 241 && cycle == 1) begin
+                vblank_flag <= 1'b1;
+            end else if (prerender_line && cycle == 1) begin
+                vblank_flag      <= 1'b0;
+                sprite0_hit_flag <= 1'b0;
+                sprite_overflow  <= 1'b0;
+            end
+        end
+    end
+
+    assign nmi_n = ~(ppu_ctrl[CTRL_NMI] & vblank_flag);
 
 endmodule
