@@ -1,10 +1,13 @@
+`include "apu/apu2A03.sv"
 `include "cpu/mos6502.sv"
+
 
 // RP2A03 wrapper: 6502 core + OAM DMA ($4014). APU is not implemented.
 // The addr/data_out/rw pins are the shared CPU bus: the core drives them
 // normally, the DMA unit drives them while the core is halted.
 module cpu2A03 (
     input  logic        clk,
+    input  logic        cpu_clk,
     input  logic        rst_n,
     input  logic        nmi_n,
     input  logic        irq_n,
@@ -33,40 +36,53 @@ module cpu2A03 (
 
     logic [15:0] core_addr;
     logic [7:0]  core_data_out;
+    logic [7:0]  core_data_in;
     logic        core_rw;
 
-    localparam MEMIO_DMA    = 16'h4014;
-    localparam MEMIO_PAD1   = 16'h4016;
-    localparam MEMIO_PAD2   = 16'h4017;
+    logic [7:0]  apu_status;
+    logic [7:0]  apu_data_in;
 
-    wire core_clk = clk && core_enabled;
-    wire dma_active = (dma_state != DMA_IDLE);
-    wire core_write_dma = !core_rw && core_addr == MEMIO_DMA;
+    localparam MEMIO_APU_START      = 16'h4000;
+    localparam MEMIO_APU_END        = 16'h4013;
+    localparam MEMIO_DMA            = 16'h4014;
+    localparam MEMIO_APU_STATUS     = 16'h4015;
+    localparam MEMIO_PAD1           = 16'h4016;
+    localparam MEMIO_PAD2           = 16'h4017;
+
+    wire core_clk               = cpu_clk && core_enabled;
+    wire dma_active             = (dma_state != DMA_IDLE);
+    wire core_write_dma         = !core_rw && core_addr == MEMIO_DMA;
+    wire core_write_pad1        = !core_rw && core_addr == MEMIO_PAD1;
+    wire core_write_pad2        = !core_rw && core_addr == MEMIO_PAD2;
     
-    wire core_write_pad1 = !core_rw && core_addr == MEMIO_PAD1;
+    wire core_write_apu         = !core_rw && (core_addr >= MEMIO_APU_START) && (core_addr <= MEMIO_APU_END);
+    wire core_read_apu_status   = core_rw && core_addr == MEMIO_APU_STATUS;
+    wire core_write_apu_status  = !core_rw && core_addr == MEMIO_APU_STATUS;
+    wire core_write_apu_control = !core_rw && core_addr == MEMIO_PAD2;
+    wire core_read_pad1         = core_rw && core_addr == MEMIO_PAD1;
+    wire core_read_pad2         = core_rw && core_addr == MEMIO_PAD2;
     
-    wire core_read_pad1 = core_rw && core_addr == MEMIO_PAD1;
-    wire core_read_pad2 = core_rw && core_addr == MEMIO_PAD2;
 
-
-    // Core clock gate: enable changes only while clk is low
-    always_ff @(negedge clk or negedge rst_n) begin
+    // Core clock gate: enable changes only while cpu_clk is low
+    always_ff @(negedge cpu_clk or negedge rst_n) begin
         if (!rst_n)
             core_enabled <= 1'b1;
         else
             core_enabled <= !dma_active;
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    // Output logic for out0 based on core writes to pad1, pad2
+    always_ff @(posedge cpu_clk or negedge rst_n) begin
         if (!rst_n) begin
             out0    <= 1'b0;
         end else 
             if (core_enabled)
-                if (core_write_pad1)
+                if (core_write_pad1 || core_write_pad2)
                     out0 <= data_out[0];
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    // DMA state machine and control logic
+    always_ff @(posedge cpu_clk or negedge rst_n) begin
         if (!rst_n) begin
             dma_state <= DMA_IDLE;
             dma_page  <= 8'd0;
@@ -104,7 +120,7 @@ module cpu2A03 (
         .rst_n(rst_n),
         .nmi_n(nmi_n),
         .irq_n(irq_n),
-        .data_in(data_in),
+        .data_in(core_data_in),
         .data_out(core_data_out),
         .addr(core_addr),
         .rw(core_rw),
@@ -112,15 +128,36 @@ module cpu2A03 (
         .undef(undef)
     );
 
+    apu2A03 u_apu (
+        .clk(clk),
+        .cpu_clk(cpu_clk),
+        .rst_n(rst_n),
+        .addr(core_addr),
+        .data_in(apu_data_in),
+        .rw(core_rw),
+        .data_out(apu_status)
+    );
+
     // Bus ownership. While the core is gated off (including the cycle after
     // DMA ends) the bus is parked on a harmless cartridge read.
     always_comb begin
         if (core_enabled && !dma_active) begin
-            if (core_read_pad1)
+            if (core_read_pad1) begin
+                core_data_in = data_in;
                 oe1_n = 1'b0;
-            else if (core_read_pad2)
+            end
+            else if (core_read_pad2) begin
+                core_data_in = data_in;
                 oe2_n = 1'b0;
+            end
+            else if (core_read_apu_status)
+                core_data_in = apu_status;
+            else if (core_write_apu_status)
+                apu_data_in = core_data_out;
+            else if (core_write_apu || core_write_apu_control)
+                apu_data_in = core_data_out;
             else begin
+                core_data_in = data_in;
                 addr     = core_addr;
                 data_out = core_data_out;
                 rw       = core_rw;

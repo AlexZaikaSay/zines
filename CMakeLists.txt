@@ -11,7 +11,7 @@ set(ZINES_SIMULATOR "verilator" CACHE STRING
 set_property(CACHE ZINES_SIMULATOR PROPERTY STRINGS
     verilator icarus)
 
-option(ZINES_TRACE "Enable waveform tracing" OFF)
+option(ZINES_TRACE "Enable waveform tracing" ON)
 
 if(ZINES_SIMULATOR STREQUAL "verilator")
     find_program(VERILATOR_EXECUTABLE verilator REQUIRED)

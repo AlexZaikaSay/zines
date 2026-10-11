@@ -8,8 +8,8 @@
 
 
 module mos6502 (
-    input logic rst_n,
     input logic clk,
+    input logic rst_n,
     input logic nmi_n,
     input logic irq_n,
     input logic [7:0] data_in,

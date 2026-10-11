@@ -1,5 +1,5 @@
 
-`include "cpu/devboard.sv"
+`include "boards/mos_devboard.sv"
 
 /* verilator lint_off STMTDLY */
 
@@ -12,7 +12,7 @@ module tb_043_asl_lsr_ror_rol_zp_x;
     logic clk;
     logic rst_n;
 
-    devboard #(
+    mos_devboard #(
         .MEM_FILE(MEM_FILE)
     )
     db_device
