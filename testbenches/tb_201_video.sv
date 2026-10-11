@@ -62,7 +62,7 @@ module tb_201_video;
 
     cartridge_sim #
     (
-        .ROM_FILE("../assets/full_nes_palette.nes")
+        .ROM_FILE("../assets/SMB.nes")
     )
     u_cartridge (
         .clk(clk),
