@@ -34,9 +34,9 @@ int pending = 0;
 // X = A, Z = B, Right Shift/Backspace = Select, Enter = Start, arrows = D-pad
 int pad_bit(int sc) {
     switch (sc) {
-        case SDL_SCANCODE_M: return 0x01;
-        case SDL_SCANCODE_N: return 0x02;
-        case SDL_SCANCODE_RSHIFT: case SDL_SCANCODE_BACKSPACE: return 0x04;
+        case SDL_SCANCODE_RIGHT: return 0x01;
+        case SDL_SCANCODE_DOWN: return 0x02;
+        case SDL_SCANCODE_RSHIFT: return 0x04;
         case SDL_SCANCODE_RETURN: return 0x08;
         case SDL_SCANCODE_W: return 0x10;
         case SDL_SCANCODE_S: return 0x20;
@@ -47,6 +47,17 @@ int pad_bit(int sc) {
 }
 int pad_state = 0;  // bit order: A, B, Select, Start, Up, Down, Left, Right
 uint32_t fps_ticks = 0;
+
+constexpr int AUDIO_RATE = 44100;
+constexpr int CPU_HZ = 1789773;
+constexpr uint32_t AUDIO_BATCH = 512;                       // samples queued per SDL call
+constexpr uint32_t AUDIO_MAX_QUEUED = AUDIO_RATE / 10 * sizeof(float);  // ~100 ms
+
+SDL_AudioDeviceID audio_dev = 0;
+int audio_acc = 0;
+float audio_buf[AUDIO_BATCH];
+uint32_t audio_fill = 0;
+float mix_table[31];  // index = pulse1 + pulse2 (each 0..15), NES nonlinear pulse mixer
 
 }  // namespace
 
@@ -92,7 +103,7 @@ int sdl_display_present(void) {
     // Held keys plus any key tapped since the last frame, so short taps are not missed.
     const uint8_t* keys = SDL_GetKeyboardState(nullptr);
     int held = 0;
-    for (int sc : {SDL_SCANCODE_M, SDL_SCANCODE_N, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_BACKSPACE,
+    for (int sc : {SDL_SCANCODE_RIGHT, SDL_SCANCODE_DOWN, SDL_SCANCODE_RSHIFT,
                    SDL_SCANCODE_RETURN, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A,
                    SDL_SCANCODE_D})
         if (keys[sc]) held |= pad_bit(sc);
@@ -121,6 +132,49 @@ int sdl_display_present(void) {
 }
 
 int sdl_display_buttons(void) { return pad_state; }
+
+void sdl_audio_init(void) {
+    if (audio_dev) return;
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        std::fprintf(stderr, "sdl_display: audio init failed: %s\n", SDL_GetError());
+        return;
+    }
+    SDL_AudioSpec want{};
+    want.freq = AUDIO_RATE;
+    want.format = AUDIO_F32SYS;
+    want.channels = 1;
+    want.samples = 1024;
+    audio_dev = SDL_OpenAudioDevice(nullptr, 0, &want, nullptr, 0);
+    if (!audio_dev) {
+        std::fprintf(stderr, "sdl_display: audio device failed: %s\n", SDL_GetError());
+        return;
+    }
+    mix_table[0] = 0.0f;
+    for (int n = 1; n < 31; n++) mix_table[n] = 95.88f / (8128.0f / n + 100.0f);
+    SDL_PauseAudioDevice(audio_dev, 0);
+}
+
+// Call once per CPU clock with the two 4-bit pulse volumes; resamples to AUDIO_RATE.
+void sdl_audio_sample(int audio1, int audio2) {
+    if (!audio_dev) return;
+    audio_acc += AUDIO_RATE;
+    if (audio_acc < CPU_HZ) return;
+    audio_acc -= CPU_HZ;
+    audio_buf[audio_fill++] = mix_table[(audio1 & 0xF) + (audio2 & 0xF)];
+    if (audio_fill < AUDIO_BATCH) return;
+    audio_fill = 0;
+
+    // Throttle the simulation to real time so the queue neither starves nor grows.
+    while (SDL_GetQueuedAudioSize(audio_dev) > AUDIO_MAX_QUEUED) SDL_Delay(1);
+    SDL_QueueAudio(audio_dev, audio_buf, sizeof(audio_buf));
+}
+
+void sdl_audio_close(void) {
+    if (!audio_dev) return;
+    SDL_CloseAudioDevice(audio_dev);
+    audio_dev = 0;
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+}
 
 void sdl_display_close(void) {
     if (texture) SDL_DestroyTexture(texture);

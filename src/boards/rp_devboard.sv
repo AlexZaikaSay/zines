@@ -7,11 +7,13 @@ module rp_devboard
     parameter MEM_FILE = ""
 )
 (
-    input logic clk,
-    input logic cpu_clk,
-    input logic rst_n,
-    input logic nmi_n = 1'b1,
-    input logic irq_n = 1'b1
+    input logic         clk,
+    input logic         cpu_clk,
+    input logic         rst_n,
+    input logic         nmi_n = 1'b1,
+    input logic         irq_n = 1'b1,
+    output logic [3:0]  audio1,
+    output logic [3:0]  audio2
 );
 
     logic [15:0] addr;
@@ -28,7 +30,9 @@ module rp_devboard
         .data_in(mem_data),
         .rw(rw),
         .nmi_n,
-        .irq_n
+        .irq_n,
+        .audio1(audio1),
+        .audio2(audio2)
     );
 
     mem #(

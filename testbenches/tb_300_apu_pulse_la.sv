@@ -1,24 +1,18 @@
 
 `include "boards/rp_devboard.sv"
 
-/* verilator lint_off STMTDLY */
+`timescale 1ns/1ps
 
-
-
-module tb_300_apu_pulse_la;
-    parameter CYCLE_LEN = 10;
-    parameter CPU_CLK_DIV = 12;
+module tb_300_apu_pulse_la (
+    input logic clk
+);
     parameter MEM_FILE = "./tests/300_apu_pulse_la.tv";
-    logic clk;
-    logic cpu_clk;
-    logic [4:0] phase;
-    logic rst_n;
+    
+    logic       rst_n;
 
+    logic [3:0] audio1;
+    logic [3:0] audio2;
 
-    always_ff @(posedge clk) begin
-        phase   <= (phase == CPU_CLK_DIV - 1) ? 0 : phase + 1;
-        cpu_clk <= (phase < CPU_CLK_DIV / 2);
-    end
 
     rp_devboard #(
         .MEM_FILE(MEM_FILE)
@@ -26,34 +20,40 @@ module tb_300_apu_pulse_la;
     db_device
     (
         .clk(clk),
-        .cpu_clk(cpu_clk),
-        .rst_n(rst_n)
+        .cpu_clk(clk),
+        .rst_n(rst_n),
+        .audio1(audio1),
+        .audio2(audio2)
     );
 
-    initial begin
-        $dumpfile("tb_300_apu_pulse_la.vcd");
-        $dumpvars(0, tb_300_apu_pulse_la);
-        #1 rst_n = 0; #2; rst_n = 1;
-    end
+    import "DPI-C" function void sdl_audio_init();
+    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2);
+    import "DPI-C" function void sdl_audio_close();
 
-    initial begin
-        for (integer i = 0, counter = 0; counter < 600000; i++) begin
-            counter = i / CPU_CLK_DIV;
-            clk = 1; #(CYCLE_LEN/2);
-            clk = 0; #(CYCLE_LEN/2);
-            case (counter)
-                default: begin
-                    // No specific check for this cycle
-                end
-            endcase
+    initial sdl_audio_init();
+
+    // One sample per CPU clock; the SDL side resamples and mixes the pulse channels.
+    always @(posedge clk) begin
+        if (rst_n === 1'b1) begin
+            sdl_audio_sample((^audio1 === 1'bx) ? 0 : int'(audio1),
+                             (^audio2 === 1'bx) ? 0 : int'(audio2));
         end
     end
 
-    always @(negedge clk)
-    begin
-        // Check for specific memory write conditions here
+    // clk is driven by utils/sim_main.cpp; reset is held for 2 clocks, run ends after 600000 CPU cycles.
+    logic [1:0] rst_cnt = 2'd0;
+    integer     cyc = 0;
+    always @(posedge clk) begin
+        if (rst_cnt != 2'd2) 
+            rst_cnt <= rst_cnt + 2'd1;
+        cyc <= cyc + 1;
+        if (cyc == 2000000) begin
+            sdl_audio_close();
+            $finish;
+        end
     end
-  
-endmodule
+    
+    assign rst_n = (rst_cnt == 2'd2);
 
-/* verilator lint_on STMTDLY */
+
+endmodule

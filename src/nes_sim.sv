@@ -31,7 +31,11 @@ module nes_sim (
     output logic [7:0]  cart_ppu_data_out,
     input  logic [7:0]  cart_ppu_data_in,
     input  logic        cart_ciram_a10,
-    input  logic        cart_ciram_ce_n
+    input  logic        cart_ciram_ce_n,
+
+    // Audio outputs
+    output logic [3:0] audio1,
+    output logic [3:0] audio2,
 );
 
     logic        nmi_n;
@@ -82,6 +86,8 @@ module nes_sim (
         .rw(cpu_rw),
         .out0(joy1_strob),
         .oe1_n(joy1_oe_n),
+        .audio1(audio1),
+        .audio2(audio2),
         .undef(cpu_undef)
     );
 

@@ -8,7 +8,9 @@ module apu2A03 (
     input  logic [7:0]  data_in,
     input  logic        rw,
     output logic [7:0]  data_out,
-    output logic        irq
+    output logic        irq,
+    output logic [3:0]  audio1,
+    output logic [3:0]  audio2
 );
 
     // internal registers and wires
@@ -16,9 +18,9 @@ module apu2A03 (
     logic [7:0] pulse1_settings;
     logic [7:0] pulse2_settings;
     logic [10:0] pulse1_timer;
-    logic [4:0] pulse1_len_counter;
+    logic [7:0] pulse1_len_counter;
     logic [10:0] pulse2_timer;
-    logic [4:0] pulse2_len_counter;
+    logic [7:0] pulse2_len_counter;
 
     wire [3:0] pulse1_vol    = pulse1_settings[3:0];
     wire [1:0] pulse1_width  = pulse1_settings[7:6];
@@ -57,6 +59,43 @@ module apu2A03 (
         duty_cycles[3] = 8'b11111100;
     end
 
+    logic [7:0] pulse_lengths[0:31];
+
+    initial begin
+        pulse_lengths[0]  = 10;
+        pulse_lengths[1]  = 254;
+        pulse_lengths[2]  = 20;
+        pulse_lengths[3]  = 2;
+        pulse_lengths[4]  = 40;
+        pulse_lengths[5]  = 4;
+        pulse_lengths[6]  = 80;
+        pulse_lengths[7]  = 6;
+        pulse_lengths[8]  = 160;
+        pulse_lengths[9]  = 8;
+        pulse_lengths[10] = 60;
+        pulse_lengths[11] = 10;
+        pulse_lengths[12] = 14;
+        pulse_lengths[13] = 12;
+        pulse_lengths[14] = 26;
+        pulse_lengths[15] = 14;
+        pulse_lengths[16] = 12;
+        pulse_lengths[17] = 16;
+        pulse_lengths[18] = 24;
+        pulse_lengths[19] = 18;
+        pulse_lengths[20] = 48;
+        pulse_lengths[21] = 20;
+        pulse_lengths[22] = 96;
+        pulse_lengths[23] = 22;
+        pulse_lengths[24] = 192;
+        pulse_lengths[25] = 24;
+        pulse_lengths[26] = 72;
+        pulse_lengths[27] = 26;
+        pulse_lengths[28] = 16;
+        pulse_lengths[29] = 28;
+        pulse_lengths[30] = 32;
+        pulse_lengths[31] = 30;
+    end
+
     logic [10:0]    pulse1_counter;
     logic [10:0]    pulse2_counter;
     logic [2:0]     pulse1_sequencer_timer;
@@ -87,10 +126,6 @@ module apu2A03 (
                 pulse2_sequencer_timer <= 7;
         end
     end
-
-    wire pulse1_signal = duty_cycles[pulse1_width][pulse1_sequencer_timer];
-    wire pulse2_signal = duty_cycles[pulse2_width][pulse2_sequencer_timer];
-
 
     logic [14:0] frame_counter;
 
@@ -202,7 +237,7 @@ module apu2A03 (
             end
             if (w_pulse1_timer2) begin
                 pulse1_timer[10:8] <= data_in[2:0];
-                pulse1_len_counter <= data_in[7:3];
+                pulse1_len_counter <= pulse_lengths[data_in[7:3]];
             end
             if (w_pulse2_settings) begin
                 pulse2_settings <= data_in;
@@ -215,7 +250,7 @@ module apu2A03 (
             end
             if (w_pulse2_timer2) begin
                 pulse2_timer[10:8] <= data_in[2:0];
-                pulse2_len_counter <= data_in[7:3];
+                pulse2_len_counter <= pulse_lengths[data_in[7:3]];
             end
             if (w_control) begin
                 if (data_in[6])
@@ -235,9 +270,6 @@ module apu2A03 (
         end
     end
 
-
-    assign irq = !fc_int_flag;
-
     always_comb begin
         if (r_apu_status) begin
             // TODO: status for all channels
@@ -255,5 +287,15 @@ module apu2A03 (
             data_out = 8'h00;
         end
     end
+
+    assign irq = !fc_int_flag;
+
+    wire pulse1_signal = duty_cycles[pulse1_width][pulse1_sequencer_timer] & (pulse1_len_counter != 0);
+    wire pulse2_signal = duty_cycles[pulse2_width][pulse2_sequencer_timer] & (pulse2_len_counter != 0);
+
+    // TODO: make real mixer
+    assign audio1 = pulse1_vol & {4{pulse1_signal}};
+    assign audio2 = pulse2_vol & {4{pulse2_signal}};
+    
 
 endmodule
