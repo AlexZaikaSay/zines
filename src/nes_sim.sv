@@ -5,7 +5,6 @@
 `include "joystick_sim.sv"
 
 module nes_sim (
-    input  logic       clk,
     input  logic       cpu_clk,
     input  logic       ppu_clk,
     input  logic       rst_n,
@@ -75,8 +74,7 @@ module nes_sim (
     );
 
     cpu2A03 u_cpu (
-        .clk(clk),
-        .cpu_clk(cpu_clk),
+        .clk(cpu_clk),
         .rst_n(rst_n),
         .nmi_n(nmi_n),
         .irq_n(1'b1),

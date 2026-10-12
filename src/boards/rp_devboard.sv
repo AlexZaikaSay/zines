@@ -8,7 +8,6 @@ module rp_devboard
 )
 (
     input logic         clk,
-    input logic         cpu_clk,
     input logic         rst_n,
     input logic         nmi_n = 1'b1,
     input logic         irq_n = 1'b1,
@@ -23,7 +22,6 @@ module rp_devboard
 
     cpu2A03 cpu (
         .clk,
-        .cpu_clk,
         .rst_n,
         .addr,
         .data_out(cpu_data),
@@ -39,11 +37,11 @@ module rp_devboard
         .ADDR_WIDTH(16),
         .MEM_FILE(MEM_FILE)
     ) memory (
-        .clk(cpu_clk),
-        .addr(addr),
+        .clk,
+        .addr,
         .data_out(mem_data),
         .data_in(cpu_data),
-        .rw(rw)
+        .rw
     );
 
 endmodule

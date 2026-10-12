@@ -2,7 +2,6 @@
 
 module apu2A03 (
     input  logic        clk,
-    input  logic        cpu_clk,
     input  logic        rst_n,
     input  logic [15:0] addr,
     input  logic [7:0]  data_in,
@@ -40,11 +39,11 @@ module apu2A03 (
     logic pulse_clk;
 
     // generate pulse clock from cpu clock
-    always_ff @(posedge cpu_clk or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pulse_clk <= 1'b0;
         end else begin
-            if (cpu_clk) begin
+            if (clk) begin
                 pulse_clk <= ~pulse_clk;
             end
         end
@@ -206,14 +205,24 @@ module apu2A03 (
     wire w_pulse2_timer2    = (addr == MEMIO_PULSE2_TIMER2) && !rw;
     
     wire w_control          = (addr == MEMIO_CONTROL) && !rw;
-    
+
+    logic pulse1_env_start;
+    logic pulse2_env_start;
+    logic [3:0] pulse1_env_divider;
+    logic [3:0] pulse2_env_divider;
+    logic [3:0] pulse1_env_decay_level;
+    logic [3:0] pulse2_env_decay_level;
 
     // registers readers/writers and length counter management
-    always_ff @(posedge cpu_clk or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pulse1_settings <= 8'h00;
             pulse1_len_counter <= 0;
             pulse2_len_counter <= 0;
+            pulse1_env_start <= 0;
+            pulse2_env_start <= 0;
+            pulse1_env_divider <= 0;
+            pulse2_env_divider <= 0;
             fc_int_flag <= 1'b0;
         end else begin
             fc_int_flag <= fc_int_latch;
@@ -236,6 +245,7 @@ module apu2A03 (
                 pulse1_timer[7:0] <= data_in[7:0];
             end
             if (w_pulse1_timer2) begin
+                pulse1_env_start <= 1;
                 pulse1_timer[10:8] <= data_in[2:0];
                 pulse1_len_counter <= pulse_lengths[data_in[7:3]];
             end
@@ -249,6 +259,7 @@ module apu2A03 (
                pulse2_timer[7:0] <= data_in[7:0];
             end
             if (w_pulse2_timer2) begin
+                pulse2_env_start <= 1;
                 pulse2_timer[10:8] <= data_in[2:0];
                 pulse2_len_counter <= pulse_lengths[data_in[7:3]];
             end
@@ -258,13 +269,47 @@ module apu2A03 (
                 control <= data_in;
             end
             if (half_frame && pulse_clk) begin
-                if (pulse1_halt) begin
+                if (pulse1_halt && pulse1_is_const) begin
                     if (pulse1_len_counter != 0)
                         pulse1_len_counter <= pulse1_len_counter - 1;
                 end
-                if (pulse2_halt) begin
+                if (pulse2_halt && pulse2_is_const) begin
                     if (pulse2_len_counter != 0)
                         pulse2_len_counter <= pulse2_len_counter - 1;
+                end
+            end
+            if (quarter_frame && pulse_clk) begin
+                if (pulse1_env_start == 0) begin
+                    pulse1_env_divider <= pulse1_env_divider - 1;
+                    if (pulse1_env_divider == 0) begin
+                        pulse1_env_divider <= pulse1_vol + 1;
+                        if (pulse1_env_decay_level != 0)
+                            pulse1_env_decay_level <= pulse1_env_decay_level - 1;
+                        else
+                            if (pulse1_halt)
+                                pulse1_env_decay_level <= 15;
+                end
+                end else begin
+                    pulse1_env_start <= 0;
+                    pulse1_env_decay_level <= 15;
+                    pulse1_env_divider <= pulse1_vol + 1;
+                end
+                
+                
+                if (pulse2_env_start == 0) begin
+                    pulse2_env_divider <= pulse2_env_divider - 1;
+                    if (pulse2_env_divider == 0) begin
+                        pulse2_env_divider <= pulse2_vol + 1;
+                        if (pulse2_env_decay_level != 0)
+                            pulse2_env_decay_level <= pulse2_env_decay_level - 1;
+                        else
+                            if (pulse2_halt)
+                                pulse2_env_decay_level <= 15;
+                    end
+                end else begin
+                    pulse2_env_start <= 0;
+                    pulse2_env_decay_level <= 15;
+                    pulse2_env_divider <= pulse2_vol + 1;
                 end
             end
         end
@@ -294,8 +339,8 @@ module apu2A03 (
     wire pulse2_signal = duty_cycles[pulse2_width][pulse2_sequencer_timer] & (pulse2_len_counter != 0);
 
     // TODO: make real mixer
-    assign audio1 = pulse1_vol & {4{pulse1_signal}};
-    assign audio2 = pulse2_vol & {4{pulse2_signal}};
+    assign audio1 = (pulse1_is_const ? pulse1_vol : pulse1_env_decay_level) & {4{pulse1_signal}};
+    assign audio2 = (pulse2_is_const ? pulse2_vol : pulse2_env_decay_level) & {4{pulse2_signal}};
     
 
 endmodule

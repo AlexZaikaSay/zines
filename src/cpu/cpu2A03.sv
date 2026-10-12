@@ -7,7 +7,6 @@
 // normally, the DMA unit drives them while the core is halted.
 module cpu2A03 (
     input  logic        clk,
-    input  logic        cpu_clk,
     input  logic        rst_n,
     input  logic        nmi_n,
     input  logic        irq_n,
@@ -51,7 +50,7 @@ module cpu2A03 (
     localparam MEMIO_PAD1           = 16'h4016;
     localparam MEMIO_PAD2           = 16'h4017;
 
-    wire core_clk               = cpu_clk && core_enabled;
+    wire core_clk               = clk && core_enabled;
     wire dma_active             = (dma_state != DMA_IDLE);
     wire core_write_dma         = !core_rw && core_addr == MEMIO_DMA;
     wire core_write_pad1        = !core_rw && core_addr == MEMIO_PAD1;
@@ -65,8 +64,8 @@ module cpu2A03 (
     wire core_read_pad2         = core_rw && core_addr == MEMIO_PAD2;
     
 
-    // Core clock gate: enable changes only while cpu_clk is low
-    always_ff @(negedge cpu_clk or negedge rst_n) begin
+    // Core clock gate: enable changes only while clk is low
+    always_ff @(negedge clk or negedge rst_n) begin
         if (!rst_n)
             core_enabled <= 1'b1;
         else
@@ -74,7 +73,7 @@ module cpu2A03 (
     end
 
     // Output logic for out0 based on core writes to pad1, pad2
-    always_ff @(posedge cpu_clk or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out0    <= 1'b0;
         end else 
@@ -84,7 +83,7 @@ module cpu2A03 (
     end
 
     // DMA state machine and control logic
-    always_ff @(posedge cpu_clk or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             dma_state <= DMA_IDLE;
             dma_page  <= 8'd0;
@@ -131,8 +130,7 @@ module cpu2A03 (
     );
 
     apu2A03 u_apu (
-        .clk(clk),
-        .cpu_clk(cpu_clk),
+        .clk(core_clk),
         .rst_n(rst_n),
         .addr(core_addr),
         .data_in(apu_data_in),

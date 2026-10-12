@@ -126,7 +126,7 @@ foreach(TB_FILE ${TESTBENCHS})
         # Live testbenches skip --timing: clk is driven by a generated C++ main.
         list(REMOVE_ITEM VERILATOR_FLAGS --binary --timing)
         list(APPEND VERILATOR_FLAGS --cc --exe --build)
-        configure_file(${TESTBENCH_DIR}/utils/sim_main.cpp.in
+        configure_file(${TESTBENCH_DIR}/utils/sim_main.cpp
             ${OBJ_DIR}/sim_main.cpp @ONLY)
         set(TB_EXTRA_SOURCES
             ${OBJ_DIR}/sim_main.cpp

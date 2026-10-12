@@ -10,14 +10,16 @@ int main(int argc, char** argv) {
     ctx->commandArgs(argc, argv);
     const std::unique_ptr<V@TB_NAME@> top{new V@TB_NAME@{ctx.get()}};
 
+    ctx->traceEverOn(true);
     top->clk = 0;
     top->eval();
     while (!ctx->gotFinish()) {
+        ctx->timeInc(1);
         top->clk = 1;
         top->eval();
+        ctx->timeInc(1);
         top->clk = 0;
         top->eval();
-        ctx->timeInc(1);
     }
     top->final();
     return 0;

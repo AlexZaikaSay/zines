@@ -22,10 +22,13 @@ APU_FRAME_CTRL   = $4017
 NOTE_A4_PERIOD   = $019C    ; A4 (440 Hz)
 NOTE_D6_PERIOD   = $0094    ; D6 (1190 Hz)
 
-; 1/16
+; 1/8
 ; Index $02 in 5 hi bits of $4003. 
-LEN_16TH        = %00010000 
+LEN_8TH        = %00010000 
 
+; Whole note
+; Index $02 in 5 hi bits of $4003. 
+LEN_WHOLE      = %00100000 
 
 start:  
 
@@ -46,25 +49,56 @@ start:
         sta APU_STATUS          ; enable Pulse 1
 
         ; duty 50% (%10), fixed volume (%1), volume 15 (%1111)
-        ; NOTE: bit pulse1_halt = 0! Len Counter works.
-        lda #%10111111          ; $BF
+        ; NOTE: bit pulse1_halt = 1! Len Counter works.
+        lda #%10111111
         sta APU_PULSE1_CTRL
         
         lda #<NOTE_A4_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_A4_PERIOD) | LEN_16TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
         jsr wait
+
+
+        ; duty 50% (%10), fixed volume (%1), volume 15 (%1111)
+        ; NOTE: bit pulse1_halt = 1! Len Counter works.
+        lda #%10111111
+        sta APU_PULSE1_CTRL
+
+        lda #<NOTE_D6_PERIOD
+        sta APU_PULSE1_FREQ1 
+
+        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
+
+        jsr wait
+
+        ; duty 50% (%10), envelope volume (%0), decay 3 (%0011)
+        ; NOTE: bit pulse1_halt = 1! Len Counter works.
+        lda #%10100011
+        sta APU_PULSE1_CTRL
+        
+        lda #<NOTE_A4_PERIOD
+        sta APU_PULSE1_FREQ1 
+
+        lda #((>NOTE_A4_PERIOD) | LEN_WHOLE)
+        sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
+
+        jsr wait
+
+        ; duty 50% (%10), envelope volume (%0), volume 15 (%1111)
+        ; NOTE: bit pulse1_halt = 0! Len Forewer.
+        lda #%10100011
+        sta APU_PULSE1_CTRL
         
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_D6_PERIOD) | LEN_16TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_WHOLE)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
-        jsr wait
 
 loop:
         jmp loop

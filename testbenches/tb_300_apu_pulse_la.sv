@@ -20,7 +20,6 @@ module tb_300_apu_pulse_la (
     db_device
     (
         .clk(clk),
-        .cpu_clk(clk),
         .rst_n(rst_n),
         .audio1(audio1),
         .audio2(audio2)
@@ -40,14 +39,22 @@ module tb_300_apu_pulse_la (
         end
     end
 
-    // clk is driven by utils/sim_main.cpp; reset is held for 2 clocks, run ends after 600000 CPU cycles.
-    logic [1:0] rst_cnt = 2'd0;
-    integer     cyc = 0;
+    initial begin
+        rst_cnt = 2'd0;
+        cyc = 0;
+        // $dumpfile("tb_300_apu_pulse_la.vcd");
+        // $dumpvars(0, tb_300_apu_pulse_la);
+    end
+
+    // clk is driven by utils/sim_main.cpp; reset is held for 2 clocks, 
+    // run ends after 6000000 CPU cycles.
+    logic [1:0] rst_cnt;
+    integer     cyc;
     always @(posedge clk) begin
         if (rst_cnt != 2'd2) 
             rst_cnt <= rst_cnt + 2'd1;
         cyc <= cyc + 1;
-        if (cyc == 2000000) begin
+        if (cyc == 6000000) begin
             sdl_audio_close();
             $finish;
         end
