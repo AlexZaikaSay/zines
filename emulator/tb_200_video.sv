@@ -3,7 +3,7 @@
 
 `timescale 1ns/1ps
 
-module tb_201_video (
+module tb_200_video (
     input logic clk
 );
     logic rst_n;
@@ -143,8 +143,8 @@ module tb_201_video (
             // if (dut.u_cpu.core_write_apu_status)
             //     $display("apu[%04h] = %02h", dut.u_cpu.core_addr, dut.u_cpu.apu_data_in);
 
-            if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4004 && (dut.u_cpu.u_apu.data_in[4] == 1'b1))
-                $display("apu[%04h] = %02h", dut.u_cpu.u_apu.addr, dut.u_cpu.u_apu.data_in);
+            // if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4001 /* && (dut.u_cpu.u_apu.data_in[4] == 1'b1) */)
+            //     $display("apu[%04h] = %02h", dut.u_cpu.u_apu.addr, dut.u_cpu.u_apu.data_in);
             if (scanline < 240 && cycle >= 1 && cycle <= 256)
                 sdl_display_pixel(int'(cycle) - 1, int'(scanline),
                                   (^pixel_palette === 1'bx) ? 0 : int'(pixel_palette[5:0]));

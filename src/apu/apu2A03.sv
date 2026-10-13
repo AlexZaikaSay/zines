@@ -16,22 +16,36 @@ module apu2A03 (
     logic [7:0] control;
     logic [7:0] pulse1_settings;
     logic [7:0] pulse2_settings;
+    logic [7:0] pulse1_sweep;
+    logic [7:0] pulse2_sweep;
+    
     logic [10:0] pulse1_timer;
-    logic [7:0] pulse1_len_counter;
     logic [10:0] pulse2_timer;
+    
+    logic [7:0] pulse1_len_counter;
     logic [7:0] pulse2_len_counter;
+    logic [2:0] pulse1_sweep_counter;
+    logic [2:0] pulse2_sweep_counter;
 
-    wire [3:0] pulse1_vol    = pulse1_settings[3:0];
-    wire [1:0] pulse1_width  = pulse1_settings[7:6];
+    wire [3:0]  pulse1_vol              = pulse1_settings[3:0];
+    wire [1:0]  pulse1_width            = pulse1_settings[7:6];
+    wire        pulse1_is_const         = pulse1_settings[4];
+    wire        pulse1_halt             = pulse1_settings[5];
 
-    wire pulse1_is_const     = pulse1_settings[4];
-    wire pulse1_halt         = pulse1_settings[5];
+    wire [3:0]  pulse2_vol              = pulse2_settings[3:0];
+    wire [1:0]  pulse2_width            = pulse2_settings[7:6];
+    wire        pulse2_is_const         = pulse2_settings[4];
+    wire        pulse2_halt             = pulse2_settings[5];
 
-    wire [3:0] pulse2_vol    = pulse2_settings[3:0];
-    wire [1:0] pulse2_width  = pulse2_settings[7:6];
+    wire        pulse1_sweep_enabled    = pulse1_sweep[7];
+    wire [2:0]  pulse1_sweep_shift      = pulse1_sweep[2:0];
+    wire [2:0]  pulse1_sweep_rate       = pulse1_sweep[6:4];
+    wire        pulse1_sweep_neg        = pulse1_sweep[3];
 
-    wire pulse2_is_const     = pulse2_settings[4];
-    wire pulse2_halt         = pulse2_settings[5];
+    wire        pulse2_sweep_enabled    = pulse2_sweep[7];
+    wire [2:0]  pulse2_sweep_shift      = pulse2_sweep[2:0];
+    wire [2:0]  pulse2_sweep_rate       = pulse2_sweep[6:4];
+    wire        pulse2_sweep_neg        = pulse2_sweep[3];
 
     wire mode           = control[7];
     wire fc_int_inhibit = control[6];
@@ -214,6 +228,20 @@ module apu2A03 (
     logic [3:0] pulse1_env_decay_level;
     logic [3:0] pulse2_env_decay_level;
 
+    logic pulse1_sweep_reload;
+    logic pulse2_sweep_reload;
+    logic [11:0] pulse1_sweep_target;
+    logic [11:0] pulse2_sweep_target;
+    
+    wire        pulse1_mute             = pulse1_sweep_target > 12'h7FF;
+    wire        pulse2_mute             = pulse2_sweep_target > 12'h7FF;
+
+    // TODO: make differences in substration 
+    function [11:0] calculated_sweep_target(input [10:0] timer, input [2:0] shifter, input neg);
+        calculated_sweep_target = timer + (neg ? 
+                                -({1'b0, timer} >> shifter) : ({1'b0, timer} >> shifter));
+    endfunction
+
     // registers readers/writers and length counter management
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -224,6 +252,8 @@ module apu2A03 (
             pulse2_env_start <= 0;
             pulse1_env_divider <= 0;
             pulse2_env_divider <= 0;
+            pulse1_sweep_reload <= 0;
+            pulse2_sweep_reload <= 0;
             fc_int_flag <= 1'b0;
             control_en <= 2'b00;
         end else begin
@@ -242,14 +272,23 @@ module apu2A03 (
                 pulse1_settings <= data_in;
             end
             if (w_pulse1_sweep) begin
-                ; // update pulse1 sweep register here
+                pulse1_sweep <= data_in;
             end
             if (w_pulse1_timer1) begin
                 pulse1_timer[7:0] <= data_in[7:0];
+                pulse1_sweep_target <= calculated_sweep_target(
+                    {3'b000, data_in[7:0]},
+                    pulse1_sweep_shift, 
+                    pulse1_sweep_neg);
             end
             if (w_pulse1_timer2) begin
                 pulse1_env_start <= 1;
                 pulse1_timer[10:8] <= data_in[2:0];
+                // TODO: add reseting pulse1_counter and sequence position
+                pulse1_sweep_target <= calculated_sweep_target(
+                    {data_in[2:0], pulse1_timer[7:0]},
+                    pulse1_sweep_shift,
+                    pulse1_sweep_neg);
                 if (control_en[0])
                     pulse1_len_counter <= pulse_lengths[data_in[7:3]];
             end
@@ -257,14 +296,22 @@ module apu2A03 (
                 pulse2_settings <= data_in;
             end
             if (w_pulse2_sweep) begin
-                ; // update pulse2 sweep register here
+                pulse2_sweep <= data_in;
             end
             if (w_pulse2_timer1) begin
-               pulse2_timer[7:0] <= data_in[7:0];
+                pulse2_timer[7:0] <= data_in[7:0];
+                pulse2_sweep_target <= calculated_sweep_target(
+                    {3'b000, data_in[7:0]},
+                    pulse2_sweep_shift,
+                    pulse2_sweep_neg);
             end
             if (w_pulse2_timer2) begin
                 pulse2_env_start <= 1;
                 pulse2_timer[10:8] <= data_in[2:0];
+                pulse2_sweep_target <= calculated_sweep_target(
+                    {data_in[2:0], pulse2_timer[7:0]},
+                    pulse2_sweep_shift,
+                    pulse2_sweep_neg);
                 if (control_en[1])
                     pulse2_len_counter <= pulse_lengths[data_in[7:3]];
             end
@@ -282,6 +329,35 @@ module apu2A03 (
                     if (pulse2_len_counter != 0)
                         pulse2_len_counter <= pulse2_len_counter - 1;
                 end
+                if (pulse1_sweep_counter == 0 && pulse1_sweep_enabled && 
+                    pulse1_sweep_shift != 0 && !pulse1_mute) begin
+                    pulse1_timer <= pulse1_sweep_target[10:0];
+                    pulse1_sweep_target <= calculated_sweep_target(
+                        pulse1_timer,
+                        pulse1_sweep_shift,
+                        pulse1_sweep_neg);
+                end
+                if (pulse1_sweep_counter == 0 || pulse1_sweep_reload) begin
+                    pulse1_sweep_counter <= pulse1_sweep_rate;
+                    pulse1_sweep_reload <= 0;
+                end
+                else
+                    pulse1_sweep_counter <= pulse1_sweep_counter - 1;
+
+                if (pulse2_sweep_counter == 0 && pulse2_sweep_enabled && 
+                    pulse2_sweep_shift != 0 && !pulse2_mute) begin
+                    pulse2_timer <= pulse2_sweep_target[10:0];
+                    pulse2_sweep_target <= calculated_sweep_target(
+                        pulse2_timer,
+                        pulse2_sweep_shift,
+                        pulse2_sweep_neg);
+                end
+                if (pulse2_sweep_counter == 0 || pulse2_sweep_reload) begin
+                    pulse2_sweep_counter <= pulse2_sweep_rate;
+                    pulse2_sweep_reload <= 0;
+                end
+                else
+                    pulse2_sweep_counter <= pulse2_sweep_counter - 1;
             end
             if (quarter_frame && pulse_clk) begin
                 if (pulse1_env_start == 0) begin

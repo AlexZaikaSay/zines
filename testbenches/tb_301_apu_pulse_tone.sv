@@ -6,9 +6,9 @@
 //   frequency = CPU_HZ / (16 * (period + 1))
 //   length    = length table entry * half-frame (~14915 CPU cycles)
 //   volume    = constant volume or decaying envelope
-module tb_301_apu_pulse_check;
+module tb_301_apu_pulse_tone;
     parameter CYCLE_LEN = 10;
-    parameter MEM_FILE = "./tests/301_apu_pulse_check.tv";
+    parameter MEM_FILE = "./tests/301_apu_pulse_tone.tv";
 
     localparam HALF_FRAME   = 14915;    // CPU cycles between length counter clocks
     localparam SETTLE       = 16000;    // first quarter frame has to load the envelope
@@ -23,15 +23,13 @@ module tb_301_apu_pulse_check;
     logic clk;
     logic rst_n;
     logic [3:0] audio1;
-    logic [3:0] audio2;
 
     rp_devboard #(
         .MEM_FILE(MEM_FILE)
     ) db_device (
         .clk(clk),
         .rst_n(rst_n),
-        .audio1(audio1),
-        .audio2(audio2)
+        .audio1(audio1)
     );
 
     wire        w_timer2 = db_device.cpu.u_apu.w_pulse1_timer2;

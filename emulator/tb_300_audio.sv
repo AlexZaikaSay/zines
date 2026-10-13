@@ -3,10 +3,10 @@
 
 `timescale 1ns/1ps
 
-module tb_300_apu_pulse_la (
+module tb_300_audio (
     input logic clk
 );
-    parameter MEM_FILE = "./tests/300_apu_pulse_la.tv";
+    parameter MEM_FILE = "./tests/302_apu_pulse_sweep.tv";
     
     logic       rst_n;
 
@@ -42,8 +42,8 @@ module tb_300_apu_pulse_la (
     initial begin
         rst_cnt = 2'd0;
         cyc = 0;
-        // $dumpfile("tb_300_apu_pulse_la.vcd");
-        // $dumpvars(0, tb_300_apu_pulse_la);
+        // $dumpfile("tb_300_audio.vcd");
+        // $dumpvars(0, tb_300_audio);
     end
 
     // clk is driven by utils/sim_main.cpp; reset is held for 2 clocks, 

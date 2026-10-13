@@ -6,7 +6,7 @@ set(TEST_ASSETS
     ${CMAKE_SOURCE_DIR}/assets/SMB.nes
     ${CMAKE_SOURCE_DIR}/assets/color_test.nes
 )
-set(EMULATOR_TBS tb_201_video tb_300_apu_pulse_la)
+set(EMULATOR_TBS tb_200_video tb_300_audio)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
 execute_process(COMMAND ${SDL2_CONFIG} --cflags

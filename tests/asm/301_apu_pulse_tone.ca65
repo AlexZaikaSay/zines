@@ -89,7 +89,7 @@ start:
         jsr wait
 
         ; duty 50% (%10), envelope volume (%0), volume 15 (%1111)
-        ; halt = 1! Len Forewer.
+        ; halt = 1! Len Forever.
         lda #%10100011
         sta APU_PULSE1_CTRL
         
