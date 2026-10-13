@@ -68,17 +68,9 @@ add_custom_target(sim_summary
     COMMENT "Testbench summary"
 )
 
-# Interactive SDL display testbench: Verilator only, never part of sim_all.
-set(LIVE_TBS tb_201_video tb_300_apu_pulse_la)
-
 foreach(TB_FILE ${TESTBENCHS})
 
     get_filename_component(TB_NAME ${TB_FILE} NAME_WE)
-    set(TB_EXTRA_SOURCES "")
-    set(TB_LIVE FALSE)
-    if(TB_NAME IN_LIST LIVE_TBS)
-        set(TB_LIVE TRUE)
-    endif()
     string(REGEX REPLACE "^tb_" "" TEST_NAME ${TB_NAME})
     # Inside foreach(TB_FILE ${TESTBENCHS}), after TB_NAME is set.
 
@@ -117,56 +109,28 @@ foreach(TB_FILE ${TESTBENCHS})
         endif()
     endif()
 
-    if(TB_LIVE)
-        find_program(SDL2_CONFIG sdl2-config REQUIRED)
-        execute_process(COMMAND ${SDL2_CONFIG} --cflags
-            OUTPUT_VARIABLE SDL2_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-        execute_process(COMMAND ${SDL2_CONFIG} --libs
-            OUTPUT_VARIABLE SDL2_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-        # Live testbenches skip --timing: clk is driven by a generated C++ main.
-        list(REMOVE_ITEM VERILATOR_FLAGS --binary --timing)
-        list(APPEND VERILATOR_FLAGS --cc --exe --build)
-        configure_file(${TESTBENCH_DIR}/utils/sim_main.cpp
-            ${OBJ_DIR}/sim_main.cpp @ONLY)
-        set(TB_EXTRA_SOURCES
-            ${OBJ_DIR}/sim_main.cpp
-            ${TESTBENCH_DIR}/utils/sdl_display.cpp)
-        list(APPEND VERILATOR_FLAGS
-            -CFLAGS "${SDL2_CFLAGS}"
-            -LDFLAGS "${SDL2_LIBS}"
-        )
-    endif()
-
     add_custom_command(
         OUTPUT "${SIM_EXE}"
         COMMAND ${VERILATOR_EXECUTABLE}
             ${VERILATOR_FLAGS}
             ${RTL_SOURCES}
             ${TB_FILE}
-            ${TB_EXTRA_SOURCES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         DEPENDS
             ${RTL_SOURCES}
             ${TB_FILE}
-            ${TB_EXTRA_SOURCES}
             ${TESTVECTORS}
             ${TEST_ASSETS}
         COMMENT "Building ${TB_NAME} with Verilator"
         VERBATIM
     )
 
-    if(TB_LIVE)
-        # Interactive: run directly so output streams and no PASS/FAIL is recorded.
-        set(TB_RUN_COMMAND ${CMAKE_COMMAND} -E chdir
-            "${CMAKE_BINARY_DIR}" "${SIM_EXE}")
-    else()
-        set(TB_RUN_COMMAND ${CMAKE_COMMAND}
-            -DTB_NAME=${TB_NAME}
-            -DSIM_EXE=${SIM_EXE}
-            -DWORK_DIR=${CMAKE_BINARY_DIR}
-            -DRESULT_DIR=${TB_RESULT_DIR}
-            -P ${CMAKE_SOURCE_DIR}/cmake/run_tb.cmake)
-    endif()
+    set(TB_RUN_COMMAND ${CMAKE_COMMAND}
+        -DTB_NAME=${TB_NAME}
+        -DSIM_EXE=${SIM_EXE}
+        -DWORK_DIR=${CMAKE_BINARY_DIR}
+        -DRESULT_DIR=${TB_RESULT_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/run_tb.cmake)
 
     add_custom_target(sim_${TB_NAME}
         COMMAND ${TB_RUN_COMMAND}
@@ -180,10 +144,6 @@ foreach(TB_FILE ${TESTBENCHS})
         # The test target produces the generated memory image consumed by the
         # testbench at runtime (for example, tests/001_cld.tv).
         add_dependencies(sim_${TB_NAME} ${TEST_NAME})
-    endif()
-
-    if(TB_LIVE)
-        continue()
     endif()
 
     add_dependencies(sim_all sim_${TB_NAME})

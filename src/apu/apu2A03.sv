@@ -37,6 +37,7 @@ module apu2A03 (
     wire fc_int_inhibit = control[6];
 
     logic pulse_clk;
+    logic [1:0] control_en;   // $4015 channel enables
 
     // generate pulse clock from cpu clock
     always_ff @(posedge clk or negedge rst_n) begin
@@ -109,20 +110,20 @@ module apu2A03 (
         end else begin
             if (pulse1_counter == 0) begin
                 pulse1_sequencer_timer <= pulse1_sequencer_timer - 1;
+                if (pulse1_sequencer_timer == 0)
+                    pulse1_sequencer_timer <= 7;
                 pulse1_counter <= pulse1_timer;
             end else
                 pulse1_counter <= pulse1_counter - 1'b1;
             
             if (pulse2_counter == 0) begin
                 pulse2_sequencer_timer <= pulse2_sequencer_timer - 1;
+                if (pulse2_sequencer_timer == 0)
+                    pulse2_sequencer_timer <= 7;
                 pulse2_counter <= pulse2_timer;
             end else
                 pulse2_counter <= pulse2_counter - 1'b1;
 
-            if (pulse1_sequencer_timer == 0)
-                pulse1_sequencer_timer <= 7;
-            if (pulse2_sequencer_timer == 0)
-                pulse2_sequencer_timer <= 7;
         end
     end
 
@@ -224,12 +225,14 @@ module apu2A03 (
             pulse1_env_divider <= 0;
             pulse2_env_divider <= 0;
             fc_int_flag <= 1'b0;
+            control_en <= 2'b00;
         end else begin
             fc_int_flag <= fc_int_latch;
             if (r_apu_status) begin
                 fc_int_flag <= 1'b0;
             end
             if (w_apu_status) begin
+                control_en <= data_in[1:0];
                 if (data_in[0] == 1'b0)
                     pulse1_len_counter <= 0;
                 if (data_in[1] == 1'b0)
@@ -247,7 +250,8 @@ module apu2A03 (
             if (w_pulse1_timer2) begin
                 pulse1_env_start <= 1;
                 pulse1_timer[10:8] <= data_in[2:0];
-                pulse1_len_counter <= pulse_lengths[data_in[7:3]];
+                if (control_en[0])
+                    pulse1_len_counter <= pulse_lengths[data_in[7:3]];
             end
             if (w_pulse2_settings) begin
                 pulse2_settings <= data_in;
@@ -261,7 +265,8 @@ module apu2A03 (
             if (w_pulse2_timer2) begin
                 pulse2_env_start <= 1;
                 pulse2_timer[10:8] <= data_in[2:0];
-                pulse2_len_counter <= pulse_lengths[data_in[7:3]];
+                if (control_en[1])
+                    pulse2_len_counter <= pulse_lengths[data_in[7:3]];
             end
             if (w_control) begin
                 if (data_in[6])
@@ -269,11 +274,11 @@ module apu2A03 (
                 control <= data_in;
             end
             if (half_frame && pulse_clk) begin
-                if (pulse1_halt && pulse1_is_const) begin
+                if (!pulse1_halt) begin
                     if (pulse1_len_counter != 0)
                         pulse1_len_counter <= pulse1_len_counter - 1;
                 end
-                if (pulse2_halt && pulse2_is_const) begin
+                if (!pulse2_halt) begin
                     if (pulse2_len_counter != 0)
                         pulse2_len_counter <= pulse2_len_counter - 1;
                 end

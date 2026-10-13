@@ -19,8 +19,8 @@ APU_PULSE1_FREQ2 = $4003
 APU_STATUS       = $4015
 APU_FRAME_CTRL   = $4017
 
-NOTE_A4_PERIOD   = $019C    ; A4 (440 Hz)
-NOTE_D6_PERIOD   = $0094    ; D6 (1190 Hz)
+NOTE_A4_PERIOD   = $00FD    ; A4 (440 Hz)
+NOTE_D6_PERIOD   = $005D    ; ~1190 Hz
 
 ; 1/8
 ; Index $02 in 5 hi bits of $4003. 
@@ -49,8 +49,8 @@ start:
         sta APU_STATUS          ; enable Pulse 1
 
         ; duty 50% (%10), fixed volume (%1), volume 15 (%1111)
-        ; NOTE: bit pulse1_halt = 1! Len Counter works.
-        lda #%10111111
+        ; halt = 0: length counter runs.
+        lda #%10011111
         sta APU_PULSE1_CTRL
         
         lda #<NOTE_A4_PERIOD
@@ -63,8 +63,8 @@ start:
 
 
         ; duty 50% (%10), fixed volume (%1), volume 15 (%1111)
-        ; NOTE: bit pulse1_halt = 1! Len Counter works.
-        lda #%10111111
+        ; halt = 0: length counter runs.
+        lda #%10011111
         sta APU_PULSE1_CTRL
 
         lda #<NOTE_D6_PERIOD
@@ -76,8 +76,8 @@ start:
         jsr wait
 
         ; duty 50% (%10), envelope volume (%0), decay 3 (%0011)
-        ; NOTE: bit pulse1_halt = 1! Len Counter works.
-        lda #%10100011
+        ; halt = 0: length counter runs.
+        lda #%10000011
         sta APU_PULSE1_CTRL
         
         lda #<NOTE_A4_PERIOD
@@ -89,7 +89,7 @@ start:
         jsr wait
 
         ; duty 50% (%10), envelope volume (%0), volume 15 (%1111)
-        ; NOTE: bit pulse1_halt = 0! Len Forewer.
+        ; halt = 1! Len Forewer.
         lda #%10100011
         sta APU_PULSE1_CTRL
         
