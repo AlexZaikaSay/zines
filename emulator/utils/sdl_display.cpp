@@ -57,7 +57,30 @@ SDL_AudioDeviceID audio_dev = 0;
 int audio_acc = 0;
 float audio_buf[AUDIO_BATCH];
 uint32_t audio_fill = 0;
-float mix_table[31];  // index = pulse1 + pulse2 (each 0..15), NES nonlinear pulse mixer
+uint32_t audio_underruns = 0;
+
+// NES nonlinear mixer (nesdev "APU Mixer"): pulses share one DAC, triangle/noise/DMC another.
+float pulse_table[31];  // index = pulse1 + pulse2 (each 0..15)
+float tnd_table[16];    // index = triangle (0..15), noise and DMC not implemented yet
+
+// Box filter: average every CPU-clock sample that falls into one output sample,
+// instead of picking one of ~40 (which aliases the square-wave edges into noise).
+float audio_sum = 0.0f;
+int audio_count = 0;
+
+// One-pole high-pass filters like the NES output stage (~90 Hz and ~440 Hz):
+// remove the DC level so note starts/stops do not click.
+struct HighPass {
+    float k, prev_in = 0.0f, prev_out = 0.0f;
+    explicit HighPass(float hz) : k(1.0f / (1.0f + 2.0f * 3.14159265f * hz / AUDIO_RATE)) {}
+    float operator()(float in) {
+        prev_out = k * (prev_out + in - prev_in);
+        prev_in = in;
+        return prev_out;
+    }
+};
+HighPass hp90(90.0f);
+HighPass hp440(440.0f);
 
 }  // namespace
 
@@ -149,20 +172,33 @@ void sdl_audio_init(void) {
         std::fprintf(stderr, "sdl_display: audio device failed: %s\n", SDL_GetError());
         return;
     }
-    mix_table[0] = 0.0f;
-    for (int n = 1; n < 31; n++) mix_table[n] = 95.88f / (8128.0f / n + 100.0f);
+    pulse_table[0] = 0.0f;
+    for (int n = 1; n < 31; n++) pulse_table[n] = 95.88f / (8128.0f / n + 100.0f);
+    tnd_table[0] = 0.0f;
+    for (int t = 1; t < 16; t++) tnd_table[t] = 159.79f / (1.0f / (t / 8227.0f) + 100.0f);
     SDL_PauseAudioDevice(audio_dev, 0);
 }
 
-// Call once per CPU clock with the two 4-bit pulse volumes; resamples to AUDIO_RATE.
-void sdl_audio_sample(int audio1, int audio2) {
+// Call once per CPU clock with the 4-bit channel outputs (pulse 1, pulse 2, triangle);
+// mixes, low-passes (box average) and resamples to AUDIO_RATE.
+void sdl_audio_sample(int audio1, int audio2, int audio3) {
     if (!audio_dev) return;
+    audio_sum += pulse_table[(audio1 & 0xF) + (audio2 & 0xF)] + tnd_table[audio3 & 0xF];
+    audio_count++;
     audio_acc += AUDIO_RATE;
     if (audio_acc < CPU_HZ) return;
     audio_acc -= CPU_HZ;
-    audio_buf[audio_fill++] = mix_table[(audio1 & 0xF) + (audio2 & 0xF)];
+
+    float sample = audio_sum / audio_count;
+    audio_sum = 0.0f;
+    audio_count = 0;
+    audio_buf[audio_fill++] = hp440(hp90(sample));
     if (audio_fill < AUDIO_BATCH) return;
     audio_fill = 0;
+
+    // An empty queue means the simulation is slower than real time: the device
+    // played silence in between, which is heard as crackling.
+    if (SDL_GetQueuedAudioSize(audio_dev) == 0) audio_underruns++;
 
     // Throttle the simulation to real time so the queue neither starves nor grows.
     while (SDL_GetQueuedAudioSize(audio_dev) > AUDIO_MAX_QUEUED) SDL_Delay(1);
@@ -171,6 +207,9 @@ void sdl_audio_sample(int audio1, int audio2) {
 
 void sdl_audio_close(void) {
     if (!audio_dev) return;
+    if (audio_underruns > 1)  // the very first batch always finds an empty queue
+        std::fprintf(stderr, "sdl_display: audio queue ran empty %u times "
+                     "(simulation slower than real time)\n", audio_underruns - 1);
     SDL_CloseAudioDevice(audio_dev);
     audio_dev = 0;
     SDL_QuitSubSystem(SDL_INIT_AUDIO);

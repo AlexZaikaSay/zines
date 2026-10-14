@@ -15,7 +15,8 @@ module rp_devboard
     input logic [7:0]   joy1_buttons = 8'h00,   // A, B, Select, Start, Up, Down, Left, Right
     input logic [7:0]   joy2_buttons = 8'h00,
     output logic [3:0]  audio1,
-    output logic [3:0]  audio2
+    output logic [3:0]  audio2,
+    output logic [3:0]  audio3
 );
 
     logic [15:0] addr;
@@ -44,6 +45,7 @@ module rp_devboard
         .oe2_n(joy2_oe_n),
         .audio1(audio1),
         .audio2(audio2),
+        .audio3(audio3),
         .undef
     );
 

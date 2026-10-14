@@ -34,6 +34,7 @@ module tb_200_video (
     logic        cart_ciram_ce_n;
     logic [3:0]  audio1;
     logic [3:0]  audio2;
+    logic [3:0]  audio3;
     integer i;
 
     // clk is driven by utils/sim_main.cpp; reset is held for 50 clocks.
@@ -73,6 +74,7 @@ module tb_200_video (
         .cart_ciram_ce_n(cart_ciram_ce_n),
         .audio1(audio1),
         .audio2(audio2),
+        .audio3(audio3),
         .undef(cpu_undef)
     );
 
@@ -136,7 +138,7 @@ module tb_200_video (
     import "DPI-C" function void sdl_display_close();
     import "DPI-C" function int  sdl_display_buttons();
     import "DPI-C" function void sdl_audio_init();
-    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2);
+    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2, input int audio3);
     import "DPI-C" function void sdl_audio_close();
 
     // Keyboard state sampled once per frame: A, B, Select, Start, Up, Down, Left, Right
@@ -155,7 +157,7 @@ module tb_200_video (
             // if (dut.u_cpu.core_write_apu_status)
             //     $display("apu[%04h] = %02h", dut.u_cpu.core_addr, dut.u_cpu.apu_data_in);
 
-            // if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4001 /* && (dut.u_cpu.u_apu.data_in[4] == 1'b1) */)
+            // if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4008 /* && (dut.u_cpu.u_apu.data_in[4] == 1'b1) */)
             //     $display("apu[%04h] = %02h", dut.u_cpu.u_apu.addr, dut.u_cpu.u_apu.data_in);
             if (scanline < 240 && cycle >= 1 && cycle <= 256)
                 sdl_display_pixel(int'(cycle) - 1, int'(scanline),
@@ -164,7 +166,8 @@ module tb_200_video (
             // Once per CPU clock (PPU clk / 3), the rate the SDL audio side expects.
             if (cpu_clk)
                 sdl_audio_sample((^audio1 === 1'bx) ? 0 : int'(audio1),
-                                 (^audio2 === 1'bx) ? 0 : int'(audio2));
+                                 (^audio2 === 1'bx) ? 0 : int'(audio2),
+                                 (^audio3 === 1'bx) ? 0 : int'(audio3));
 
             if (scanline == 240 && cycle == 0) begin
                 if (sdl_display_present() != 0) begin

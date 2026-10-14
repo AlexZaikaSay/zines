@@ -6,12 +6,13 @@
 module tb_300_audio (
     input logic clk
 );
-    parameter MEM_FILE = "./tests/302_apu_pulse_sweep.tv";
+    parameter MEM_FILE = "./tests/303_apu_triangle.tv";
     
     logic       rst_n;
 
     logic [3:0] audio1;
     logic [3:0] audio2;
+    logic [3:0] audio3;
 
 
     rp_devboard #(
@@ -22,11 +23,12 @@ module tb_300_audio (
         .clk(clk),
         .rst_n(rst_n),
         .audio1(audio1),
-        .audio2(audio2)
+        .audio2(audio2),
+        .audio3(audio3)
     );
 
     import "DPI-C" function void sdl_audio_init();
-    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2);
+    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2, input int audio3);
     import "DPI-C" function void sdl_audio_close();
 
     initial sdl_audio_init();
@@ -35,7 +37,8 @@ module tb_300_audio (
     always @(posedge clk) begin
         if (rst_n === 1'b1) begin
             sdl_audio_sample((^audio1 === 1'bx) ? 0 : int'(audio1),
-                             (^audio2 === 1'bx) ? 0 : int'(audio2));
+                             (^audio2 === 1'bx) ? 0 : int'(audio2),
+                             (^audio3 === 1'bx) ? 0 : int'(audio3));
         end
     end
 

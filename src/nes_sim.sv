@@ -34,6 +34,7 @@ module nes_sim (
     // Audio outputs
     output logic [3:0] audio1,
     output logic [3:0] audio2,
+    output logic [3:0] audio3,
 
     // Simulation status: CPU fetched an undefined opcode
     output logic       undef
@@ -75,6 +76,7 @@ module nes_sim (
         .oe2_n(joy2_oe_n),
         .audio1(audio1),
         .audio2(audio2),
+        .audio3(audio3),
         .undef(undef)
     );
 

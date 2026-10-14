@@ -19,6 +19,7 @@ module cpu2A03 (
     output logic        oe2_n,
     output logic [3:0]  audio1,
     output logic [3:0]  audio2,
+    output logic [3:0]  audio3,
     output logic        undef
 );
     localparam logic [2:0] DMA_IDLE  = 3'd0;
@@ -137,7 +138,8 @@ module cpu2A03 (
         .data_out(apu_status),
         .irq_n(apu_irq_n),
         .audio1(audio1),
-        .audio2(audio2)
+        .audio2(audio2),
+        .audio3(audio3)
     );
 
     // Bus ownership. While the core is gated off (including the cycle after
