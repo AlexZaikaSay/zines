@@ -35,6 +35,7 @@ module tb_200_video (
     logic [3:0]  audio1;
     logic [3:0]  audio2;
     logic [3:0]  audio3;
+    logic [3:0]  audio4;
     integer i;
 
     // clk is driven by utils/sim_main.cpp; reset is held for 50 clocks.
@@ -75,6 +76,7 @@ module tb_200_video (
         .audio1(audio1),
         .audio2(audio2),
         .audio3(audio3),
+        .audio4(audio4),
         .undef(cpu_undef)
     );
 
@@ -138,7 +140,7 @@ module tb_200_video (
     import "DPI-C" function void sdl_display_close();
     import "DPI-C" function int  sdl_display_buttons();
     import "DPI-C" function void sdl_audio_init();
-    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2, input int audio3);
+    import "DPI-C" function void sdl_audio_sample(input int audio1, input int audio2, input int audio3, input int audio4);
     import "DPI-C" function void sdl_audio_close();
 
     // Keyboard state sampled once per frame: A, B, Select, Start, Up, Down, Left, Right
@@ -167,7 +169,8 @@ module tb_200_video (
             if (cpu_clk)
                 sdl_audio_sample((^audio1 === 1'bx) ? 0 : int'(audio1),
                                  (^audio2 === 1'bx) ? 0 : int'(audio2),
-                                 (^audio3 === 1'bx) ? 0 : int'(audio3));
+                                 (^audio3 === 1'bx) ? 0 : int'(audio3),
+                                 (^audio4 === 1'bx) ? 0 : int'(audio4));
 
             if (scanline == 240 && cycle == 0) begin
                 if (sdl_display_present() != 0) begin

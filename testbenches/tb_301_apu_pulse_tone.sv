@@ -24,6 +24,9 @@ module tb_301_apu_pulse_tone;
     logic rst_n;
     logic running;      // checks are enabled once reset is released
     logic [3:0] audio2;
+    logic [3:0] audio3;
+    logic [3:0] audio3_idle;  // triangle level after reset
+    logic [3:0] audio4;
     logic [3:0] audio1;
 
     rp_devboard #(
@@ -32,7 +35,9 @@ module tb_301_apu_pulse_tone;
         .clk(clk),
         .rst_n(rst_n),
         .audio1(audio1),
-        .audio2(audio2)
+        .audio2(audio2),
+        .audio3(audio3),
+        .audio4(audio4)
     );
 
     wire        w_timer2 = db_device.cpu.u_apu.w_pulse1_timer2;
@@ -138,7 +143,14 @@ module tb_301_apu_pulse_tone;
         rst_n = 0;
         running = 0;
         clk = 0;
-        #1 rst_n = 0; #(CYCLE_LEN * 2); rst_n = 1; running = 1;
+        #1 rst_n = 0;
+        // Clock the design while reset is held: rst_n starts low, so there is no
+        // negedge, and the flops only see reset on a clock edge.
+        repeat (2) begin
+            clk = 1; #(CYCLE_LEN/2);
+            clk = 0; #(CYCLE_LEN/2);
+        end
+        rst_n = 1; running = 1; audio3_idle = audio3;
         for (integer i = 0; i < RUN_CYCLES; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
@@ -148,9 +160,15 @@ module tb_301_apu_pulse_tone;
     end
 
     always @(posedge clk) begin
-        // Pulse 2 is never enabled by this program
+        // Only pulse 1 is enabled by this program
         if (audio2 != 0)
             $error("FAIL: pulse 2 output %0d, expected silence", audio2);
+        // A stopped triangle holds its level (15 after reset) instead of going to 0
+        if (running && audio3 != audio3_idle)
+            $error("FAIL: triangle output changed %0d -> %0d, expected it to stay idle",
+                   audio3_idle, audio3);
+        if (audio4 != 0)
+            $error("FAIL: noise output %0d, expected silence", audio4);
 
         if (running) begin
             cyc <= cyc + 1;

@@ -61,7 +61,8 @@ uint32_t audio_underruns = 0;
 
 // NES nonlinear mixer (nesdev "APU Mixer"): pulses share one DAC, triangle/noise/DMC another.
 float pulse_table[31];  // index = pulse1 + pulse2 (each 0..15)
-float tnd_table[16];    // index = triangle (0..15), noise and DMC not implemented yet
+float tnd_table[16][16]; // index = [triangle 0..15][noise 0..15], DMC not implemented yet
+
 
 // Box filter: average every CPU-clock sample that falls into one output sample,
 // instead of picking one of ~40 (which aliases the square-wave edges into noise).
@@ -173,17 +174,21 @@ void sdl_audio_init(void) {
         return;
     }
     pulse_table[0] = 0.0f;
-    for (int n = 1; n < 31; n++) pulse_table[n] = 95.88f / (8128.0f / n + 100.0f);
-    tnd_table[0] = 0.0f;
-    for (int t = 1; t < 16; t++) tnd_table[t] = 159.79f / (1.0f / (t / 8227.0f) + 100.0f);
+    for (int p = 1; p < 31; p++) pulse_table[p] = 95.88f / (8128.0f / p + 100.0f);
+    // Every triangle/noise combination, including one channel alone; 0/0 is silence.
+    for (int t = 0; t < 16; t++)
+        for (int n = 0; n < 16; n++)
+            tnd_table[t][n] = (t == 0 && n == 0) ? 0.0f :
+                159.79f / (1.0f / (t / 8227.0f + n / 12241.0f) + 100.0f);
+
     SDL_PauseAudioDevice(audio_dev, 0);
 }
 
-// Call once per CPU clock with the 4-bit channel outputs (pulse 1, pulse 2, triangle);
+// Call once per CPU clock with the 4-bit channel outputs (pulse 1, pulse 2, triangle, noise);
 // mixes, low-passes (box average) and resamples to AUDIO_RATE.
-void sdl_audio_sample(int audio1, int audio2, int audio3) {
+void sdl_audio_sample(int audio1, int audio2, int audio3, int audio4) {
     if (!audio_dev) return;
-    audio_sum += pulse_table[(audio1 & 0xF) + (audio2 & 0xF)] + tnd_table[audio3 & 0xF];
+    audio_sum += pulse_table[(audio1 & 0xF) + (audio2 & 0xF)] + tnd_table[audio3 & 0xF][audio4 & 0xF];
     audio_count++;
     audio_acc += AUDIO_RATE;
     if (audio_acc < CPU_HZ) return;

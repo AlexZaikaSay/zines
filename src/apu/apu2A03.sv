@@ -1,6 +1,7 @@
 `include "apu/apu_pulse.sv"
 `include "apu/apu_frame_counter.sv"
 `include "apu/apu_triangle.sv"
+`include "apu/apu_noise.sv"
 
 module apu2A03 (
     input  logic        clk,
@@ -12,7 +13,8 @@ module apu2A03 (
     output logic        irq_n,
     output logic [3:0]  audio1,
     output logic [3:0]  audio2,
-    output logic [3:0]  audio3
+    output logic [3:0]  audio3,
+    output logic [3:0]  audio4
 );
 
     // internal registers and wires
@@ -22,7 +24,7 @@ module apu2A03 (
     wire fc_int_inhibit = control[0];
 
     logic pulse_clk;
-    logic [2:0] control_en;   // $4015 channel enables
+    logic [3:0] control_en;   // $4015 channel enables
 
     // generate pulse clock from cpu clock
     always_ff @(posedge clk or negedge rst_n) begin
@@ -66,6 +68,11 @@ module apu2A03 (
     localparam MEMIO_TRIANGLE_TIMER1    = 16'h400A;
     localparam MEMIO_TRIANGLE_TIMER2    = 16'h400B;
 
+    // noise channel
+    localparam MEMIO_NOISE_SETTING      = 16'h400C;
+    localparam MEMIO_NOISE_MODE         = 16'h400E;
+    localparam MEMIO_NOISE_TIMER        = 16'h400F;
+
     localparam MEMIO_APU_STATUS         = 16'h4015;
     localparam MEMIO_CONTROL            = 16'h4017;
 
@@ -86,11 +93,16 @@ module apu2A03 (
     wire w_triangle_timer1      = (addr == MEMIO_TRIANGLE_TIMER1) && !rw;
     wire w_triangle_timer2      = (addr == MEMIO_TRIANGLE_TIMER2) && !rw;
     
+    wire w_noise_settings    = (addr == MEMIO_NOISE_SETTING) && !rw;
+    wire w_noise_mode        = (addr == MEMIO_NOISE_MODE) && !rw;
+    wire w_noise_timer       = (addr == MEMIO_NOISE_TIMER) && !rw;
+
     wire w_control          = (addr == MEMIO_CONTROL) && !rw;
 
     logic pulse1_active;
     logic pulse2_active;
     logic triangle_active;
+    logic noise_active;
     logic fc_int_flag;
 
     apu_pulse #(
@@ -144,18 +156,33 @@ module apu2A03 (
         .audio(audio3)
     );
 
+    apu_noise u_noise (
+        .clk,
+        .rst_n,
+        .pulse_clk,
+        .quarter_frame,
+        .half_frame,
+        .enabled(control_en[3]),
+        .data_in,
+        .w_settings(w_noise_settings),
+        .w_mode(w_noise_mode),
+        .w_timer(w_noise_timer),
+        .active(noise_active),
+        .audio(audio4)
+    );
+
     // $4015 / $4017 registers and frame IRQ flag
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             fc_int_flag <= 1'b0;
-            control_en <= 3'b000;
+            control_en <= 4'b0000;
             control <= 2'b00;
         end else begin
             fc_int_flag <= fc_int_latch;
             if (r_apu_status)
                 fc_int_flag <= 1'b0;
             if (w_apu_status)
-                control_en <= data_in[2:0];
+                control_en <= data_in[3:0];
             if (w_control) begin
                 if (data_in[6])
                     fc_int_flag <= 0;
@@ -172,7 +199,7 @@ module apu2A03 (
                 fc_int_flag, 
                 1'b0, 
                 1'b0, 
-                1'b0, 
+                noise_active, 
                 triangle_active, 
                 pulse2_active, 
                 pulse1_active
