@@ -7,7 +7,7 @@ module tb_101_sd_card;
     localparam integer IMAGE_SECTORS = (ASSET_BYTES + SECTOR_BYTES - 1) / SECTOR_BYTES;
     localparam integer LOAD_WORDS = IMAGE_SECTORS * 128;
 
-    logic clk = 1'b0;
+    logic clk;
     logic reset = 1'b0;
     logic sd_clk;
     logic sd_cmd;
@@ -16,6 +16,7 @@ module tb_101_sd_card;
     logic busy;
     logic done;
     logic error;
+    logic [7:0]  error_code;
     logic        rx_valid;
     logic [7:0]  rx_data;
     logic [31:0] rx_index;
@@ -56,14 +57,18 @@ module tb_101_sd_card;
         .busy,
         .done,
         .error,
+        .error_code,
         .byte_valid(rx_valid),
         .byte_data(rx_data),
         .byte_index(rx_index)
     );
 
     always @(posedge clk) begin
-        if (rx_valid)
+        if (rx_valid) begin
+            if (rx_index >= LOAD_WORDS * 4)
+                $fatal(1, "byte_index %0d is outside the %0d-byte load", rx_index, LOAD_WORDS * 4);
             received[rx_index] <= rx_data;
+        end
     end
 
     task automatic queue_byte(input logic [7:0] value);
@@ -90,8 +95,25 @@ module tb_101_sd_card;
         end
     endtask
 
+    // SD command indexes in the order the controller has to send them;
+    // everything after CMD58 is a CMD17 block read.
+    function automatic logic [5:0] expected_command(input integer number);
+        case (number)
+            0: return 6'd0;
+            1: return 6'd8;
+            2: return 6'd55;
+            3: return 6'd41;
+            4: return 6'd58;
+            default: return 6'd17;
+        endcase
+    endfunction
+
     task automatic respond_to_command;
         begin
+            if (command[0] !== {2'b01, expected_command(command_number)})
+                $fatal(1, "Command %0d: got CMD%0d (%02h), expected CMD%0d",
+                       command_number, command[0][5:0], command[0],
+                       expected_command(command_number));
             case (command_number)
                 0: queue_byte(8'h01); // CMD0: idle
                 1: begin              // CMD8: SD v2, 2.7-3.6 V
@@ -116,7 +138,8 @@ module tb_101_sd_card;
         end
     endtask
 
-    always @(posedge sd_clk) begin
+    initial forever begin
+        @(posedge sd_clk);
         if (!sd_cs_n) begin
             if (!collecting_command && (sd_cmd == 1'b0)) begin
                 collecting_command = 1'b1;
@@ -128,7 +151,7 @@ module tb_101_sd_card;
             if (collecting_command) begin
                 command_shift = {command_shift[6:0], sd_cmd};
                 if (command_bit == 7) begin
-                    command[command_index] = {command_shift[6:0], sd_cmd};
+                    command[command_index] = command_shift;
                     if (command_index == 5) begin
                         respond_to_command();
                         collecting_command = 1'b0;
@@ -147,7 +170,8 @@ module tb_101_sd_card;
         end
     end
 
-    always @(negedge sd_clk) begin
+    initial forever begin
+        @(negedge sd_clk);
         if (!sd_cs_n) begin
             if (response_head < response_tail) begin
                 sd_dat0 = response_queue[response_head][7 - response_bit];
@@ -165,7 +189,8 @@ module tb_101_sd_card;
         end
     end
 
-    always @(negedge sd_cs_n) begin
+    initial forever begin
+        @(negedge sd_cs_n);
         command_index = 0;
         command_bit = 0;
         command_shift = 0;
@@ -179,6 +204,7 @@ module tb_101_sd_card;
     initial begin
         $dumpfile("tb_101_sd_card.vcd");
         $dumpvars(0, tb_101_sd_card);
+        clk = 1'b0;
         asset_file = $fopen(ASSET_FILE, "rb");
         if (asset_file == 0)
             $fatal(1, "Unable to open %s", ASSET_FILE);
@@ -203,7 +229,7 @@ module tb_101_sd_card;
         wait (done || error);
 
         if (error)
-            $fatal(1, "SD controller entered error state");
+            $fatal(1, "SD controller entered error state, code %02h", error_code);
         if (busy)
             $fatal(1, "SD controller still busy after done");
 

@@ -107,6 +107,12 @@ foreach(TB_FILE ${TESTBENCHS})
                 -LDFLAGS -L${LZ4_LIB_DIR}
             )
         endif()
+
+        # Verilator links -lz twice for FST (its own flags + verilated.mk);
+        # Apple's ld warns about it, so silence that harmless warning.
+        if(APPLE)
+            list(APPEND VERILATOR_FLAGS -LDFLAGS -Wl,-no_warn_duplicate_libraries)
+        endif()
     endif()
 
     add_custom_command(

@@ -33,7 +33,7 @@ module cpu2A03 (
     logic [7:0] dma_data;
     logic       odd_cycle;
     logic       core_enabled;
-    logic       m2;
+    logic       apu_irq_n;
 
     logic [15:0] core_addr;
     logic [7:0]  core_data_out;
@@ -120,12 +120,11 @@ module cpu2A03 (
         .clk(core_clk),
         .rst_n(rst_n),
         .nmi_n(nmi_n),
-        .irq_n(irq_n),
+        .irq_n(irq_n && apu_irq_n),     // IRQ line is wired-AND with the APU
         .data_in(core_data_in),
         .data_out(core_data_out),
         .addr(core_addr),
         .rw(core_rw),
-        .m2(m2),
         .undef(undef)
     );
 
@@ -136,6 +135,7 @@ module cpu2A03 (
         .data_in(apu_data_in),
         .rw(core_rw),
         .data_out(apu_status),
+        .irq_n(apu_irq_n),
         .audio1(audio1),
         .audio2(audio2)
     );

@@ -17,6 +17,7 @@ module mos_devboard
     logic [7:0] cpu_data;
     logic [7:0] mem_data;
     logic rw;
+    logic undef;
 
     mos6502 cpu (
         .clk,
@@ -26,8 +27,13 @@ module mos_devboard
         .data_in(mem_data),
         .rw(rw),
         .nmi_n,
-        .irq_n
+        .irq_n,
+        .undef
     );
+
+    // undef is probed hierarchically by the testbenches that care about it
+    // (tests may run past their program into undefined opcodes on purpose)
+    wire unused = &{1'b0, undef};
 
     mem #(
         .ADDR_WIDTH(16),

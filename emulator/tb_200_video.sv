@@ -1,5 +1,6 @@
 `include "nes_sim.sv"
 `include "cartridge/cartridge_sim.sv"
+`include "joystick_sim.sv"
 
 `timescale 1ns/1ps
 
@@ -15,6 +16,8 @@ module tb_200_video (
     logic       joy1_strob;
     logic       joy1_oe_n;
     logic [7:0] joy1_data;
+    logic       joy2_oe_n;
+    logic [7:0] joy2_data;
     logic [15:0] cpu_addr;
     logic cpu_undef;
     logic [15:0] cart_cpu_addr;
@@ -50,11 +53,12 @@ module tb_200_video (
         .rst_n(rst_n),
         .scanline(scanline),
         .cycle(cycle),
-        .video(),
         .pixel_palette(pixel_palette),
         .joy1_strob(joy1_strob),
         .joy1_oe_n(joy1_oe_n),
         .joy1_data(joy1_data),
+        .joy2_oe_n(joy2_oe_n),
+        .joy2_data(joy2_data),
         .cart_cpu_addr(cart_cpu_addr),
         .cart_cpu_data_out(cart_cpu_data_out),
         .cart_cpu_data_in(cart_cpu_data_in),
@@ -68,7 +72,8 @@ module tb_200_video (
         .cart_ciram_a10(cart_ciram_a10),
         .cart_ciram_ce_n(cart_ciram_ce_n),
         .audio1(audio1),
-        .audio2(audio2)
+        .audio2(audio2),
+        .undef(cpu_undef)
     );
 
     cartridge_sim #
@@ -103,8 +108,15 @@ module tb_200_video (
         .data(joy1_data)
     );
 
+    // Second pad is plugged in but never pressed
+    joystick_sim u_joystick2 (
+        .strob(joy1_strob),
+        .oe_n(joy2_oe_n),
+        .buttons(8'h00),
+        .data(joy2_data)
+    );
+
     assign cpu_addr = dut.cpu_addr;
-    assign cpu_undef = dut.cpu_undef;
 
     initial begin
         // $dumpfile("tb_201_video.vcd");

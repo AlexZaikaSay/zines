@@ -33,10 +33,11 @@ module cartridge_sim #(
 
     logic [7:0] prg_banks;
     logic [7:0] chr_banks;
-    logic [7:0] flags6;
-    logic [7:0] flags7;
+    logic [7:0] mapper;
+    logic       vertical;       // flags 6 bit 0: vertical mirroring
+    logic       has_trainer;    // flags 6 bit 2: 512-byte trainer before PRG
+    logic       four_screen;    // flags 6 bit 3: cartridge provides extra VRAM
 
-    wire       vertical   = flags6[0];
     wire       chr_is_ram = (chr_banks == 8'd0);
 
     integer file;
@@ -52,8 +53,10 @@ module cartridge_sim #(
         error_code = 8'h00;
         prg_banks  = 8'd0;
         chr_banks  = 8'd0;
-        flags6     = 8'd0;
-        flags7     = 8'd0;
+        mapper      = 8'd0;
+        vertical    = 1'b0;
+        has_trainer = 1'b0;
+        four_screen = 1'b0;
 
         for (i = 0; i < 32768; i = i + 1) prg_mem[i] = 8'h00;
         for (i = 0; i < 8192;  i = i + 1) chr_mem[i] = 8'h00;
@@ -75,13 +78,20 @@ module cartridge_sim #(
 
         prg_banks = image[4];
         chr_banks = image[5];
-        flags6    = image[6];
-        flags7    = image[7];
+        mapper      = {image[7][7:4], image[6][7:4]};
+        vertical    = image[6][0];
+        has_trainer = image[6][2];
+        four_screen = image[6][3];
 
-        if ({flags7[7:4], flags6[7:4]} != 8'd0) begin
+        if (mapper != 8'd0) begin
             error_code = 8'h21;
             error      = 1'b1;
-            $fatal(1, "cartridge_sim: only mapper 0 is supported");
+            $fatal(1, "cartridge_sim: only mapper 0 is supported, got %0d", mapper);
+        end
+        if (four_screen) begin
+            error_code = 8'h23;
+            error      = 1'b1;
+            $fatal(1, "cartridge_sim: four-screen mirroring is not supported");
         end
         if (prg_banks == 8'd0 || prg_banks > 8'd2 || chr_banks > 8'd1) begin
             error_code = 8'h22;
@@ -89,7 +99,7 @@ module cartridge_sim #(
             $fatal(1, "cartridge_sim: unsupported ROM size");
         end
 
-        data_start = 16 + (flags6[2] ? 512 : 0);
+        data_start = 16 + (has_trainer ? 512 : 0);
         prg_size   = prg_banks * 16384;
         chr_size   = chr_banks * 8192;
 

@@ -26,9 +26,10 @@ module ppu2C02 (
     output logic        nmi_n,
     output logic        ppu_rd_n,
     output logic        ppu_wr_n,
-    output logic [4:0]  video,
     output logic [7:0]  pixel_color
 );
+
+    logic [4:0]  video;            // palette index of the current pixel
 
     // Palette RAM lives inside the PPU: $3F00-$3FFF never reaches the external bus
     logic        rd_n_q;

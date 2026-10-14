@@ -3,7 +3,7 @@ module nes_video_capture #(
     parameter BMP_BASE = "nes_frame"
 ) (
     input logic       clk,
-    input logic       rst_n,
+    input logic       enable,       // capture starts once the PPU runs
     input logic [8:0] scanline,
     input logic [8:0] cycle,
     input logic [7:0] palette_color
@@ -14,8 +14,12 @@ module nes_video_capture #(
 
     logic [23:0] nes_rgb [0:63];
     logic [23:0] frame [0:WIDTH*HEIGHT-1];
-    integer frames_done = 0;
-    integer px;
+    integer frames_done;
+
+    // Visible area is scanlines 0-239, dots 1-256: pixel index = scanline * 256 + dot - 1
+    wire        visible = 32'(scanline) < HEIGHT && cycle >= 9'd1 && 32'(cycle) <= WIDTH;
+    wire [7:0]  dot     = 8'(cycle - 9'd1);
+    wire [15:0] px      = {scanline[7:0], dot};
     string bmp_name;
 
     initial begin
@@ -38,19 +42,19 @@ module nes_video_capture #(
 
         for (integer i = 0; i < WIDTH * HEIGHT; i = i + 1)
             frame[i] = 24'h000000;
+        frames_done = 0;
     end
 
     always @(posedge clk) begin
-        if (rst_n === 1'b1) begin
-            if (scanline < HEIGHT && cycle >= 1 && cycle <= WIDTH) begin
-                px = scanline * WIDTH + cycle - 1;
+        if (enable) begin
+            if (visible) begin
                 if (^palette_color === 1'bx)
                     frame[px] <= 24'h000000;
                 else
                     frame[px] <= nes_rgb[palette_color[5:0]];
             end
 
-            if (scanline == HEIGHT && cycle == 0) begin
+            if (32'(scanline) == HEIGHT && cycle == 9'd0) begin
                 frames_done <= frames_done + 1;
                 $sformat(bmp_name, "%s_%0d.bmp", BMP_BASE, frames_done + 1);
                 write_bmp(bmp_name);

@@ -22,6 +22,8 @@ module tb_301_apu_pulse_tone;
 
     logic clk;
     logic rst_n;
+    logic running;      // checks are enabled once reset is released
+    logic [3:0] audio2;
     logic [3:0] audio1;
 
     rp_devboard #(
@@ -29,20 +31,21 @@ module tb_301_apu_pulse_tone;
     ) db_device (
         .clk(clk),
         .rst_n(rst_n),
-        .audio1(audio1)
+        .audio1(audio1),
+        .audio2(audio2)
     );
 
     wire        w_timer2 = db_device.cpu.u_apu.w_pulse1_timer2;
     wire [7:0]  apu_data = db_device.cpu.u_apu.data_in;
-    wire [10:0] apu_timer = db_device.cpu.u_apu.pulse1_timer;
-    wire [7:0]  apu_ctrl = db_device.cpu.u_apu.pulse1_settings;
+    // timer period being written by $4003: data[2:0] high bits + $4002 low byte
+    wire [31:0] new_period = {21'd0, apu_data[2:0], db_device.cpu.u_apu.u_pulse1.timer[7:0]};
+    wire [7:0]  apu_ctrl = db_device.cpu.u_apu.u_pulse1.settings;
 
     integer cyc;
     integer note;           // index of the running note, -1 before the first one
     integer note_start;
     integer last_nz;        // last cycle with audible output
     integer rise_at;
-    integer fall_at;
     integer edges;
     integer period_errs;
     integer duty_errs;
@@ -51,7 +54,6 @@ module tb_301_apu_pulse_tone;
     integer env_last;
     integer env_drops;
     integer len_end;
-    integer period_reg;
     logic [3:0] prev;
 
     function automatic integer abs_i(input integer v);
@@ -71,7 +73,7 @@ module tb_301_apu_pulse_tone;
         endcase
     endfunction
 
-    task automatic finish_note(input integer idx, input integer end_cyc);
+    task automatic finish_note(input integer idx);
         integer expect_len, dur;
         begin
             if (idx >= 0) begin
@@ -111,9 +113,9 @@ module tb_301_apu_pulse_tone;
 
     initial begin
         // A4 / D6 periods and lengths (LEN_8TH -> index 2, LEN_WHOLE -> index 4)
-        exp_period[0] = 16'h00FD; exp_len[0] = 20; exp_const[0] = 15;
-        exp_period[1] = 16'h005D; exp_len[1] = 20; exp_const[1] = 15;
-        exp_period[2] = 16'h00FD; exp_len[2] = 40; exp_const[2] = 0;
+        exp_period[0] = 'h0FD; exp_len[0] = 20; exp_const[0] = 15;
+        exp_period[1] = 'h05D; exp_len[1] = 20; exp_const[1] = 15;
+        exp_period[2] = 'h0FD; exp_len[2] = 40; exp_const[2] = 0;
         cyc = 0;
         note = -1;
         note_start = 0;
@@ -121,7 +123,6 @@ module tb_301_apu_pulse_tone;
         len_end = -1;
         prev = 0;
         rise_at = -1;
-        fall_at = -1;
         edges = 0;
         period_errs = 0;
         duty_errs = 0;
@@ -132,11 +133,12 @@ module tb_301_apu_pulse_tone;
     end
 
     initial begin
-        $dumpfile("tb_301_apu_pulse_check.vcd");
-        $dumpvars(0, tb_301_apu_pulse_check);
+        $dumpfile("tb_301_apu_pulse_tone.vcd");
+        $dumpvars(0, tb_301_apu_pulse_tone);
         rst_n = 0;
+        running = 0;
         clk = 0;
-        #1 rst_n = 0; #(CYCLE_LEN * 2); rst_n = 1;
+        #1 rst_n = 0; #(CYCLE_LEN * 2); rst_n = 1; running = 1;
         for (integer i = 0; i < RUN_CYCLES; i++) begin
             clk = 1; #(CYCLE_LEN/2);
             clk = 0; #(CYCLE_LEN/2);
@@ -146,24 +148,27 @@ module tb_301_apu_pulse_tone;
     end
 
     always @(posedge clk) begin
-        if (rst_n === 1'b1) begin
+        // Pulse 2 is never enabled by this program
+        if (audio2 != 0)
+            $error("FAIL: pulse 2 output %0d, expected silence", audio2);
+
+        if (running) begin
             cyc <= cyc + 1;
-            if (note >= 0 && len_end < 0 && cyc - note_start > 2 && db_device.cpu.u_apu.pulse1_len_counter == 0)
+            if (note >= 0 && len_end < 0 && cyc - note_start > 2 && db_device.cpu.u_apu.u_pulse1.len_counter == 0)
                 len_end <= cyc;
 
             if (w_timer2) begin
                 // The ca65 program writes $4000, $4002, then $4003 (starts the note).
-                finish_note(note, cyc);
+                finish_note(note);
                 note <= note + 1;
                 if (note + 1 == NOTES) begin
-                    $display("tb_301_apu_pulse_check done");
+                    $display("tb_301_apu_pulse_tone done");
                     $finish;
                 end
                 if (note + 1 < NOTES) begin
-                    period_reg = {apu_data[2:0], apu_timer[7:0]};
-                    if (period_reg !== exp_period[note + 1] || len_of(apu_data[7:3]) !== exp_len[note + 1])
+                    if (new_period !== exp_period[note + 1] || len_of(apu_data[7:3]) !== exp_len[note + 1])
                         $error("TEST FAILED: note %0d: period $%03h length %0d, expected $%03h and %0d",
-                               note + 1, period_reg, len_of(apu_data[7:3]), exp_period[note + 1], exp_len[note + 1]);
+                               note + 1, new_period, len_of(apu_data[7:3]), exp_period[note + 1], exp_len[note + 1]);
                     if (exp_const[note + 1] != 0 && apu_ctrl !== 8'h9F)
                         $error("TEST FAILED: note %0d: $4000=%h, expected 9F", note + 1, apu_ctrl);
                 end
@@ -172,7 +177,6 @@ module tb_301_apu_pulse_tone;
                 len_end <= -1;
                 prev <= 0;
                 rise_at <= -1;
-                fall_at <= -1;
                 edges <= 0;
                 period_errs <= 0;
                 duty_errs <= 0;
@@ -188,12 +192,12 @@ module tb_301_apu_pulse_tone;
                     if (exp_const[note] != 0 && audio1 != 0 && audio1 != 4'd15)
                         vol_errs <= vol_errs + 1;
                     if (exp_const[note] == 0 && audio1 != 0) begin
-                        if (audio1 > env_max) env_max <= audio1;
-                        if (env_last != 16 && audio1 > env_last)
+                        if (32'(audio1) > env_max) env_max <= 32'(audio1);
+                        if (env_last != 16 && 32'(audio1) > env_last)
                             vol_errs <= vol_errs + 1;
-                        if (env_last != 16 && audio1 < env_last)
+                        if (env_last != 16 && 32'(audio1) < env_last)
                             env_drops <= env_drops + 1;
-                        env_last <= audio1;
+                        env_last <= 32'(audio1);
                     end
                     if (prev == 0 && audio1 != 0) begin
                         if (rise_at >= 0) begin

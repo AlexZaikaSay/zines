@@ -16,7 +16,6 @@ module mos6502 (
     output logic [7:0] data_out,
     output logic [15:0] addr,
     output logic rw,
-    output logic m2,
     output logic undef
 );
     logic [7:0] pc_h;
@@ -62,7 +61,6 @@ module mos6502 (
     logic [3:0] alu_op;
 
     assign rw = !w_mem;
-    assign m2 = !clk;
 
     int_control int_control_inst(
         .sel(irq_type),
