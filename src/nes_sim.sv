@@ -1,5 +1,5 @@
 `include "cpu/cpu2A03.sv"
-`include "cpu/mem.sv"
+`include "cpu/sync_ram.sv"
 `include "ppu/ppu2C02.sv"
 
 module nes_sim (
@@ -82,16 +82,18 @@ module nes_sim (
         .undef(undef)
     );
 
-    mem #(
+    // Block RAM needs a registered read, so the RAM runs on ppu_clk (3x cpu_clk):
+    // the CPU address is stable for three PPU clocks, read data is ready after one,
+    // well before the next cpu_clk edge. A write repeats harmlessly on each of them.
+    sync_ram #(
         .ADDR_WIDTH(11)
     ) u_cpu_ram (
-        .clk(cpu_clk),
+        .clk(ppu_clk),
+        .we(cpu_ram_selected && !cpu_rw),
+        .re(cpu_ram_selected && cpu_rw),
         .addr(cpu_addr[10:0]),
         .data_in(cpu_data_out),
-        .data_out(cpu_ram_data),
-        .rw(cpu_rw),
-        .cs_n(!cpu_ram_selected),
-        .oe_n(!cpu_rw)
+        .data_out(cpu_ram_data)
     );
 
     always_comb begin
@@ -112,7 +114,6 @@ module nes_sim (
     logic [13:0] ppu_addr;
     logic [7:0]  ppu_data_out;
     wire  [7:0]  ppu_data;
-    wire  [7:0]  ciram_raw;
     logic [7:0]  ciram_data;      // registered like cartridge CHR: the PPU samples a clock after rd_n
     logic        ppu_rd_n;
     logic        ppu_wr_n;
@@ -131,11 +132,10 @@ module nes_sim (
         .nmi_n(nmi_n),
         .ppu_rd_n(ppu_rd_n),
         .ppu_wr_n(ppu_wr_n),
-        .pixel_color(pixel_palette)
+        .pixel_color(pixel_palette),
+        .scanline(scanline),
+        .cycle(cycle)
     );
-
-    assign scanline = u_ppu.scanline;
-    assign cycle = u_ppu.cycle;
 
     assign cart_cpu_addr     = cpu_addr;
     assign cart_cpu_data_out = cpu_data_out;
@@ -152,21 +152,15 @@ module nes_sim (
                       !cart_ciram_ce_n   ? ciram_data   :
                                            cart_ppu_data_in;
 
-    always_ff @(posedge ppu_clk) begin
-        if (!cart_ciram_ce_n && !ppu_rd_n)
-            ciram_data <= ciram_raw;
-    end
-
-    mem #(
+    sync_ram #(
         .ADDR_WIDTH(11)
     ) u_ciram (
         .clk(ppu_clk),
+        .we(!cart_ciram_ce_n && !ppu_wr_n),
+        .re(!cart_ciram_ce_n && !ppu_rd_n),
         .addr({cart_ciram_a10, ppu_addr[9:0]}),
         .data_in(ppu_data),
-        .data_out(ciram_raw),
-        .rw(ppu_wr_n),
-        .cs_n(cart_ciram_ce_n),
-        .oe_n(ppu_rd_n)
+        .data_out(ciram_data)
     );
 
 endmodule

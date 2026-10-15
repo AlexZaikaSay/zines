@@ -1,6 +1,9 @@
 // iNES cartridge: loads a .nes image from raw SD sectors (starting at START_LBA),
 // parses the header and fills PRG-ROM / CHR memory. Only mapper 0 (NROM) is supported.
-// Memory reads are synchronous: data is valid one CLOCK_50 cycle after the address.
+// Two clock domains: `clk` runs the SD loader, `bus_clk` the CPU/PPU ports. Memory
+// reads are synchronous: data is valid one bus_clk cycle after the address.
+// The header fields are written by the loader and only read on the bus side, so the
+// console must be held in reset until `loaded` (synchronized to bus_clk) goes high.
 module cartridge #(
     parameter integer CLK_FREQ_HZ = 50_000_000,
     parameter integer RUN_SPI_HZ  = 10_000_000,
@@ -8,8 +11,9 @@ module cartridge #(
     // Upper bound of bytes read from the card (16-byte header + PRG + CHR), rounded up to sectors.
     parameter integer MAX_FILE_BYTES = 81 * 512
 )(
-    input  logic        clk,
-    input  logic        reset,
+    input  logic        clk,          // SD loader clock, CLK_FREQ_HZ
+    input  logic        bus_clk,      // CPU/PPU port clock
+    input  logic        reset_n,
 
     output logic        sd_clk,
     output logic        sd_cmd,
@@ -61,7 +65,7 @@ module cartridge #(
         .START_LBA(START_LBA)
     ) sd_card_inst (
         .clk(clk),
-        .reset_n(reset),
+        .reset_n(reset_n),
         .sd_clk(sd_clk),
         .sd_cmd(sd_cmd),
         .sd_dat0(sd_dat0),
@@ -102,8 +106,8 @@ module cartridge #(
 
     wire hdr_ok = (hdr_error == 8'h00);
 
-    always_ff @(posedge clk or negedge reset) begin
-        if (!reset) begin
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
             magic_ok  <= 4'd0;
             prg_banks <= 8'd0;
             chr_banks <= 8'd0;
@@ -135,19 +139,27 @@ module cartridge #(
     end
 
     // ----------------------------------------------------------------
-    // Memories (inferred block RAM)
+    // Memories (inferred dual-clock block RAM)
+    // PRG-ROM and CHR-ROM: loader writes on clk, CPU/PPU read on bus_clk (simple dual port).
+    // CHR-RAM (images without CHR data) is a separate single-clock RAM on bus_clk, so no
+    // memory is written from both clock domains.
     // ----------------------------------------------------------------
     logic [7:0] prg_mem [0:32767];
-    logic [7:0] chr_mem [0:8191];
+    logic [7:0] chr_rom [0:8191];
+    logic [7:0] chr_ram [0:8191];
 
-    // Loader write port
+    wire        load_byte = byte_valid && hdr_ok && (byte_index >= 32'd16);
+    wire [31:0] chr_off   = data_off - prg_size;
+
+    // Loader write ports
     always_ff @(posedge clk) begin
-        if (byte_valid && hdr_ok && (byte_index >= 32'd16)) begin
-            if (in_prg)
-                prg_mem[data_off[14:0]] <= byte_data;
-            else if (in_chr)
-                chr_mem[(data_off - prg_size) & 32'h1FFF] <= byte_data;
-        end
+        if (load_byte && in_prg)
+            prg_mem[data_off[14:0]] <= byte_data;
+    end
+
+    always_ff @(posedge clk) begin
+        if (load_byte && in_chr)
+            chr_rom[chr_off[12:0]] <= byte_data;
     end
 
     // ----------------------------------------------------------------
@@ -162,7 +174,7 @@ module cartridge #(
     // ----------------------------------------------------------------
     wire [14:0] prg_addr = (prg_banks == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge bus_clk) begin
         if (!cpu_ce_n && cpu_rw && cpu_addr[15])
             cpu_data_out <= prg_mem[prg_addr];
     end
@@ -172,12 +184,23 @@ module cartridge #(
     // ----------------------------------------------------------------
     wire chr_sel = !ppu_addr[13];
 
-    always_ff @(posedge clk) begin
-        if (chr_sel && !ppu_wr_n && chr_is_ram)
-            chr_mem[ppu_addr[12:0]] <= ppu_data_in;
+    logic [7:0] chr_rom_q;
+    logic [7:0] chr_ram_q;
+
+    always_ff @(posedge bus_clk) begin
         if (chr_sel && !ppu_rd_n)
-            ppu_data_out <= chr_mem[ppu_addr[12:0]];
+            chr_rom_q <= chr_rom[ppu_addr[12:0]];
     end
+
+    always_ff @(posedge bus_clk) begin
+        if (chr_sel && !ppu_wr_n && chr_is_ram)
+            chr_ram[ppu_addr[12:0]] <= ppu_data_in;
+        if (chr_sel && !ppu_rd_n)
+            chr_ram_q <= chr_ram[ppu_addr[12:0]];
+    end
+
+    // chr_is_ram is fixed by the header before the console leaves reset
+    assign ppu_data_out = chr_is_ram ? chr_ram_q : chr_rom_q;
 
     // Four-screen is not supported; mirroring follows flags6 bit 0.
     assign ciram_a10 = vertical ? ppu_addr[10] : ppu_addr[11];

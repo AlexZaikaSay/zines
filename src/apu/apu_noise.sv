@@ -32,14 +32,23 @@ module apu_noise (
     logic [7:0] noise_lengths[0:31];
 
     initial begin
-        noise_lengths[0:15]  = {10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14};
-        noise_lengths[16:31] = {12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30};
+        noise_lengths[0] = 10;  noise_lengths[1] = 254; noise_lengths[2] = 20;  noise_lengths[3] = 2;
+        noise_lengths[4] = 40;  noise_lengths[5] = 4;   noise_lengths[6] = 80;  noise_lengths[7] = 6;
+        noise_lengths[8] = 160; noise_lengths[9] = 8;   noise_lengths[10] = 60; noise_lengths[11] = 10;
+        noise_lengths[12] = 14; noise_lengths[13] = 12; noise_lengths[14] = 26; noise_lengths[15] = 14;
+        noise_lengths[16] = 12;  noise_lengths[17] = 16;  noise_lengths[18] = 24;  noise_lengths[19] = 18;
+        noise_lengths[20] = 48;  noise_lengths[21] = 20;  noise_lengths[22] = 96;  noise_lengths[23] = 22;
+        noise_lengths[24] = 192; noise_lengths[25] = 24;  noise_lengths[26] = 72;  noise_lengths[27] = 26;
+        noise_lengths[28] = 16;  noise_lengths[29] = 28;  noise_lengths[30] = 32;  noise_lengths[31] = 30;
     end
 
     logic [11:0] noise_periods[0:15];
 
     initial begin
-        noise_periods[0:15]  = {4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068};
+        noise_periods[0] = 4;     noise_periods[1] = 8;     noise_periods[2] = 16;    noise_periods[3] = 32;
+        noise_periods[4] = 64;    noise_periods[5] = 96;    noise_periods[6] = 128;   noise_periods[7] = 160;
+        noise_periods[8] = 202;   noise_periods[9] = 254;   noise_periods[10] = 380;  noise_periods[11] = 508;
+        noise_periods[12] = 762;  noise_periods[13] = 1016; noise_periods[14] = 2034; noise_periods[15] = 4068;
     end
 
     logic [11:0] counter;

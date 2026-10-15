@@ -52,8 +52,14 @@ module apu_pulse #(
     logic [7:0] pulse_lengths[0:31];
 
     initial begin
-        pulse_lengths[0:15]  = {10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14};
-        pulse_lengths[16:31] = {12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30};
+        pulse_lengths[0] = 10;  pulse_lengths[1] = 254; pulse_lengths[2] = 20;  pulse_lengths[3] = 2;
+        pulse_lengths[4] = 40;  pulse_lengths[5] = 4;   pulse_lengths[6] = 80;  pulse_lengths[7] = 6;
+        pulse_lengths[8] = 160; pulse_lengths[9] = 8;   pulse_lengths[10] = 60; pulse_lengths[11] = 10;
+        pulse_lengths[12] = 14; pulse_lengths[13] = 12; pulse_lengths[14] = 26; pulse_lengths[15] = 14;
+        pulse_lengths[16] = 12;  pulse_lengths[17] = 16;  pulse_lengths[18] = 24;  pulse_lengths[19] = 18;
+        pulse_lengths[20] = 48;  pulse_lengths[21] = 20;  pulse_lengths[22] = 96;  pulse_lengths[23] = 22;
+        pulse_lengths[24] = 192; pulse_lengths[25] = 24;  pulse_lengths[26] = 72;  pulse_lengths[27] = 26;
+        pulse_lengths[28] = 16;  pulse_lengths[29] = 28;  pulse_lengths[30] = 32;  pulse_lengths[31] = 30;
     end
 
     logic [10:0] counter;

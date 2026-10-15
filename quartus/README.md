@@ -27,3 +27,19 @@ file (in `sd_loader/output_files`). The SD card must be connected for the loader
 
 `cartridge_demo/cartridge_demo.qpf` loads an iNES file through the `cartridge`
 module and shows the first CHR byte on the 7-segment display.
+
+# NES project
+
+`nes/nes.qpf` runs the whole console (`src/nes_sim.sv`) on the board, the FPGA
+counterpart of `emulator/tb_200_video.sv`:
+
+- Copy a mapper-0 (NROM) `.nes` file raw to the SD card starting at LBA 0
+  (e.g. `dd if=SMB.nes of=/dev/sdX`), insert it, and program `output_files/nes.sof`.
+- `LEDR` lights when the ROM is loaded and the console has been released from
+  reset; `LED2` lights on a load error (no card, bad header, unsupported mapper).
+- Video is 640x480@60 on the Pmod VGA (same pins as `vga/`): the 256x240 picture
+  is pixel-doubled to 512x480 and centered.
+- No audio and no joysticks yet.
+
+`nes_pll` makes three clocks from `CLOCK_50`: `ppu_clk` 5.370 MHz,
+`vga_clk` 25.174 MHz and `sd_clk` 50.347 MHz; `cpu_clk` is `ppu_clk / 3`.

@@ -119,7 +119,7 @@ module alu (
                 z = (result == 8'b0);
             end
             default: begin
-                result = 8'bz;
+                result = '0;
                 v = 0;
                 n = 0;
                 c = 0;

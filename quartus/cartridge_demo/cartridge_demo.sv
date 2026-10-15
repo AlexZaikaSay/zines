@@ -26,7 +26,8 @@ module cartridge_demo (
 
     cartridge cartridge_inst (
         .clk(CLOCK_50),
-        .reset(RESET_N),
+        .bus_clk(CLOCK_50),
+        .reset_n(RESET_N),
         .sd_clk(SD_CLK),
         .sd_cmd(SD_CMD),
         .sd_dat0(SD_DAT0),
@@ -37,14 +38,14 @@ module cartridge_demo (
         .cpu_data_in(8'h00),
         .cpu_data_out,
         .cpu_rw(1'b1),
-        .cpu_ce(1'b1),
+        .cpu_ce_n(1'b0),
         .ppu_addr(14'h0000),
-        .ppu_rd(1'b1),
-        .ppu_wr(1'b0),
+        .ppu_rd_n(1'b0),
+        .ppu_wr_n(1'b1),
         .ppu_data_in(8'h00),
         .ppu_data_out,
         .ciram_a10(),
-        .ciram_ce(),
+        .ciram_ce_n(),
         .loaded,
         .error,
         .error_code

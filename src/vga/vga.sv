@@ -28,9 +28,9 @@ module vga #
     localparam integer VGA_H_TOTAL = VGA_H_VIS + VGA_H_FRONT_PORCH + VGA_H_SYNC + VGA_H_BACK_PORCH;
 
     localparam integer VGA_V_VIS = 480;
-    localparam integer VGA_V_FRONT_PORCH = 11;
+    localparam integer VGA_V_FRONT_PORCH = 10;
     localparam integer VGA_V_SYNC = 2;
-    localparam integer VGA_V_BACK_PORCH = 31;
+    localparam integer VGA_V_BACK_PORCH = 33;
     localparam integer VGA_V_TOTAL = VGA_V_VIS + VGA_V_FRONT_PORCH + VGA_V_SYNC + VGA_V_BACK_PORCH;
 
     logic               vga_active;
@@ -39,8 +39,6 @@ module vga #
     logic [31:0]        h_counter;
     logic [31:0]        v_counter;
 
-    logic               h_visible;
-    logic               v_visible;
 
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
@@ -55,35 +53,25 @@ module vga #
         end
     end
 
+    wire eol = (h_counter == VGA_H_TOTAL - 1);
+    wire eof = (v_counter == VGA_V_TOTAL - 1);
+    
+    wire h_visible = (h_counter < VGA_H_VIS);
+    wire v_visible = (v_counter < VGA_V_VIS);
+    wire visible = h_visible && v_visible;
+
     always_ff @(posedge clk or negedge reset) begin
         if (!reset) begin
-            hsync <= 1;
-            vsync <= 1;
             h_counter <= 0;
             v_counter <= 0;
-            h_visible <= 1;
-            v_visible <= 1;
+ 
         end else begin
             if (vga_active) begin
                 h_counter <= h_counter + 1;
-                if (h_counter == VGA_H_VIS)
-                    h_visible <= 0;
-                else if (h_counter == VGA_H_VIS + VGA_H_FRONT_PORCH)
-                    hsync <= 0;
-                else if (h_counter == VGA_H_VIS + VGA_H_FRONT_PORCH + VGA_H_SYNC)
-                    hsync <= 1;
-                else  if (h_counter == VGA_H_TOTAL) begin
-                    h_visible <= 1;
+                if (eol) begin
                     h_counter <= 0;
                     v_counter <= v_counter + 1;
-                    if (v_counter == VGA_V_VIS)
-                        v_visible <= 0;
-                    else if (v_counter == VGA_V_VIS + VGA_V_FRONT_PORCH)
-                        vsync <= 0;
-                    else if (v_counter == VGA_V_VIS + VGA_V_FRONT_PORCH + VGA_V_SYNC)
-                        vsync <= 1;
-                    else if (v_counter == VGA_V_TOTAL) begin
-                        v_visible <= 1;
+                    if (eof) begin
                         v_counter <= 0;
                     end
                 end
@@ -92,17 +80,26 @@ module vga #
     end
 
     // Test pattern: 8 vertical color bars across the visible area.
-    wire [2:0] bar = 3'(h_counter / 80);
+    wire [2:0] bar = 3'(h_counter / (VGA_H_VIS / 8));
 
-    always_comb begin
-        if (h_visible && v_visible) begin
-            red   = {4{bar[0]}};
-            green = {4{bar[1]}};
-            blue  = {4{bar[2]}};
+    wire h_sync_pulse = (h_counter >= VGA_H_VIS + VGA_H_FRONT_PORCH) && (h_counter < VGA_H_VIS + VGA_H_FRONT_PORCH + VGA_H_SYNC);
+    wire v_sync_pulse = (v_counter >= VGA_V_VIS + VGA_V_FRONT_PORCH) && (v_counter < VGA_V_VIS + VGA_V_FRONT_PORCH + VGA_V_SYNC);
+
+    // Registered outputs: no combinational glitches on the pins.
+    // 640x480@60 uses negative sync polarity.
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            hsync <= 1'b1;
+            vsync <= 1'b1;
+            red   <= 4'h0;
+            green <= 4'h0;
+            blue  <= 4'h0;
         end else begin
-            red   = 4'h0;
-            green = 4'h0;
-            blue  = 4'h0;
+            hsync <= ~h_sync_pulse;
+            vsync <= ~v_sync_pulse;
+            red   <= visible ? {4{bar[0]}} : 4'h0;
+            green <= visible ? {4{bar[1]}} : 4'h0;
+            blue  <= visible ? {4{bar[2]}} : 4'h0;
         end
     end
 

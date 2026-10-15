@@ -32,16 +32,28 @@ module apu_triangle (
     logic [3:0] sequencer_volumes[0:31];
 
     initial begin
-        sequencer_volumes[0:15]  = {15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0};
-        sequencer_volumes[16:31] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15};
+        sequencer_volumes[0] = 15; sequencer_volumes[1] = 14; sequencer_volumes[2] = 13; sequencer_volumes[3] = 12;
+        sequencer_volumes[4] = 11; sequencer_volumes[5] = 10; sequencer_volumes[6] = 9;  sequencer_volumes[7] = 8;
+        sequencer_volumes[8] = 7;  sequencer_volumes[9] = 6;  sequencer_volumes[10] = 5; sequencer_volumes[11] = 4;
+        sequencer_volumes[12] = 3; sequencer_volumes[13] = 2; sequencer_volumes[14] = 1; sequencer_volumes[15] = 0;
+        sequencer_volumes[16] = 0;  sequencer_volumes[17] = 1;  sequencer_volumes[18] = 2;  sequencer_volumes[19] = 3;
+        sequencer_volumes[20] = 4;  sequencer_volumes[21] = 5;  sequencer_volumes[22] = 6;  sequencer_volumes[23] = 7;
+        sequencer_volumes[24] = 8;  sequencer_volumes[25] = 9;  sequencer_volumes[26] = 10; sequencer_volumes[27] = 11;
+        sequencer_volumes[28] = 12; sequencer_volumes[29] = 13; sequencer_volumes[30] = 14; sequencer_volumes[31] = 15;
     end
 
     logic [7:0] triangle_lengths[0:31];
     logic [4:0]  sequencer_timer;
 
     initial begin
-        triangle_lengths[0:15]  = {10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14};
-        triangle_lengths[16:31] = {12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30};
+        triangle_lengths[0] = 10;  triangle_lengths[1] = 254; triangle_lengths[2] = 20;  triangle_lengths[3] = 2;
+        triangle_lengths[4] = 40;  triangle_lengths[5] = 4;   triangle_lengths[6] = 80;  triangle_lengths[7] = 6;
+        triangle_lengths[8] = 160; triangle_lengths[9] = 8;   triangle_lengths[10] = 60; triangle_lengths[11] = 10;
+        triangle_lengths[12] = 14; triangle_lengths[13] = 12; triangle_lengths[14] = 26; triangle_lengths[15] = 14;
+        triangle_lengths[16] = 12;  triangle_lengths[17] = 16;  triangle_lengths[18] = 24;  triangle_lengths[19] = 18;
+        triangle_lengths[20] = 48;  triangle_lengths[21] = 20;  triangle_lengths[22] = 96;  triangle_lengths[23] = 22;
+        triangle_lengths[24] = 192; triangle_lengths[25] = 24;  triangle_lengths[26] = 72;  triangle_lengths[27] = 26;
+        triangle_lengths[28] = 16;  triangle_lengths[29] = 28;  triangle_lengths[30] = 32;  triangle_lengths[31] = 30;
     end
 
     logic [10:0] counter;
