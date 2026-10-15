@@ -5,12 +5,20 @@ set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
 
+# ---- Video output selection ----
+# Uncomment for HDMI (video + audio) on the board's HDMI connector;
+# leave commented for VGA on the Pmod VGA (no audio).
+set_global_assignment -name VERILOG_MACRO "VIDEO_HDMI=1"
+
 # nes_sim.sv pulls in the CPU/APU/PPU through `include "cpu/...", "ppu/..." relative to src/
 set_global_assignment -name SEARCH_PATH ../../src
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/nes_sim.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/cartridge/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/vga/nes_vga.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/hdmi/hdmi_tx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/hdmi/nes_audio_sampler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE hdmi_serializer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE nes_pll.sv
 set_global_assignment -name SYSTEMVERILOG_FILE nes_top.sv
 set_global_assignment -name SDC_FILE nes.sdc
@@ -44,6 +52,19 @@ set_location_assignment PIN_P5 -to VGA_G[2]
 set_location_assignment PIN_M5 -to VGA_G[3]
 set_location_assignment PIN_J1 -to VGA_HS
 set_location_assignment PIN_H1 -to VGA_VS
+
+# HDMI connector (V3 schematic: FPGA -> TPD12S016 ESD -> connector, no resistors).
+# All banks are 3.3 V and bank 4 also holds the SD card, so LVDS_E_3R (2.5 V) is not
+# possible; each pair is two complementary 3.3-V LVTTL outputs (default standard).
+# In the VGA build these ports do not exist and Quartus only warns about them.
+set_location_assignment PIN_AA20 -to TMDS[2]
+set_location_assignment PIN_AB20 -to TMDS_N[2]
+set_location_assignment PIN_AA16 -to TMDS[1]
+set_location_assignment PIN_AB16 -to TMDS_N[1]
+set_location_assignment PIN_AA15 -to TMDS[0]
+set_location_assignment PIN_AB15 -to TMDS_N[0]
+set_location_assignment PIN_AA14 -to TMDS_CLK
+set_location_assignment PIN_AB14 -to TMDS_CLK_N
 
 set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
 set_global_assignment -name RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND "AS INPUT TRI-STATED"

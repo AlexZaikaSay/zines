@@ -2,10 +2,12 @@
 //
 // Write side (ppu_clk): stores the 6-bit palette index of every visible PPU dot,
 // sampled the same way as the SDL testbench: scanlines 0-239, dots 1-256.
-// Read side (vga_clk, 25.175 MHz): scans the buffer, doubling each pixel and line
+// Read side (vga_clk, ~25.2 MHz): scans the buffer, doubling each pixel and line
 // (512x480), centered with 64-pixel black borders, and maps the index to RGB444.
+// pixel_x/pixel_y give the 800x525 raster position of the registered outputs, for
+// encoders (HDMI) that generate their own sync and blanking from it.
 //
-// The two sides are not frame-locked (PPU 60.10 Hz vs VGA 59.94 Hz), so a slowly
+// The two sides are not frame-locked (PPU ~60.1 Hz vs VGA 60.0 Hz), so a slowly
 // drifting tear line can be visible; a line FIFO would underflow/overflow instead.
 module nes_vga (
     // PPU side
@@ -21,7 +23,9 @@ module nes_vga (
     output logic       vsync,
     output logic [3:0] red,
     output logic [3:0] green,
-    output logic [3:0] blue
+    output logic [3:0] blue,
+    output logic [9:0] pixel_x,
+    output logic [9:0] pixel_y
 );
 
     // ----------------------------------------------------------------
@@ -30,11 +34,11 @@ module nes_vga (
     logic [5:0] fb [0:65535];
 
     wire       pixel_visible = (scanline < 9'd240) && (cycle >= 9'd1) && (cycle <= 9'd256);
-    wire [8:0] pixel_x       = cycle - 9'd1;
+    wire [8:0] ppu_x         = cycle - 9'd1;
 
     always_ff @(posedge ppu_clk) begin
         if (pixel_visible)
-            fb[{scanline[7:0], pixel_x[7:0]}] <= pixel_palette[5:0];
+            fb[{scanline[7:0], ppu_x[7:0]}] <= pixel_palette[5:0];
     end
 
     // ----------------------------------------------------------------
@@ -86,6 +90,7 @@ module nes_vga (
 
     logic [5:0] fb_q;
     logic       visible1, image1, hs1, vs1;
+    logic [9:0] h1, v1;
 
     always_ff @(posedge vga_clk) begin
         fb_q <= fb[{fb_y, fb_x}];
@@ -97,26 +102,34 @@ module nes_vga (
             image1   <= 1'b0;
             hs1      <= 1'b0;
             vs1      <= 1'b0;
+            h1       <= 10'd0;
+            v1       <= 10'd0;
         end
         else begin
             visible1 <= visible0;
             image1   <= image0;
             hs1      <= hs0;
             vs1      <= vs0;
+            h1       <= h_count;
+            v1       <= v_count;
         end
     end
 
     // Registered outputs; 640x480@60 uses negative sync polarity.
     always_ff @(posedge vga_clk or negedge vga_rst_n) begin
         if (!vga_rst_n) begin
-            hsync <= 1'b1;
-            vsync <= 1'b1;
+            hsync   <= 1'b1;
+            vsync   <= 1'b1;
             {red, green, blue} <= 12'h000;
+            pixel_x <= 10'd0;
+            pixel_y <= 10'd0;
         end
         else begin
-            hsync <= ~hs1;
-            vsync <= ~vs1;
+            hsync   <= ~hs1;
+            vsync   <= ~vs1;
             {red, green, blue} <= (visible1 && image1) ? nes_rgb(fb_q) : 12'h000;
+            pixel_x <= h1;
+            pixel_y <= v1;
         end
     end
 
@@ -145,6 +158,6 @@ module nes_vga (
         return rgb;
     endfunction
 
-    wire unused = &{1'b0, pixel_palette[7:6], scanline[8], pixel_x[8], image_x[9], v_count[9]};
+    wire unused = &{1'b0, pixel_palette[7:6], scanline[8], ppu_x[8], image_x[9]};
 
 endmodule

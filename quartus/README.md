@@ -37,9 +37,13 @@ counterpart of `emulator/tb_200_video.sv`:
   (e.g. `dd if=SMB.nes of=/dev/sdX`), insert it, and program `output_files/nes.sof`.
 - `LEDR` lights when the ROM is loaded and the console has been released from
   reset; `LED2` lights on a load error (no card, bad header, unsupported mapper).
-- Video is 640x480@60 on the Pmod VGA (same pins as `vga/`): the 256x240 picture
-  is pixel-doubled to 512x480 and centered.
-- No audio and no joysticks yet.
+- Video is 640x480@60. By default it goes to the Pmod VGA (same pins as `vga/`),
+  with no audio. Uncomment the `VERILOG_MACRO "VIDEO_HDMI=1"` line in `nes.qsf`
+  to build for the board's HDMI connector instead, with 48 kHz audio (the APU
+  channels mixed to mono, sent on both channels).
+- The 256x240 picture is pixel-doubled to 512x480 and centered.
+- No joysticks yet.
 
-`nes_pll` makes three clocks from `CLOCK_50`: `ppu_clk` 5.370 MHz,
-`vga_clk` 25.174 MHz and `sd_clk` 50.347 MHz; `cpu_clk` is `ppu_clk / 3`.
+`nes_pll` makes four clocks from `CLOCK_50` (VCO 1260 MHz): `ppu_clk` 5.362 MHz,
+`pix_clk` 25.2 MHz, `sd_clk` 50.4 MHz and `tmds_clk` 126 MHz (HDMI serializer);
+`cpu_clk` is `ppu_clk / 3`.
