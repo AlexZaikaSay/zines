@@ -1,0 +1,86 @@
+zero_page    = $00
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .ZEROPAGE
+        .org zero_page
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+
+APU_NOISE_CTRL   = $400C
+APU_NOISE_MODE   = $400E
+APU_NOISE_LEN    = $400F
+APU_STATUS       = $4015
+APU_FRAME_CTRL   = $4017
+
+MODE_LONG        = %00000000  ; 15-bit LFSR, feedback from bit 1
+MODE_SHORT       = %10000000  ; 93-step LFSR, feedback from bit 6
+PERIOD_64        = $04        ; period table index 4 = 64 CPU cycles
+PERIOD_202       = $08        ; period table index 8 = 202 CPU cycles
+
+LEN_8TH          = %00010000  ; length-table index 2 = 20 half-frames
+LEN_WHOLE        = %00100000  ; length-table index 4 = 40 half-frames
+
+start:
+        sei
+        cld
+        ldx #$FF
+        txs
+
+        lda #$40
+        sta APU_FRAME_CTRL
+        lda #$08
+        sta APU_STATUS          ; enable Noise
+
+; 1. Long mode, period 64, constant volume 15.
+        lda #%00011111
+        sta APU_NOISE_CTRL      ; length counter runs, constant volume 15
+        lda #(MODE_LONG | PERIOD_64)
+        sta APU_NOISE_MODE
+        lda #LEN_8TH
+        sta APU_NOISE_LEN
+        jsr wait_note
+
+; 2. Short (metallic) mode, period 64, constant volume 15.
+        lda #%00011111
+        sta APU_NOISE_CTRL
+        lda #(MODE_SHORT | PERIOD_64)
+        sta APU_NOISE_MODE
+        lda #LEN_8TH
+        sta APU_NOISE_LEN
+        jsr wait_note
+
+; 3. Long mode, period 202, envelope decay 3.
+        lda #%00000011
+        sta APU_NOISE_CTRL      ; length counter runs, envelope, decay period 3
+        lda #(MODE_LONG | PERIOD_202)
+        sta APU_NOISE_MODE
+        lda #LEN_WHOLE
+        sta APU_NOISE_LEN
+        jsr wait_note
+
+; Marks the end of the last note for the testbench.
+        lda #$00
+        sta APU_NOISE_LEN
+
+done:
+        jmp done
+
+; Wait for the noise length counter to expire. No software delay loop
+; is used to time the sound; the APU length counter controls its duration.
+wait_note:
+        lda APU_STATUS
+        and #$08
+        bne wait_note
+        rts
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   start
+        .word   $0000

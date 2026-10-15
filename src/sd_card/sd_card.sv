@@ -257,8 +257,8 @@ module sd_card #(
     assign byte_address = lba << 9;
 
 
-    // CMD58 OCR bytes
-    logic [7:0] ocr1;
+    // CMD58 OCR byte 1 (bits 31:24), bit 6 = CCS
+    logic ocr_ccs;
 
 
     // ================================================================
@@ -415,7 +415,7 @@ module sd_card #(
             word_byte <= 0;
 
             sd_high_capacity <= 1'b1;
-            ocr1 <= 0;
+            ocr_ccs <= 1'b0;
 
             byte_valid <= 1'b0;
             byte_data  <= 8'h00;
@@ -874,7 +874,7 @@ module sd_card #(
 
                             case (response_count)
 
-                                1: ocr1 <= rx_byte;
+                                1: ocr_ccs <= rx_byte[6];
                                 4: begin
                                     // OCR byte 0 bit 6 = CCS
                                     //
@@ -883,14 +883,14 @@ module sd_card #(
                                     //
                                     // CCS = OCR[30]
                                     //
-                                    if (ocr1[6])
+                                    if (ocr_ccs)
                                         sd_high_capacity <= 1'b1;
                                     else
                                         sd_high_capacity <= 1'b0;
 
                                     sd_cs_n <= 1'b1;
 
-                                    if (ocr1[6]) begin
+                                    if (ocr_ccs) begin
 
                                         // SDHC / SDXC
                                         init_mode <= 1'b0;

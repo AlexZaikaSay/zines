@@ -9,7 +9,7 @@ module tb_102_cartridge;
     localparam integer PRG_START = 16;
     localparam integer CHR_START = PRG_START + PRG_BYTES;
 
-    logic clk = 1'b0;
+    logic clk;
 
     logic [15:0] cpu_addr = 16'h0000;
     logic [7:0]  cpu_data_out;
@@ -20,6 +20,8 @@ module tb_102_cartridge;
     logic        loaded;
     logic        error;
     logic [7:0]  error_code;
+    logic        ciram_a10;
+    logic        ciram_ce_n;
 
     logic [7:0] asset_image [0:ASSET_BYTES-1];
     integer asset_file;
@@ -41,8 +43,8 @@ module tb_102_cartridge;
         .ppu_wr_n(1'b1),
         .ppu_data_in(8'h00),
         .ppu_data_out,
-        .ciram_a10(),
-        .ciram_ce_n(),
+        .ciram_a10,
+        .ciram_ce_n,
         .loaded,
         .error,
         .error_code
@@ -50,6 +52,8 @@ module tb_102_cartridge;
 
     task automatic check_prg(input logic [15:0] addr, input integer file_offset);
         begin
+            if (file_offset < 0 || file_offset >= ASSET_BYTES)
+                $fatal(1, "check_prg: file offset %0d outside the image", file_offset);
             cpu_addr = addr;
             cpu_ce_n = 1'b0;
             repeat (2) @(posedge clk);
@@ -63,6 +67,8 @@ module tb_102_cartridge;
 
     task automatic check_chr(input logic [13:0] addr, input integer file_offset);
         begin
+            if (file_offset < 0 || file_offset >= ASSET_BYTES)
+                $fatal(1, "check_chr: file offset %0d outside the image", file_offset);
             ppu_addr = addr;
             ppu_rd_n = 1'b0;
             repeat (2) @(posedge clk);
@@ -74,9 +80,25 @@ module tb_102_cartridge;
         end
     endtask
 
+    // Nametable select: CIRAM is enabled for $2000-$3EFF, A10 follows the
+    // header mirroring bit (vertical -> PPU A10, horizontal -> PPU A11).
+    task automatic check_ciram(input logic [13:0] addr);
+        logic expected_a10;
+        begin
+            expected_a10 = asset_image[6][0] ? addr[10] : addr[11];
+            ppu_addr = addr;
+            #1;
+            if (ciram_ce_n !== !addr[13])
+                $fatal(1, "CIRAM /CE for %04h expected %0b, got %0b", addr, !addr[13], ciram_ce_n);
+            if (addr[13] && ciram_a10 !== expected_a10)
+                $fatal(1, "CIRAM A10 for %04h expected %0b, got %0b", addr, expected_a10, ciram_a10);
+        end
+    endtask
+
     initial begin
         $dumpfile("tb_102_cartridge.vcd");
         $dumpvars(0, tb_102_cartridge);
+        clk = 1'b0;
         asset_file = $fopen(ASSET_FILE, "rb");
         if (asset_file == 0)
             $fatal(1, "Unable to open %s", ASSET_FILE);
@@ -95,6 +117,11 @@ module tb_102_cartridge;
         check_prg(16'hFFFF, PRG_START + PRG_BYTES - 1);
         check_chr(14'h0000, CHR_START);
         check_chr(14'h1FFF, ASSET_BYTES - 1);
+        check_ciram(14'h0400);
+        check_ciram(14'h2000);
+        check_ciram(14'h2400);
+        check_ciram(14'h2800);
+        check_ciram(14'h2C00);
 
         $display("%s cartridge test passed: PRG[8000]=%02h CHR[0000]=%02h",
                  ASSET_FILE, asset_image[PRG_START], asset_image[CHR_START]);

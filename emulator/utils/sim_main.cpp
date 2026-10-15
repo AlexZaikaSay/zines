@@ -1,0 +1,26 @@
+// Generated per live testbench by CMake. Drives clk from C++ so Verilator runs
+// without --timing (no coroutine scheduler); the testbench ends itself with $finish.
+#include "V@TB_NAME@.h"
+#include "verilated.h"
+
+#include <memory>
+
+int main(int argc, char** argv) {
+    const std::unique_ptr<VerilatedContext> ctx{new VerilatedContext};
+    ctx->commandArgs(argc, argv);
+    const std::unique_ptr<V@TB_NAME@> top{new V@TB_NAME@{ctx.get()}};
+
+    ctx->traceEverOn(true);
+    top->clk = 0;
+    top->eval();
+    while (!ctx->gotFinish()) {
+        ctx->timeInc(1);
+        top->clk = 1;
+        top->eval();
+        ctx->timeInc(1);
+        top->clk = 0;
+        top->eval();
+    }
+    top->final();
+    return 0;
+}

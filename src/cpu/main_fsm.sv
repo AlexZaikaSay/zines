@@ -298,12 +298,8 @@ module main_fsm
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= Reset;
-            low_byte <= 8'hFD;
             counter <= 0;
             undef <= 0;
-            irq_type <= 1;                  // Reset
-            flags <= FLAGS_RESET_VALUE;
-            inst <= OP_BRK;
         end 
         else begin
             case (state)
@@ -312,6 +308,12 @@ module main_fsm
                     counter <= counter + 1;
                     if (counter == 3'd4)
                         state <= FetchVectorLow;
+                    else begin
+                        irq_type <= 1;                  // Reset
+                        low_byte <= 8'hFD;
+                        flags <= FLAGS_RESET_VALUE;
+                        inst <= OP_BRK;
+                    end
                 end
                 Fetch: begin
                     if (nmi_request) begin

@@ -1,4 +1,6 @@
+`include "apu/apu2A03.sv"
 `include "cpu/mos6502.sv"
+
 
 // RP2A03 wrapper: 6502 core + OAM DMA ($4014). APU is not implemented.
 // The addr/data_out/rw pins are the shared CPU bus: the core drives them
@@ -15,6 +17,10 @@ module cpu2A03 (
     output logic        out0,
     output logic        oe1_n,
     output logic        oe2_n,
+    output logic [3:0]  audio1,
+    output logic [3:0]  audio2,
+    output logic [3:0]  audio3,
+    output logic [3:0]  audio4,
     output logic        undef
 );
     localparam logic [2:0] DMA_IDLE  = 3'd0;
@@ -29,25 +35,36 @@ module cpu2A03 (
     logic [7:0] dma_data;
     logic       odd_cycle;
     logic       core_enabled;
-    logic       m2;
+    logic       apu_irq_n;
 
     logic [15:0] core_addr;
     logic [7:0]  core_data_out;
+    logic [7:0]  core_data_in;
     logic        core_rw;
 
-    localparam MEMIO_DMA    = 16'h4014;
-    localparam MEMIO_PAD1   = 16'h4016;
-    localparam MEMIO_PAD2   = 16'h4017;
+    logic [7:0]  apu_status;
+    logic [7:0]  apu_data_in;
 
-    wire core_clk = clk && core_enabled;
-    wire dma_active = (dma_state != DMA_IDLE);
-    wire core_write_dma = !core_rw && core_addr == MEMIO_DMA;
-    
-    wire core_write_pad1 = !core_rw && core_addr == MEMIO_PAD1;
-    
-    wire core_read_pad1 = core_rw && core_addr == MEMIO_PAD1;
-    wire core_read_pad2 = core_rw && core_addr == MEMIO_PAD2;
+    localparam MEMIO_APU_START      = 16'h4000;
+    localparam MEMIO_APU_END        = 16'h4013;
+    localparam MEMIO_DMA            = 16'h4014;
+    localparam MEMIO_APU_STATUS     = 16'h4015;
+    localparam MEMIO_PAD1           = 16'h4016;
+    localparam MEMIO_PAD2           = 16'h4017;
 
+    wire core_clk               = clk && core_enabled;
+    wire dma_active             = (dma_state != DMA_IDLE);
+    wire core_write_dma         = !core_rw && core_addr == MEMIO_DMA;
+    wire core_write_pad1        = !core_rw && core_addr == MEMIO_PAD1;
+    wire core_write_pad2        = !core_rw && core_addr == MEMIO_PAD2;
+    
+    wire core_write_apu         = !core_rw && (core_addr >= MEMIO_APU_START) && (core_addr <= MEMIO_APU_END);
+    wire core_read_apu_status   = core_rw && core_addr == MEMIO_APU_STATUS;
+    wire core_write_apu_status  = !core_rw && core_addr == MEMIO_APU_STATUS;
+    wire core_write_apu_control = !core_rw && core_addr == MEMIO_PAD2;
+    wire core_read_pad1         = core_rw && core_addr == MEMIO_PAD1;
+    wire core_read_pad2         = core_rw && core_addr == MEMIO_PAD2;
+    
 
     // Core clock gate: enable changes only while clk is low
     always_ff @(negedge clk or negedge rst_n) begin
@@ -57,15 +74,17 @@ module cpu2A03 (
             core_enabled <= !dma_active;
     end
 
+    // Output logic for out0 based on core writes to pad1, pad2
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out0    <= 1'b0;
         end else 
             if (core_enabled)
-                if (core_write_pad1)
+                if (core_write_pad1 || core_write_pad2)
                     out0 <= data_out[0];
     end
 
+    // DMA state machine and control logic
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             dma_state <= DMA_IDLE;
@@ -103,24 +122,48 @@ module cpu2A03 (
         .clk(core_clk),
         .rst_n(rst_n),
         .nmi_n(nmi_n),
-        .irq_n(irq_n),
-        .data_in(data_in),
+        .irq_n(irq_n && apu_irq_n),     // IRQ line is wired-AND with the APU
+        .data_in(core_data_in),
         .data_out(core_data_out),
         .addr(core_addr),
         .rw(core_rw),
-        .m2(m2),
         .undef(undef)
+    );
+
+    apu2A03 u_apu (
+        .clk(core_clk),
+        .rst_n(rst_n),
+        .addr(core_addr),
+        .data_in(apu_data_in),
+        .rw(core_rw),
+        .data_out(apu_status),
+        .irq_n(apu_irq_n),
+        .audio1(audio1),
+        .audio2(audio2),
+        .audio3(audio3),
+        .audio4(audio4)
     );
 
     // Bus ownership. While the core is gated off (including the cycle after
     // DMA ends) the bus is parked on a harmless cartridge read.
     always_comb begin
         if (core_enabled && !dma_active) begin
-            if (core_read_pad1)
+            if (core_read_pad1) begin
+                core_data_in = data_in;
                 oe1_n = 1'b0;
-            else if (core_read_pad2)
+            end
+            else if (core_read_pad2) begin
+                core_data_in = data_in;
                 oe2_n = 1'b0;
+            end
+            else if (core_read_apu_status)
+                core_data_in = apu_status;
+            else if (core_write_apu_status)
+                apu_data_in = core_data_out;
+            else if (core_write_apu || core_write_apu_control)
+                apu_data_in = core_data_out;
             else begin
+                core_data_in = data_in;
                 addr     = core_addr;
                 data_out = core_data_out;
                 rw       = core_rw;

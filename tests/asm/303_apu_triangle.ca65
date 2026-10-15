@@ -1,0 +1,83 @@
+zero_page    = $00
+data_segment = $200
+code_segment = $400
+vect_segment = $fffa
+
+        .ZEROPAGE
+        .org zero_page
+
+        .DATA
+        .org data_segment
+
+        .CODE
+        .org code_segment
+
+APU_TRIANGLE_CTRL  = $4008
+APU_TRIANGLE_FREQ1 = $400A
+APU_TRIANGLE_FREQ2 = $400B
+APU_STATUS         = $4015
+APU_FRAME_CTRL     = $4017
+
+NOTE_A4_PERIOD   = $007E      ; 1789773 / (32 * 127) = 440 Hz (triangle period is 32 * (t + 1))
+NOTE_D6_PERIOD   = $002E      ; 1789773 / (32 * 47)  = 1190 Hz, same pitches as the pulse tests
+LEN_8TH          = %00010000  ; length-table index 2 = 20 half-frames
+
+start:
+        sei
+        cld
+        ldx #$FF
+        txs
+
+        lda #$40
+        sta APU_FRAME_CTRL
+        lda #$04
+        sta APU_STATUS          ; enable Triangle
+
+; 1. A4, linear counter 31 quarter-frames: the linear counter stops the
+;    sequencer before the length counter (20 half-frames) runs out.
+        lda #%00011111
+        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 31
+        lda #<NOTE_A4_PERIOD
+        sta APU_TRIANGLE_FREQ1
+        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        sta APU_TRIANGLE_FREQ2
+        jsr wait_note
+
+; 2. A4, linear counter 127 quarter-frames: now the length counter stops it.
+        lda #%01111111
+        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 127
+        lda #<NOTE_A4_PERIOD
+        sta APU_TRIANGLE_FREQ1
+        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        sta APU_TRIANGLE_FREQ2
+        jsr wait_note
+
+; 3. D6, linear counter 31 quarter-frames.
+        lda #%00011111
+        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 31
+        lda #<NOTE_D6_PERIOD
+        sta APU_TRIANGLE_FREQ1
+        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        sta APU_TRIANGLE_FREQ2
+        jsr wait_note
+
+; Marks the end of the last note for the testbench.
+        lda #$00
+        sta APU_TRIANGLE_FREQ2
+
+done:
+        jmp done
+
+; Wait for the triangle length counter to expire. No software delay loop
+; is used to time the sound; the APU length counter controls its duration.
+wait_note:
+        lda APU_STATUS
+        and #$04
+        bne wait_note
+        rts
+
+        .segment "VECTORS"
+        .org vect_segment
+        .word   $0000
+        .word   start
+        .word   $0000

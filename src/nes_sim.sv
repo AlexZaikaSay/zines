@@ -1,8 +1,6 @@
 `include "cpu/cpu2A03.sv"
 `include "cpu/mem.sv"
-`include "cpu/decoder2_4.sv"
 `include "ppu/ppu2C02.sv"
-`include "joystick_sim.sv"
 
 module nes_sim (
     input  logic       cpu_clk,
@@ -10,13 +8,14 @@ module nes_sim (
     input  logic       rst_n,
     output logic [8:0] scanline,
     output logic [8:0] cycle,
-    output logic [4:0] video,
     output logic [7:0] pixel_palette,
 
-    // Joystick interface
+    // Joystick interface: strobe is shared by both ports
     output logic       joy1_strob,
     output logic       joy1_oe_n,
     input  logic [7:0] joy1_data,
+    output logic       joy2_oe_n,
+    input  logic [7:0] joy2_data,
 
     // Cartridge edge connector
     output logic [15:0] cart_cpu_addr,
@@ -30,7 +29,16 @@ module nes_sim (
     output logic [7:0]  cart_ppu_data_out,
     input  logic [7:0]  cart_ppu_data_in,
     input  logic        cart_ciram_a10,
-    input  logic        cart_ciram_ce_n
+    input  logic        cart_ciram_ce_n,
+
+    // Audio outputs
+    output logic [3:0] audio1,
+    output logic [3:0] audio2,
+    output logic [3:0] audio3,
+    output logic [3:0] audio4,
+
+    // Simulation status: CPU fetched an undefined opcode
+    output logic       undef
 );
 
     logic        nmi_n;
@@ -38,16 +46,14 @@ module nes_sim (
     logic [7:0]  cpu_data_out;
     logic [7:0]  cpu_data_in;
     logic        cpu_rw;
-    logic        cpu_undef;
     logic        cpu_strobe;
     logic [7:0]  cpu_ram_data;
-    logic [3:0]  cpu_page_select;
-    logic [3:0]  cpu_upper_select;
     logic [7:0]  ppu_cpu_data;
 
-    wire cpu_ram_selected = !cpu_addr[15] && cpu_page_select[0];
-    wire ppu_register_selected = !cpu_addr[15] && cpu_page_select[1];
-    wire cartridge_selected = cpu_upper_select[2] || cpu_upper_select[3];
+    // CPU address decoding
+    wire cpu_ram_selected      = cpu_addr[15:13] == 3'b000;    // $0000-$1FFF
+    wire ppu_register_selected = cpu_addr[15:13] == 3'b001;    // $2000-$3FFF
+    wire cartridge_selected    = cpu_addr[15];                 // $8000-$FFFF
     wire ppu_register_access = cpu_strobe && ppu_register_selected;
 
     always_ff @(posedge ppu_clk or negedge rst_n) begin
@@ -56,18 +62,6 @@ module nes_sim (
         else
             cpu_strobe <= cpu_clk;
     end
-
-    decoder2_4 cpu_address_decoder (
-        .a(cpu_addr[14:13]),
-        .en_n(cpu_addr[15]),
-        .y(cpu_page_select)
-    );
-
-    decoder2_4 cartridge_address_decoder (
-        .a(cpu_addr[15:14]),
-        .en_n(1'b0),
-        .y(cpu_upper_select)
-    );
 
     cpu2A03 u_cpu (
         .clk(cpu_clk),
@@ -80,7 +74,12 @@ module nes_sim (
         .rw(cpu_rw),
         .out0(joy1_strob),
         .oe1_n(joy1_oe_n),
-        .undef(cpu_undef)
+        .oe2_n(joy2_oe_n),
+        .audio1(audio1),
+        .audio2(audio2),
+        .audio3(audio3),
+        .audio4(audio4),
+        .undef(undef)
     );
 
     mem #(
@@ -98,6 +97,8 @@ module nes_sim (
     always_comb begin
         if (!joy1_oe_n)
             cpu_data_in = joy1_data;
+        else if (!joy2_oe_n)
+            cpu_data_in = joy2_data;
         else if (cartridge_selected)
             cpu_data_in = cart_cpu_data_in;
         else if (cpu_ram_selected)
@@ -130,7 +131,6 @@ module nes_sim (
         .nmi_n(nmi_n),
         .ppu_rd_n(ppu_rd_n),
         .ppu_wr_n(ppu_wr_n),
-        .video(video),
         .pixel_color(pixel_palette)
     );
 

@@ -12,17 +12,25 @@ module joystick_sim (
     input  logic [7:0] buttons,
     output logic [7:0] data
 );
-    logic [7:0] shift = 8'hFF;
-    logic [7:0] data_q = 8'h00;
-    logic       latch_req = 1'b0;   // toggled by the strobe event
-    logic       latch_ack = 1'b0;   // toggled by the read event once it applied the snapshot
+    logic [7:0] shift;
+    logic [7:0] data_q;
+    logic       latch_req;          // toggled by the strobe event
+    logic       latch_ack;          // toggled by the read event once it applied the snapshot
 
-    always_ff @(negedge strob)
+    // Power-on state (simulation model, there is no reset pin)
+    initial begin
+        shift     = 8'hFF;
+        data_q    = 8'h00;
+        latch_req = 1'b0;
+        latch_ack = 1'b0;
+    end
+
+    always @(negedge strob)
         latch_req <= ~latch_req;
 
     // Single block owns `shift` so it has one driver; a pending strobe is applied
     // on the first read after it.
-    always_ff @(negedge oe_n) begin
+    always @(negedge oe_n) begin
         logic [7:0] cur;
         cur = (latch_req != latch_ack) ? buttons : shift;
         if (strob) begin
