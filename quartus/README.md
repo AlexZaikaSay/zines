@@ -42,7 +42,8 @@ counterpart of `emulator/tb_200_video.sv`:
   to build for the board's HDMI connector instead, with 48 kHz audio (the APU
   channels mixed to mono, sent on both channels).
 - The 256x240 picture is pixel-doubled to 512x480 and centered.
-- No joysticks yet.
+- Player 1 is a real NES controller: LATCH on M20, CLK on M19, DO on L22
+  (the pad runs from the board's 3.3 V; DO polarity is `JOY_DO_ACTIVE_LOW` in nes_top.sv).
 
 `nes_pll` makes four clocks from `CLOCK_50` (VCO 1260 MHz): `ppu_clk` 5.362 MHz,
 `pix_clk` 25.2 MHz, `sd_clk` 50.4 MHz and `tmds_clk` 126 MHz (HDMI serializer);

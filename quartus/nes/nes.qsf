@@ -16,6 +16,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../src/nes_sim.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/cartridge/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/vga/nes_vga.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/joystick/nes_pad.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/hdmi/hdmi_tx.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/hdmi/nes_audio_sampler.sv
 set_global_assignment -name SYSTEMVERILOG_FILE hdmi_serializer.sv
@@ -34,6 +35,26 @@ set_location_assignment PIN_W19 -to SD_CMD
 set_location_assignment PIN_W20 -to SD_CLK
 set_location_assignment PIN_W17 -to SD_CS_N
 set_location_assignment PIN_T18 -to SD_CD
+
+# NES controller, player 1. DO is active low (pressed = 0); the pull-up makes an
+# unplugged pad read "not pressed".
+set_location_assignment PIN_M20 -to JOY_LATCH
+set_location_assignment PIN_M19 -to JOY_CLK
+set_location_assignment PIN_L22 -to JOY_DATA
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to JOY_DATA
+
+# 3-digit 7-segment display (debug), same pins as cartridge_demo
+set_location_assignment PIN_U14 -to SMG_Data[7]
+set_location_assignment PIN_AA19 -to SMG_Data[6]
+set_location_assignment PIN_V15 -to SMG_Data[5]
+set_location_assignment PIN_U12 -to SMG_Data[4]
+set_location_assignment PIN_V13 -to SMG_Data[3]
+set_location_assignment PIN_AB18 -to SMG_Data[2]
+set_location_assignment PIN_AB19 -to SMG_Data[1]
+set_location_assignment PIN_W14 -to SMG_Data[0]
+set_location_assignment PIN_U11 -to Scan_Sig[2]
+set_location_assignment PIN_V16 -to Scan_Sig[1]
+set_location_assignment PIN_AA18 -to Scan_Sig[0]
 
 # Pmod VGA on J11: pins 1-4 red, pins 7-10 blue.
 set_location_assignment PIN_R1 -to VGA_R[0]

@@ -1,6 +1,6 @@
 // NES on the QMTECH Cyclone 10 LP board: FPGA counterpart of emulator/tb_200_video.sv.
-// The cartridge is loaded from a raw .nes image on the SD card. No joysticks yet
-// (both pads read as "nothing pressed").
+// The cartridge is loaded from a raw .nes image on the SD card. A real NES controller
+// is wired to player 1 (JOY_*); player 2 reads as "nothing pressed".
 //
 // Video output is selected at build time:
 //   default            640x480@60 VGA on the Pmod VGA (RGB444), no audio
@@ -27,6 +27,11 @@ module nes_top (
     output logic       SD_CS_N,
     input  logic       SD_CD,
 
+    // NES controller (CD4021 shift register), player 1
+    output logic       JOY_LATCH,
+    output logic       JOY_CLK,
+    input  logic       JOY_DATA,
+
 `ifdef VIDEO_HDMI
     // HDMI connector: TMDS lanes 2..0 (red, green, blue) and clock, each pair driven
     // as two complementary 3.3-V LVTTL pins
@@ -42,6 +47,10 @@ module nes_top (
     output logic       VGA_HS,
     output logic       VGA_VS,
 `endif
+
+    // 3-digit 7-segment display (debug): controller byte as read by the CPU
+    output logic [7:0] SMG_Data,
+    output logic [2:0] Scan_Sig,
 
     output logic       LEDR,
     output logic       LED2
@@ -121,6 +130,94 @@ module nes_top (
     logic        cart_ciram_ce_n;
     logic [3:0]  audio1, audio2, audio3, audio4;
 
+    // ----------------------------------------------------------------
+    // Controller port 1. The pad is polled by the FPGA with slow pulses
+    // (nes_pad_poller) instead of being clocked by the CPU's $4016 reads: the
+    // CSH-8088-3 clone does not follow the console's ~0.5 us clock pulses (each
+    // button also appeared in the previous bit). nes_pad_port answers the CPU like
+    // a CD4021 holding the last polled buttons.
+    // DO is active low (pressed = 0), like an original pad.
+    // ----------------------------------------------------------------
+    logic       joy1_strob;
+    logic       joy1_oe_n;
+    logic [7:0] joy1_data;
+    logic [7:0] pad1_buttons;
+    logic       pad1_data;
+    logic [1:0] joy_data_sync = 2'b11;
+
+    always_ff @(posedge ppu_clk)
+        joy_data_sync <= {joy_data_sync[0], JOY_DATA};
+
+    nes_pad_poller #(
+        .CLK_HZ(5_361_702),
+        .ACTIVE_LOW(1'b1)
+    ) u_pad1_poller (
+        .clk(ppu_clk),
+        .rst_n(loaded_rst_n),
+        .pad_latch(JOY_LATCH),
+        .pad_clk(JOY_CLK),
+        .pad_data(joy_data_sync[1]),
+        .buttons(pad1_buttons)
+    );
+
+    nes_pad_port u_pad1_port (
+        .clk(ppu_clk),
+        .rst_n(loaded_rst_n),
+        .strobe(joy1_strob),
+        .oe_n(joy1_oe_n),
+        .buttons(pad1_buttons),
+        .data(pad1_data)
+    );
+
+    assign joy1_data = {7'd0, pad1_data};
+
+    // CPU-side edges for the debug capture below
+    logic joy_latch_q = 1'b0;
+    logic joy_clk_q   = 1'b1;
+
+    always_ff @(posedge ppu_clk) begin
+        joy_latch_q <= joy1_strob;
+        joy_clk_q   <= joy1_oe_n;
+    end
+
+    // ----------------------------------------------------------------
+    // Debug: record the bits the CPU reads after each strobe (1 = pressed,
+    // bit 0 = A ... bit 7 = Right) and show them on the 7-segment display:
+    // left digit = number of reads after the strobe, right digits = hex byte.
+    // A read ends when oe_n rises; joy1_data still holds the bit it returned.
+    // ----------------------------------------------------------------
+    logic [7:0] dbg_bits;
+    logic [3:0] dbg_count;
+    logic [7:0] dbg_byte  = 8'h00;
+    logic [3:0] dbg_reads = 4'h0;
+
+    wire strobe_fall = joy_latch_q && !joy1_strob;
+    wire read_end    = !joy_clk_q && joy1_oe_n;
+
+    always_ff @(posedge ppu_clk) begin
+        if (strobe_fall) begin
+            // a new poll starts: publish the previous one
+            dbg_byte  <= dbg_bits;
+            dbg_reads <= dbg_count;
+            dbg_bits  <= 8'h00;
+            dbg_count <= 4'd0;
+        end
+        else if (read_end && !joy1_strob && dbg_count != 4'hF) begin
+            if (dbg_count < 4'd8)
+                dbg_bits[dbg_count[2:0]] <= joy1_data[0];
+            dbg_count <= dbg_count + 4'd1;
+        end
+    end
+
+    seg7_hex3 #(
+        .SCAN_DIV(5_000)                    // ~1 ms per digit at ppu_clk
+    ) u_seg7 (
+        .clk(ppu_clk),
+        .digits({dbg_reads, dbg_byte}),
+        .seg(SMG_Data),
+        .scan(Scan_Sig)
+    );
+
     nes_sim u_nes (
         .cpu_clk(cpu_clk),
         .ppu_clk(ppu_clk),
@@ -128,9 +225,9 @@ module nes_top (
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
-        .joy1_strob(),
-        .joy1_oe_n(),
-        .joy1_data(8'h00),
+        .joy1_strob(joy1_strob),
+        .joy1_oe_n(joy1_oe_n),
+        .joy1_data(joy1_data),
         .joy2_oe_n(),
         .joy2_data(8'h00),
         .cart_cpu_addr(cart_cpu_addr),
@@ -265,6 +362,60 @@ module nes_top (
 
     assign LEDR = cart_loaded;
     assign LED2 = cart_error;
+
+endmodule
+
+
+// 3-digit multiplexed hex display (QMTECH board: segments and digit selects as in
+// cartridge_demo; digits[11:8] is the left digit).
+module seg7_hex3 #(
+    parameter integer SCAN_DIV = 50_000
+) (
+    input  logic        clk,
+    input  logic [11:0] digits,
+    output logic [7:0]  seg,
+    output logic [2:0]  scan
+);
+    logic [31:0] scan_counter = 32'd0;
+    logic [1:0]  scan_digit   = 2'd0;
+    logic [3:0]  nibble;
+
+    always_ff @(posedge clk) begin
+        if (scan_counter == 32'(SCAN_DIV - 1)) begin
+            scan_counter <= 32'd0;
+            scan_digit   <= (scan_digit == 2'd2) ? 2'd0 : scan_digit + 2'd1;
+        end
+        else begin
+            scan_counter <= scan_counter + 32'd1;
+        end
+    end
+
+    always_comb begin
+        case (scan_digit)
+            2'd0:    begin scan = 3'b100; nibble = digits[11:8]; end
+            2'd1:    begin scan = 3'b010; nibble = digits[7:4];  end
+            default: begin scan = 3'b001; nibble = digits[3:0];  end
+        endcase
+
+        case (nibble)
+            4'h0: seg = 8'b1100_0000;
+            4'h1: seg = 8'b1111_1001;
+            4'h2: seg = 8'b1010_0100;
+            4'h3: seg = 8'b1011_0000;
+            4'h4: seg = 8'b1001_1001;
+            4'h5: seg = 8'b1001_0010;
+            4'h6: seg = 8'b1000_0010;
+            4'h7: seg = 8'b1111_1000;
+            4'h8: seg = 8'b1000_0000;
+            4'h9: seg = 8'b1001_0000;
+            4'hA: seg = 8'b1000_1000;
+            4'hB: seg = 8'b1000_0011;
+            4'hC: seg = 8'b1100_0110;
+            4'hD: seg = 8'b1010_0001;
+            4'hE: seg = 8'b1000_0110;
+            default: seg = 8'b1000_1110;
+        endcase
+    end
 
 endmodule
 
