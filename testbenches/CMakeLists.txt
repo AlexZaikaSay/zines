@@ -116,8 +116,9 @@ foreach(TB_FILE ${TESTBENCHS})
     endif()
 
     add_custom_command(
+
         OUTPUT "${SIM_EXE}"
-        COMMAND ${VERILATOR_EXECUTABLE}
+        COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
             ${RTL_SOURCES}
             ${TB_FILE}

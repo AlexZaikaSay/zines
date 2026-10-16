@@ -26,7 +26,9 @@ module ppu2C02 (
     output logic        nmi_n,
     output logic        ppu_rd_n,
     output logic        ppu_wr_n,
-    output logic [7:0]  pixel_color
+    output logic [7:0]  pixel_color,
+    output logic [8:0]  scanline,
+    output logic [8:0]  cycle
 );
 
     logic [4:0]  video;            // palette index of the current pixel
@@ -92,9 +94,6 @@ module ppu2C02 (
     logic [14:0] t_addr;          // temporary VRAM address
     logic [2:0]  fine_x;
 
-    logic [8:0]  cycle;
-    logic [8:0]  scanline;
-
     logic        vblank_flag;
     logic        sprite0_hit_flag;
     logic        sprite_overflow;
@@ -158,6 +157,9 @@ module ppu2C02 (
             end
         end
     endfunction
+
+    // Nametable fetch address source: at a tile edge the coarse-X increment is not yet in v
+    wire [14:0] nt_fetch_v = tile_edge ? inc_x(v_addr) : v_addr;
 
     function automatic [14:0] inc_y(input [14:0] a);
         begin
@@ -343,7 +345,7 @@ module ppu2C02 (
                 if (bg_fetch_win) begin
                     case (mod8_cycle)
                         0: begin
-                            ppu_addr <= 14'h2000 | {((tile_edge ? inc_x(v_addr) : v_addr) & 15'h0FFF)}[13:0];
+                            ppu_addr <= {2'b10, nt_fetch_v[11:0]};   // $2000 | (v & $0FFF)
                             rd_n_q <= 1'b0;
                         end
                         2: begin
@@ -352,7 +354,9 @@ module ppu2C02 (
                             rd_n_q <= 1'b0;
                         end
                         4: begin
-                            bg_at    <= {(bus_data_in >> {v_addr[6], v_addr[1], 1'b0})}[1:0];
+                            // 2-bit attribute of this 16x16 quadrant: bits {v[6], v[1], x} of the byte
+                            bg_at    <= {bus_data_in[{v_addr[6], v_addr[1], 1'b1}],
+                                         bus_data_in[{v_addr[6], v_addr[1], 1'b0}]};
                             ppu_addr <= {1'b0, ppu_ctrl[CTRL_BG], bg_nt, 1'b0, v_addr[14:12]};
                             rd_n_q <= 1'b0;
                         end

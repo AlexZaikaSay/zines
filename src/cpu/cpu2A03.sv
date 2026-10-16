@@ -146,30 +146,25 @@ module cpu2A03 (
 
     // Bus ownership. While the core is gated off (including the cycle after
     // DMA ends) the bus is parked on a harmless cartridge read.
+    // Every output gets a default first so the block stays purely combinational
+    // (no latches); internal register accesses also appear on the external bus,
+    // as on the real 2A03.
     always_comb begin
+        core_data_in = data_in;
+        apu_data_in  = core_data_out;
+        addr         = core_addr;
+        data_out     = core_data_out;
+        rw           = core_rw;
+        oe1_n        = 1'b1;
+        oe2_n        = 1'b1;
+
         if (core_enabled && !dma_active) begin
-            if (core_read_pad1) begin
-                core_data_in = data_in;
+            if (core_read_pad1)
                 oe1_n = 1'b0;
-            end
-            else if (core_read_pad2) begin
-                core_data_in = data_in;
+            else if (core_read_pad2)
                 oe2_n = 1'b0;
-            end
             else if (core_read_apu_status)
                 core_data_in = apu_status;
-            else if (core_write_apu_status)
-                apu_data_in = core_data_out;
-            else if (core_write_apu || core_write_apu_control)
-                apu_data_in = core_data_out;
-            else begin
-                core_data_in = data_in;
-                addr     = core_addr;
-                data_out = core_data_out;
-                rw       = core_rw;
-                oe1_n = 1'b1;
-                oe2_n = 1'b1;
-            end
         end else begin
             case (dma_state)
                 DMA_READ: begin

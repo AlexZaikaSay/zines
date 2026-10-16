@@ -9,10 +9,30 @@ set(TEST_ASSETS
 set(EMULATOR_TBS tb_200_video tb_300_audio)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
-execute_process(COMMAND ${SDL2_CONFIG} --cflags
-    OUTPUT_VARIABLE SDL2_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${SDL2_CONFIG} --libs
-    OUTPUT_VARIABLE SDL2_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# On MSYS2 sdl2-config is a shell script, which Windows cannot execute directly
+if(WIN32)
+    find_program(SH_EXECUTABLE sh REQUIRED)
+    set(SDL2_CONFIG_COMMAND ${SH_EXECUTABLE} ${SDL2_CONFIG})
+else()
+    set(SDL2_CONFIG_COMMAND ${SDL2_CONFIG})
+endif()
+
+execute_process(COMMAND ${SDL2_CONFIG_COMMAND} --cflags
+    OUTPUT_VARIABLE SDL2_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND ${SDL2_CONFIG_COMMAND} --libs
+    OUTPUT_VARIABLE SDL2_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
+
+if(WIN32)
+    # -mwindows builds a GUI-subsystem exe with no console, hiding simulator output
+    string(REPLACE "-mwindows" "" SDL2_LIBS "${SDL2_LIBS}")
+    # sim_main.cpp defines a plain main() without including SDL.h, so skip
+    # SDL's main -> SDL_main renaming and its SDL2main entry-point wrapper
+    string(REPLACE "-Dmain=SDL_main" "-DSDL_MAIN_HANDLED" SDL2_CFLAGS "${SDL2_CFLAGS}")
+    string(REPLACE "-lSDL2main" "" SDL2_LIBS "${SDL2_LIBS}")
+endif()
 
 foreach(TB_NAME ${EMULATOR_TBS})
     set(TB_FILE ${EMULATOR_DIR}/${TB_NAME}.sv)
@@ -25,6 +45,9 @@ foreach(TB_NAME ${EMULATOR_TBS})
         --x-assign fast --x-initial fast
         -O3
         -CFLAGS "-O3 -g -march=native"
+        # Time comes from VerilatedContext::timeInc() in sim_main.cpp; without this
+        # Verilator references a weak sc_time_stamp(), which Windows linkers reject
+        -CFLAGS -DVL_TIME_CONTEXT
         --top-module ${TB_NAME}
         --Mdir ${OBJ_DIR}
         -Wall
@@ -68,7 +91,7 @@ foreach(TB_NAME ${EMULATOR_TBS})
 
     add_custom_command(
         OUTPUT "${SIM_EXE}"
-        COMMAND ${VERILATOR_EXECUTABLE}
+        COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
             ${RTL_SOURCES}
             ${TB_FILE}

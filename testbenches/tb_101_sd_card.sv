@@ -8,7 +8,7 @@ module tb_101_sd_card;
     localparam integer LOAD_WORDS = IMAGE_SECTORS * 128;
 
     logic clk;
-    logic reset = 1'b0;
+    logic reset_n = 1'b0;
     logic sd_clk;
     logic sd_cmd;
     logic sd_dat0;
@@ -48,7 +48,7 @@ module tb_101_sd_card;
         .START_LBA(32'd7)
     ) dut (
         .clk,
-        .reset,
+        .reset_n,
         .sd_clk,
         .sd_cmd,
         .sd_dat0,
@@ -224,7 +224,7 @@ module tb_101_sd_card;
         sd_dat0 = 1'b1;
 
         repeat (4) @(posedge clk);
-        reset = 1'b1;
+        reset_n = 1'b1;
 
         wait (done || error);
 
