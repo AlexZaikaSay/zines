@@ -1,16 +1,27 @@
 /* OSD firmware entry point (stub). */
 
+#include "pff.h"
+
 /* Placeholder OSD text buffer; real address comes with the OSD memory map. */
 #define OSD_TEXT ((volatile unsigned char *)0x2000)
 
-static const char hello[] = "HELLO, WORLD";
+static FATFS fs;
 
-int main(void)
+static void print(const char *s)
 {
     unsigned char i;
 
-    for (i = 0; hello[i] != '\0'; ++i) {
-        OSD_TEXT[i] = hello[i];
+    for (i = 0; s[i] != '\0'; ++i) {
+        OSD_TEXT[i] = s[i];
+    }
+}
+
+int main(void)
+{
+    if (pf_mount(&fs) == FR_OK) {
+        print("SD CARD OK  ");
+    } else {
+        print("NO SD CARD  ");
     }
 
     for (;;) {
