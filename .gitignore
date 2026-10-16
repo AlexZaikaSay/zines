@@ -6,3 +6,4 @@ quartus/**/incremental_db/
 quartus/**/output_files/
 quartus/**/simulation/
 quartus/**/*.rpt
+osd/src/main.o

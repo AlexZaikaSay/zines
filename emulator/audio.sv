@@ -3,7 +3,7 @@
 
 `timescale 1ns/1ps
 
-module tb_300_audio (
+module audio (
     input logic clk
 );
     parameter MEM_FILE = "./tests/304_apu_noise.tv";
@@ -48,8 +48,8 @@ module tb_300_audio (
     initial begin
         rst_cnt = 2'd0;
         cyc = 0;
-        // $dumpfile("tb_300_audio.vcd");
-        // $dumpvars(0, tb_300_audio);
+        // $dumpfile("audio.vcd");
+        // $dumpvars(0, audio);
     end
 
     // clk is driven by utils/sim_main.cpp; reset is held for 2 clocks, 

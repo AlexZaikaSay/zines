@@ -4,7 +4,7 @@
 
 `timescale 1ns/1ps
 
-module tb_200_video (
+module video (
     input logic clk
 );
     logic rst_n;
@@ -123,8 +123,8 @@ module tb_200_video (
     assign cpu_addr = dut.cpu_addr;
 
     initial begin
-        // $dumpfile("tb_201_video.vcd");
-        // $dumpvars(0, tb_201_video);
+        // $dumpfile("video.vcd");
+        // $dumpvars(0, video);
         
         for (i = 0; i < 2048; i = i + 1) begin
             dut.u_cpu_ram.data[i] = 8'h00;

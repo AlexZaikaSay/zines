@@ -1,12 +1,13 @@
-# Interactive SDL emulator testbenches (video, joysticks, audio).
-# Verilator only; clk is driven by utils/sim_main.cpp, never part of sim_all.
+# Interactive SDL emulators (video + joysticks, audio).
+# Verilator only; clk is driven by utils/sim_main.cpp. `ninja` builds them,
+# `ninja video` / `ninja audio` runs them. Never part of `ninja test`.
 set(EMULATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(TESTBENCH_DIR ${CMAKE_SOURCE_DIR}/testbenches)
 set(TEST_ASSETS
     ${CMAKE_SOURCE_DIR}/assets/SMB.nes
     ${CMAKE_SOURCE_DIR}/assets/color_test.nes
 )
-set(EMULATOR_TBS tb_200_video tb_300_audio)
+set(EMULATOR_TBS video audio)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
 
@@ -36,7 +37,6 @@ endif()
 
 foreach(TB_NAME ${EMULATOR_TBS})
     set(TB_FILE ${EMULATOR_DIR}/${TB_NAME}.sv)
-    string(REGEX REPLACE "^tb_" "" TEST_NAME ${TB_NAME})
     set(OBJ_DIR "${CMAKE_BINARY_DIR}/obj_${TB_NAME}")
     set(SIM_EXE "${OBJ_DIR}/V${TB_NAME}")
 
@@ -106,15 +106,13 @@ foreach(TB_NAME ${EMULATOR_TBS})
         VERBATIM
     )
 
+    add_custom_target(build_${TB_NAME} ALL DEPENDS "${SIM_EXE}")
+
     # Interactive: run directly so output streams and no PASS/FAIL is recorded.
-    add_custom_target(sim_${TB_NAME}
+    add_custom_target(${TB_NAME}
         COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_BINARY_DIR}" "${SIM_EXE}"
-        DEPENDS "${SIM_EXE}"
+        DEPENDS build_${TB_NAME}
         USES_TERMINAL
         VERBATIM
     )
-
-    if(TARGET ${TEST_NAME})
-        add_dependencies(sim_${TB_NAME} ${TEST_NAME})
-    endif()
 endforeach()
