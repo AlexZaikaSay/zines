@@ -10,9 +10,9 @@ set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
 # leave commented for VGA on the Pmod VGA (no audio).
 set_global_assignment -name VERILOG_MACRO "VIDEO_HDMI=1"
 
-# nes_sim.sv pulls in the CPU/APU/PPU through `include "cpu/...", "ppu/..." relative to src/
+# nes.sv pulls in the CPU/APU/PPU through `include "cpu/...", "ppu/..." relative to src/
 set_global_assignment -name SEARCH_PATH ../../src
-set_global_assignment -name SYSTEMVERILOG_FILE ../../src/nes_sim.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/nes.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/cartridge/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/vga/nes_vga.sv

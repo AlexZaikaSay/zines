@@ -2,7 +2,7 @@
 `include "cpu/sync_ram.sv"
 `include "ppu/ppu2C02.sv"
 
-module nes_sim (
+module nes (
     input  logic       cpu_clk,
     input  logic       ppu_clk,
     input  logic       rst_n,

@@ -1,6 +1,6 @@
-`include "nes_sim.sv"
+`include "nes.sv"
 `include "cartridge/cartridge_sim.sv"
-`include "joystick_sim.sv"
+`include "joystick/joystick_sim.sv"
 
 `timescale 1ns/1ps
 
@@ -49,7 +49,7 @@ module video (
         cpu_clk <= (phase == 2'd2);
     end
 
-    nes_sim dut (
+    nes dut (
         .cpu_clk(cpu_clk),
         .ppu_clk(clk),
         .rst_n(rst_n),
@@ -152,15 +152,9 @@ module video (
     initial sdl_audio_init();
     initial sdl_display_init("zines NES");
 
-    // Same sampling as nes_video_capture: visible area is scanlines 0-239, dots 1-256.
     // Gamepad simulation, W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start
     always @(posedge clk or negedge rst_n) begin
         if (rst_n === 1'b1) begin
-            // if (dut.u_cpu.core_write_apu_status)
-            //     $display("apu[%04h] = %02h", dut.u_cpu.core_addr, dut.u_cpu.apu_data_in);
-
-            // if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4008 /* && (dut.u_cpu.u_apu.data_in[4] == 1'b1) */)
-            //     $display("apu[%04h] = %02h", dut.u_cpu.u_apu.addr, dut.u_cpu.u_apu.data_in);
             if (scanline < 240 && cycle >= 1 && cycle <= 256)
                 sdl_display_pixel(int'(cycle) - 1, int'(scanline),
                                   (^pixel_palette === 1'bx) ? 0 : int'(pixel_palette[5:0]));
@@ -184,7 +178,7 @@ module video (
 
     always @(posedge clk) begin
         if (cpu_undef === 1'b1)
-            $fatal(1, "tb_201_video: undefined opcode at %04h", cpu_addr);
+            $fatal(1, "video: undefined opcode at %04h", cpu_addr);
     end
 
 endmodule

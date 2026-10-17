@@ -1,7 +1,7 @@
 
 `include "cpu/mem.sv"
 `include "cpu/cpu2A03.sv"
-`include "joystick_sim.sv"
+`include "joystick/joystick_sim.sv"
 
 module rp_devboard 
 #(

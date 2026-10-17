@@ -7,7 +7,7 @@ set(TEST_ASSETS
     ${CMAKE_SOURCE_DIR}/assets/SMB.nes
     ${CMAKE_SOURCE_DIR}/assets/color_test.nes
 )
-set(EMULATOR_TBS video audio)
+set(EMULATOR_TBS video audio osdvideo)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
 
