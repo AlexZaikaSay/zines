@@ -42,6 +42,8 @@
 #define OSD_ATTR      MEM8(0x2800)
 #define OSD_WIDTH     64
 #define OSD_HEIGHT    32
+#define OSD_VIS_WIDTH  32
+#define OSD_VIS_HEIGHT 30
 #define OSD_CTRL      REG8(0xD010)  // RW
 #define   OSD_ENABLE    0x01
 #define   OSD_DIM_BG    0x02        //   darken game picture under OSD
