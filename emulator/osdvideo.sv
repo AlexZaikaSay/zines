@@ -7,6 +7,7 @@ module osdvideo (
 );
  
     parameter ROM_FILE = "./data/osd.tv";
+    parameter string FONT_FILE = "./data/font.hex";
 
     logic [8:0] scanline;
     logic [8:0] cycle;
@@ -21,7 +22,8 @@ module osdvideo (
 
     osd_devboard #
     (
-        .ROM_FILE(ROM_FILE)
+        .ROM_FILE(ROM_FILE),
+        .FONT_FILE(FONT_FILE)
     )
     u_osd_devboard (
         .clk(clk),
@@ -61,7 +63,7 @@ module osdvideo (
     end
 
     wire cpu_undef = u_osd_devboard.undef;
-    wire [15:0] cpu_addr = u_osd_devboard.addr;
+    wire [15:0] cpu_addr = u_osd_devboard.cpu_addr;
 
     always @(posedge clk) begin
         if (cpu_undef === 1'b1)

@@ -4,6 +4,7 @@
 find_program(CL65_EXECUTABLE cl65 REQUIRED)
 
 set(OSD_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(OSD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 # Petit FatFs (ChaN), unmodified; its config pffconf.h and disk I/O live in src/
 set(PFF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/pff)
 file(GLOB_RECURSE OSD_SOURCES CONFIGURE_DEPENDS
@@ -28,7 +29,7 @@ foreach(SRC ${OSD_SOURCES})
 
     add_custom_command(OUTPUT ${OBJ}
         COMMAND ${CL65_EXECUTABLE} -t none -O -c
-            -I ${OSD_SOURCE_DIR}
+            -I ${OSD_INCLUDE_DIR}
             -I ${PFF_DIR}
             --create-dep ${DEP}
             -o ${OBJ}

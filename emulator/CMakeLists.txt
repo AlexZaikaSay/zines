@@ -117,5 +117,18 @@ foreach(TB_NAME ${EMULATOR_TBS})
     )
 endforeach()
 
-# osdvideo loads the OSD firmware image (data/osd.tv) at runtime
-add_dependencies(osdvideo osd)
+# OSD character font for charmap.sv, generated from the unscii-8 glyphs
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(FONT_SRC ${CMAKE_SOURCE_DIR}/assets/unscii-8.hex)
+set(FONT_HEX ${CMAKE_BINARY_DIR}/data/font.hex)
+add_custom_command(OUTPUT ${FONT_HEX}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/toold/make_font.py
+            ${FONT_SRC} ${FONT_HEX}
+    DEPENDS ${FONT_SRC} ${CMAKE_SOURCE_DIR}/toold/make_font.py
+    COMMENT "Generating data/font.hex"
+    VERBATIM)
+add_custom_target(font ALL DEPENDS ${FONT_HEX})
+
+# osdvideo loads the OSD firmware image (data/osd.tv) and font (data/font.hex) at runtime
+add_dependencies(osdvideo osd font)
