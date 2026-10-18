@@ -2,7 +2,7 @@
 # label names and treats data segments as data, not code.
 #
 # Inputs: LABELS (ld65 -Ln file), MAP (ld65 -m file), OUTPUT (info file),
-#         START, END (hex, e.g. 8000/FFFF: image region to disassemble)
+#         START, END (hex, e.g. 8000/FFFF: address range the image covers)
 
 math(EXPR START "0x${START}")
 math(EXPR END "0x${END}")
@@ -10,7 +10,7 @@ math(EXPR SIZE "${END} - ${START} + 1")
 math(EXPR START_HEX "${START}" OUTPUT_FORMAT HEXADECIMAL)
 math(EXPR SIZE_HEX "${SIZE}" OUTPUT_FORMAT HEXADECIMAL)
 
-set(INFO "GLOBAL {\n    CPU \"6502\";\n    INPUTOFFS ${START_HEX};\n    INPUTSIZE ${SIZE_HEX};\n    STARTADDR ${START_HEX};\n    COMMENTS 4;\n};\n")
+set(INFO "GLOBAL {\n    CPU \"6502\";\n    INPUTOFFS 0x0;\n    INPUTSIZE ${SIZE_HEX};\n    STARTADDR ${START_HEX};\n    COMMENTS 4;\n};\n")
 
 # Labels: "al 008000 ._init". Skip linker-generated __NAME__ symbols and
 # keep only the first name per address (da65 allows one).

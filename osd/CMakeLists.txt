@@ -19,6 +19,7 @@ set(OSD_LST ${CMAKE_CURRENT_BINARY_DIR}/osd.lst)
 set(OSD_LABELS ${CMAKE_CURRENT_BINARY_DIR}/osd.lbl)
 set(OSD_DA65_INFO ${CMAKE_CURRENT_BINARY_DIR}/osd.da65)
 set(OSD_TV ${CMAKE_CURRENT_BINARY_DIR}/osd.tv)
+set(OSD_TV_DATA ${CMAKE_BINARY_DIR}/data/osd.tv)
 
 foreach(SRC ${OSD_SOURCES})
     file(RELATIVE_PATH REL ${CMAKE_CURRENT_SOURCE_DIR} ${SRC})
@@ -57,8 +58,16 @@ add_custom_command(OUTPUT ${OSD_TV}
             -P ${CMAKE_SOURCE_DIR}/cmake/hexdump.cmake
     DEPENDS ${OSD_BIN})
 
-# Whole-program listing with final addresses: disassemble the ROM half of
-# the image with da65, using the linker's labels and segment layout.
+# Testbenches load the OSD ROM image from build/data
+add_custom_command(OUTPUT ${OSD_TV_DATA}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OSD_TV} ${OSD_TV_DATA}
+    DEPENDS ${OSD_TV}
+    COMMENT "Copying osd.tv to data/"
+    VERBATIM)
+
+# Whole-program listing with final addresses: disassemble the ROM image
+# with da65, using the linker's labels and segment layout.
 find_program(DA65_EXECUTABLE da65 REQUIRED)
 add_custom_command(OUTPUT ${OSD_LST}
     COMMAND ${CMAKE_COMMAND} -DLABELS=${OSD_LABELS} -DMAP=${OSD_MAP}
@@ -70,4 +79,4 @@ add_custom_command(OUTPUT ${OSD_LST}
     COMMENT "Disassembling osd.bin to osd.lst"
     VERBATIM)
 
-add_custom_target(osd ALL DEPENDS ${OSD_BIN} ${OSD_TV} ${OSD_LST})
+add_custom_target(osd ALL DEPENDS ${OSD_BIN} ${OSD_TV_DATA} ${OSD_LST})

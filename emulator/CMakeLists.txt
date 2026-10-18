@@ -116,3 +116,6 @@ foreach(TB_NAME ${EMULATOR_TBS})
         VERBATIM
     )
 endforeach()
+
+# osdvideo loads the OSD firmware image (data/osd.tv) at runtime
+add_dependencies(osdvideo osd)

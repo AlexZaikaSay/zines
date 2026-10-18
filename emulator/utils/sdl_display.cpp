@@ -1,4 +1,4 @@
-// SDL2 window used by tb_201_video as a live NES display (DPI-C).
+// SDL2 window used by video and osdvideo as a live NES display (DPI-C).
 #include <SDL.h>
 
 #include <cstdint>
@@ -27,6 +27,7 @@ SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 SDL_Texture* texture = nullptr;
 uint32_t framebuffer[WIDTH * HEIGHT];
+char base_title[128] = "";  // title from sdl_display_init; fps is appended to it
 uint32_t last_frame_ticks = 0;
 uint32_t frame_count = 0;
 int pending = 0;
@@ -93,6 +94,7 @@ void sdl_display_init(const char* title) {
         std::fprintf(stderr, "sdl_display: SDL_Init failed: %s\n", SDL_GetError());
         return;
     }
+    std::snprintf(base_title, sizeof(base_title), "%s", title);
     window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               WIDTH * SCALE, HEIGHT * SCALE, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
@@ -146,8 +148,8 @@ int sdl_display_present(void) {
 
     if (++frame_count % 30 == 0) {
         uint32_t t = SDL_GetTicks();
-        char title[64];
-        std::snprintf(title, sizeof(title), "zines NES - %.1f fps",
+        char title[sizeof(base_title) + 32];
+        std::snprintf(title, sizeof(title), "%s - %.1f fps", base_title,
                       30000.0 / (t - fps_ticks));
         SDL_SetWindowTitle(window, title);
         fps_ticks = t;

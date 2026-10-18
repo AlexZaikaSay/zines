@@ -18,10 +18,11 @@ static void print(const char *s)
 
 int main(void)
 {
+    print("INIT");
     if (pf_mount(&fs) == FR_OK) {
-        print("SD CARD OK  ");
+       print("SD CARD OK  ");
     } else {
-        print("NO SD CARD  ");
+       print("NO SD CARD  ");
     }
 
     for (;;) {

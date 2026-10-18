@@ -3,7 +3,7 @@
 
         .export   _init, _exit
         .export   __STARTUP__ : absolute = 1    ; mark as startup code
-        .import   _main, zerobss, initlib, donelib
+        .import   _main, zerobss, copydata, initlib, donelib
         .import   __RAM_START__, __RAM_SIZE__
 
         .include  "zeropage.inc"
@@ -22,6 +22,7 @@ _init:  sei
         sta     sp+1
 
         jsr     zerobss
+        jsr     copydata            ; DATA: ROM -> RAM
         jsr     initlib
         jsr     _main
 
