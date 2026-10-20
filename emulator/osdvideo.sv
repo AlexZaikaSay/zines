@@ -8,6 +8,7 @@ module osdvideo (
  
     parameter ROM_FILE = "./data/osd.tv";
     parameter string FONT_FILE = "./data/font.hex";
+    parameter string SD_FILE = "./data/sd.img";
 
     logic [8:0] scanline;
     logic [8:0] cycle;
@@ -23,7 +24,8 @@ module osdvideo (
     osd_devboard #
     (
         .ROM_FILE(ROM_FILE),
-        .FONT_FILE(FONT_FILE)
+        .FONT_FILE(FONT_FILE),
+        .SD_FILE(SD_FILE)
     )
     u_osd_devboard (
         .clk(clk),

@@ -29,12 +29,21 @@ foreach(LINE IN LISTS LABEL_LINES)
     string(APPEND INFO "LABEL { NAME \"${NAME}\"; ADDR $${ADDR}; };\n")
 endforeach()
 
+# Load addresses of segments that run elsewhere ("load = ROM, run = RAM,
+# define = yes" exports __NAME_LOAD__ / __NAME_SIZE__), e.g. DATA's init image.
+foreach(LINE IN LISTS LABEL_LINES)
+    if(LINE MATCHES "^al ([0-9A-Fa-f]+) \\.__([A-Z_0-9]+)_(LOAD|SIZE)__$")
+        math(EXPR VAL "0x${CMAKE_MATCH_1}")
+        set(SEG_${CMAKE_MATCH_3}_${CMAKE_MATCH_2} ${VAL})
+    endif()
+endforeach()
+
 # Segments from the map: "CODE  008029  0080D9  0000B1  00001".
-# Code segments are disassembled, RODATA as bytes, VECTORS as addresses,
-# and the gaps (fill bytes) are skipped.
+# Code segments are disassembled, RODATA and ROM-stored init data as bytes,
+# VECTORS as addresses, and the gaps (fill bytes) are skipped.
 file(STRINGS "${MAP}" MAP_LINES)
 set(IN_SEGMENTS FALSE)
-set(POS ${START})
+set(RANGES "")
 foreach(LINE IN LISTS MAP_LINES)
     if(LINE MATCHES "^Segment list:")
         set(IN_SEGMENTS TRUE)
@@ -52,9 +61,6 @@ foreach(LINE IN LISTS MAP_LINES)
     set(SEG "${CMAKE_MATCH_1}")
     math(EXPR SEG_START "0x${CMAKE_MATCH_2}")
     math(EXPR SEG_END "0x${CMAKE_MATCH_3}")
-    if(SEG_START LESS START OR SEG_END GREATER END)
-        continue()
-    endif()
 
     if(SEG STREQUAL "RODATA")
         set(TYPE ByteTable)
@@ -64,6 +70,31 @@ foreach(LINE IN LISTS MAP_LINES)
         set(TYPE Code)
     endif()
 
+    if(SEG_START LESS START OR SEG_END GREATER END)
+        # Runs outside the image; its initial contents may still live in it
+        if(NOT DEFINED SEG_LOAD_${SEG} OR NOT DEFINED SEG_SIZE_${SEG})
+            continue()
+        endif()
+        set(SEG_START ${SEG_LOAD_${SEG}})
+        math(EXPR SEG_END "${SEG_START} + ${SEG_SIZE_${SEG}} - 1")
+        if(SEG_START LESS START OR SEG_END GREATER END)
+            continue()
+        endif()
+        set(TYPE ByteTable)
+    endif()
+
+    # Fixed-width hex key so the list sorts by address
+    math(EXPR KEY "0x100000 + ${SEG_START}" OUTPUT_FORMAT HEXADECIMAL)
+    list(APPEND RANGES "${KEY}:${SEG_START}:${SEG_END}:${TYPE}")
+endforeach()
+list(SORT RANGES)
+
+set(POS ${START})
+foreach(R IN LISTS RANGES)
+    string(REPLACE ":" ";" R "${R}")
+    list(GET R 1 SEG_START)
+    list(GET R 2 SEG_END)
+    list(GET R 3 TYPE)
     if(SEG_START GREATER POS)
         math(EXPR GAP_END "${SEG_START} - 1")
         math(EXPR A "${POS}" OUTPUT_FORMAT HEXADECIMAL)

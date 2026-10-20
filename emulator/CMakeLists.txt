@@ -130,5 +130,28 @@ add_custom_command(OUTPUT ${FONT_HEX}
     VERBATIM)
 add_custom_target(font ALL DEPENDS ${FONT_HEX})
 
-# osdvideo loads the OSD firmware image (data/osd.tv) and font (data/font.hex) at runtime
-add_dependencies(osdvideo osd font)
+# Test SD card image: MBR + FAT32 with test1/{test1.nes,test1.sv0..3} and test2/
+find_program(SFDISK sfdisk REQUIRED
+    HINTS /opt/homebrew/opt/util-linux/sbin /usr/local/opt/util-linux/sbin)
+find_program(MFORMAT mformat REQUIRED)
+find_program(MMD mmd REQUIRED)
+find_program(MCOPY mcopy REQUIRED)
+find_program(DD dd REQUIRED)
+set(SDIMG_ROM ${CMAKE_SOURCE_DIR}/assets/color_test.nes)
+set(SDIMG ${CMAKE_BINARY_DIR}/data/sd.img)
+set(SDIMG_SCRIPT ${CMAKE_SOURCE_DIR}/cmake/make_sdimg.cmake)
+add_custom_command(OUTPUT ${SDIMG}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+    COMMAND ${CMAKE_COMMAND}
+            -DOUT=${SDIMG} -DROM=${SDIMG_ROM} -DWORK=${CMAKE_BINARY_DIR}/sdimg
+            -DSFDISK=${SFDISK} -DMFORMAT=${MFORMAT} -DMMD=${MMD}
+            -DMCOPY=${MCOPY} -DDD=${DD}
+            -P ${SDIMG_SCRIPT}
+    DEPENDS ${SDIMG_SCRIPT} ${SDIMG_ROM}
+    COMMENT "Generating data/sd.img"
+    VERBATIM)
+add_custom_target(sdimg ALL DEPENDS ${SDIMG})
+
+# osdvideo loads the OSD firmware image (data/osd.tv), font (data/font.hex)
+# and SD card image (data/sd.img) at runtime
+add_dependencies(osdvideo osd font sdimg)

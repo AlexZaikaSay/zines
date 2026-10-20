@@ -3,10 +3,20 @@
  * TODO: implement over the OSD SD card interface once its registers exist. */
 
 #include "diskio.h"
+#include "screen.h"
+#include "memio.h"
+
+
+uint8_t getDiskStatus(void)
+{
+    return SD_STATUS;
+}
 
 /* Initialize the SD card */
 DSTATUS disk_initialize(void)
 {
+    printstatus("DISK INIT");
+
     return STA_NOINIT;
 }
 
