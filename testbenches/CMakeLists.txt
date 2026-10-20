@@ -122,7 +122,6 @@ foreach(TB_FILE ${TESTBENCHS})
         OUTPUT "${SIM_EXE}"
         COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
-            ${RTL_SOURCES}
             ${TB_FILE}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         DEPENDS

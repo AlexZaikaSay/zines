@@ -93,7 +93,6 @@ foreach(TB_NAME ${EMULATOR_TBS})
         OUTPUT "${SIM_EXE}"
         COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
-            ${RTL_SOURCES}
             ${TB_FILE}
             ${TB_EXTRA_SOURCES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

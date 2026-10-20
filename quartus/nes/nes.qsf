@@ -14,6 +14,7 @@ set_global_assignment -name VERILOG_MACRO "VIDEO_HDMI=1"
 set_global_assignment -name SEARCH_PATH ../../src
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/nes.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/cartridge/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/vga/nes_vga.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/joystick/nes_pad.sv

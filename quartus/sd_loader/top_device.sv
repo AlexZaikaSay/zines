@@ -29,7 +29,7 @@ module top_device (
     logic [7:0] displayed_byte;
     logic [3:0] displayed_nibble;
 
-    sd_card #(
+    sd_loader #(
         .CLK_FREQ_HZ(50_000_000),
         .INIT_SPI_HZ(400_000),
         .RUN_SPI_HZ(10_000_000),

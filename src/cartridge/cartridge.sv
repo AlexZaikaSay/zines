@@ -58,7 +58,7 @@ module cartridge #(
     logic [7:0]  byte_data;
     logic [31:0] byte_index;
 
-    sd_card #(
+    sd_loader #(
         .CLK_FREQ_HZ(CLK_FREQ_HZ),
         .RUN_SPI_HZ(RUN_SPI_HZ),
         .LOAD_WORDS(LOAD_WORDS),

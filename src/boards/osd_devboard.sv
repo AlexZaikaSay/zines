@@ -4,6 +4,7 @@
 `include "cpu/rom.sv"
 `include "ppu/ppu_sim.sv"
 `include "sd_card/disk.sv"
+`include "sd_card/sim_sd_card.sv"
 
 module osd_devboard 
 #(
@@ -25,7 +26,7 @@ module osd_devboard
     logic [7:0]     ram_data;
     logic [7:0]     rom_data;
     logic [7:0]     char_code;
-    logic [7:0]     sd_buf_data;
+    logic [7:0]     sd_data;
 
     logic [7:0]     osd_pixels;
     logic [7:0]     ppu_pixels;
@@ -33,44 +34,20 @@ module osd_devboard
     logic cpu_rw;
     logic undef;
 
-    logic [7:0]     sd_status;
-    logic [7:0]     sd_errcode;
-    logic [31:0]    sd_lba;
-
     localparam MEMIO_OSD_TEXT = 16'h2000;
     localparam MEMIO_OSD_ATTR = 16'h2800;
 
     localparam PPU_WIDTH = 256;
     localparam PPU_HEIGHT = 240;
 
-    localparam MEMIO_SD_BUF     = 16'h3000;
-    localparam MEMIO_SD_CMD     = 16'h4020; // W: start command
-    localparam MEMIO_SD_STATUS  = 16'h4021; // R
-    localparam MEMIO_SD_ERRCODE = 16'h4022; // R: last R1 / data token on error
-    localparam MEMIO_SD_LBA0    = 16'h4024; // RW: sector number, 32 bit
-    localparam MEMIO_SD_LBA1    = 16'h4025;
-    localparam MEMIO_SD_LBA2    = 16'h4026;
-    localparam MEMIO_SD_LBA3    = 16'h4027;
-
-    localparam SD_CMD_INIT      = 8'h01;
-    localparam SD_CMD_READ      = 8'h02;    //   sector SD_LBA -> SD_BUF
-    localparam SD_CMD_WRITE     = 8'h03;    //   SD_BUF -> sector SD_LBA
-
-    localparam SD_BUSY          = 8'h01;
-    localparam SD_ERROR         = 8'h02;
-    localparam SD_READY         = 8'h04;    //   init done
-    localparam SD_SDHC          = 8'h08;    //   block addressing (info only, HW converts)
+    localparam MEMIO_SD_BUF     = 16'h3000; // $3000-$31FF sector buffer
+    localparam MEMIO_SD_REGS    = 16'h4020; // $4020-$4027 SD_CMD..SD_LBA3
 
     wire ram_selected           = cpu_addr[15:13] == 3'b000;    // $0000-$1FFF
     wire rom_selected           = cpu_addr[15];                 // $8000-$FFFF
     wire sd_buffer_selected     = cpu_addr[15:9] == 7'b0011000; // $3000-$31FF
     wire osd_text_selected      = cpu_addr[15:11] == 5'b00100;  // $2000-$27FF
-    wire sd_status_selected     = cpu_addr == MEMIO_SD_STATUS;  // $4021
-    wire sd_errcode_selected    = cpu_addr == MEMIO_SD_ERRCODE; // $4022
-    wire sd_lba0_selected       = cpu_addr == MEMIO_SD_LBA0;    // $4024
-    wire sd_lba1_selected       = cpu_addr == MEMIO_SD_LBA1;    // $4025
-    wire sd_lba2_selected       = cpu_addr == MEMIO_SD_LBA2;    // $4026
-    wire sd_lba3_selected       = cpu_addr == MEMIO_SD_LBA3;    // $4027
+    wire sd_regs_selected       = cpu_addr[15:3] == MEMIO_SD_REGS[15:3]; // $4020-$4027
 
     mos6502 cpu (
         .clk(clk),
@@ -86,13 +63,7 @@ module osd_devboard
 
     assign cpu_in_data = ram_selected ? ram_data :
                       rom_selected ? rom_data :
-                      sd_buffer_selected ? sd_buf_data :
-                      sd_status_selected ? sd_status :
-                      sd_errcode_selected ? sd_errcode :
-                      sd_lba0_selected ? sd_lba[7:0] :
-                      sd_lba1_selected ? sd_lba[15:8] :
-                      sd_lba2_selected ? sd_lba[23:16] :
-                      sd_lba3_selected ? sd_lba[31:24] :
+                      (sd_buffer_selected || sd_regs_selected) ? sd_data :
                       8'h00;
 
     // Async read: mos6502 samples data in the same cycle it drives addr
@@ -160,49 +131,65 @@ module osd_devboard
         .data_out(char_code)
     );
 
-    logic sd_active;
+    // SD card: disk is the command processor, sim_sd_card stands in for the
+    // card on the SPI pins and works on SD_FILE
+    logic sd_clk, sd_mosi, sd_miso, sd_cs_n;
+    logic [7:0] sd_reg_data;
+    logic [7:0] sd_buf_data;
+    logic       sd_buf_active;
+    logic [8:0] sd_buf_addr;
+    logic       sd_buf_we;
+    logic [7:0] sd_buf_wdata;
 
-    wire sd_buf_cpu_write   = !cpu_rw && cpu_addr == MEMIO_SD_BUF;
-    wire sd_buf_cpu_read    =  cpu_rw && cpu_addr == MEMIO_SD_BUF;
-    wire sd_cmd_write       = !cpu_rw && cpu_addr == MEMIO_SD_CMD;
-    wire sd_status_read     =  cpu_rw && cpu_addr == MEMIO_SD_STATUS;
-    wire sd_errcode_read    =  cpu_rw && cpu_addr == MEMIO_SD_ERRCODE;
-    wire sd_lba0_write      = !cpu_rw && cpu_addr == MEMIO_SD_LBA0;
-    wire sd_lba1_write      = !cpu_rw && cpu_addr == MEMIO_SD_LBA1;
-    wire sd_lba2_write      = !cpu_rw && cpu_addr == MEMIO_SD_LBA2;
-    wire sd_lba3_write      = !cpu_rw && cpu_addr == MEMIO_SD_LBA3;
+    assign sd_data = sd_buffer_selected ? sd_buf_data : sd_reg_data;
 
-    wire [8:0] sd_buf_addr   = sd_active ? sd_addr : cpu_addr[8:0];
-    wire sd_buf_in_data = sd_active ? sd_data : cpu_data;
+    // Sector buffer: owned by disk while a command runs, by the CPU otherwise
+    wire       sd_buf_cpu_write = sd_buffer_selected && !cpu_rw;
+    wire [8:0] sd_buf_mem_addr  = sd_buf_active ? sd_buf_addr  : cpu_addr[8:0];
+    wire [7:0] sd_buf_mem_wdata = sd_buf_active ? sd_buf_wdata : cpu_data;
+    wire       sd_buf_mem_write = sd_buf_active ? sd_buf_we    : sd_buf_cpu_write;
 
-
-    // sd data buffer
     mem #(
         .ADDR_WIDTH(9)
     ) sd_buf_mem (
         .clk(clk),
-        .addr(sd_buf_addr),
-        .data_in(sd_buf_in_data),
-        .rw(!sd_buf_write),
-        .cs_n(0),
-        .oe_n(0),
+        .addr(sd_buf_mem_addr),
+        .data_in(sd_buf_mem_wdata),
+        .rw(!sd_buf_mem_write),
+        .cs_n(1'b0),
+        .oe_n(1'b0),
         .data_out(sd_buf_data)
     );
 
-    disk #(
-        .SD_FILE(SD_FILE)
-    ) disk_inst (
+    disk disk_inst (
         .clk(clk),
         .rst_n(rst_n),
-        .addr(sd_addr),
+        .reg_sel(sd_regs_selected),
+        .reg_addr(cpu_addr[2:0]),
         .rw(cpu_rw),
         .data_in(cpu_data),
-        .data_out(sd_data),
-        .active(sd_active),
-        .status(sd_status),
-        .errcode(sd_errcode),
-        .lba(sd_lba)
+        .data_out(sd_reg_data),
+        .buf_active(sd_buf_active),
+        .buf_addr(sd_buf_addr),
+        .buf_we(sd_buf_we),
+        .buf_wdata(sd_buf_wdata),
+        .buf_rdata(sd_buf_data),
+        .sd_clk(sd_clk),
+        .sd_cmd(sd_mosi),
+        .sd_dat0(sd_miso),
+        .sd_cs_n(sd_cs_n),
+        .sd_cd_n(1'b0)
     );
 
+    sim_sd_card #(
+        .SD_FILE(SD_FILE)
+    ) sd_card_sim (
+        .clk(clk),
+        .rst_n(rst_n),
+        .sd_clk(sd_clk),
+        .sd_cmd(sd_mosi),
+        .sd_cs_n(sd_cs_n),
+        .sd_dat0(sd_miso)
+    );
 
 endmodule

@@ -62,7 +62,25 @@
 #define   SD_ERROR      0x02
 #define   SD_READY      0x04        //   init done
 #define   SD_SDHC       0x08        //   block addressing (info only, HW converts)
-#define SD_ERRCODE    REG8(0x4022)  // R: last R1 / data token on error
+#define SD_ERRCODE    REG8(0x4022)  // R: error code of the last failed command (sd_card.sv E_*)
+#define   SD_ERR_NONE           0x00
+#define   SD_ERR_NO_CARD        0x01    //   card detect: no card inserted
+#define   SD_ERR_NOT_INIT       0x02    //   read/write before a successful init
+#define   SD_ERR_BAD_OP         0x03    //   internal: unknown operation
+#define   SD_ERR_R1_TIMEOUT     0x10    //   card did not answer a command
+#define   SD_ERR_CMD0           0x11    //   CMD0 (go idle) rejected
+#define   SD_ERR_CMD8           0x12    //   CMD8 (interface condition) bad answer
+#define   SD_ERR_CMD55          0x13    //   CMD55 (app command) rejected
+#define   SD_ERR_ACMD41         0x14    //   ACMD41 (start init) rejected
+#define   SD_ERR_ACMD41_TIMEOUT 0x15    //   card stayed in idle state
+#define   SD_ERR_CMD58          0x16    //   CMD58 (read OCR) rejected
+#define   SD_ERR_CMD16          0x17    //   CMD16 (block size 512) rejected
+#define   SD_ERR_READ_R1        0x20    //   CMD17 (read block) rejected
+#define   SD_ERR_READ_TOKEN     0x21    //   error token instead of data
+#define   SD_ERR_READ_TIMEOUT   0x22    //   no data token in time
+#define   SD_ERR_WRITE_R1       0x30    //   CMD24 (write block) rejected
+#define   SD_ERR_WRITE_REJECT   0x31    //   data response not "accepted"
+#define   SD_ERR_WRITE_TIMEOUT  0x32    //   card busy too long after write
 #define SD_LBA0       REG8(0x4024)  // RW: sector number, 32 bit
 #define SD_LBA1       REG8(0x4025)
 #define SD_LBA2       REG8(0x4026)
