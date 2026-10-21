@@ -51,6 +51,20 @@
 #define OSD_BG        REG8(0x4012)  // RW: window background color index
 #define   ATTR_INVERT   0x01        // attribute bit: inverted cell (cursor)
 
+/* Attribute byte, one per character cell (same layout as OSD_TEXT):
+ *   [3:0] FG color index (16-color palette)
+ *   [7:4] BG color index (16-color palette)
+ */
+#define ATTR(fg, bg)      ((uint8_t)(((fg) & 0x0F) | (((bg) & 0x0F) << 4)))
+ 
+/* Fixed palette (CGA order) */
+enum {
+    C_BLACK, C_BLUE, C_GREEN, C_CYAN, C_RED, C_MAGENTA, C_BROWN, C_LGRAY,
+    C_DGRAY, C_LBLUE, C_LGREEN, C_LCYAN, C_LRED, C_LMAGENTA, C_YELLOW, C_WHITE
+};
+
+#define ATTR_PRESENT 0x80        // attribute bit: transparent cell
+
 /* ---------------- SD card ---------------- */
 #define SD_BUF        MEM8(0x3000)
 #define SD_CMD        REG8(0x4020)  // W: start command

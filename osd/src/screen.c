@@ -8,6 +8,12 @@ uint8_t pos_y = 0;
 #define MENU_X      ((OSD_VIS_WIDTH - MENU_WIDTH) / 2)
 #define MENU_Y      ((OSD_VIS_HEIGHT - MENU_HEIGHT) / 2)
 
+#define MENU_BUF_WIDTH 13
+static char menu_names[MENU_ITEMS][MENU_BUF_WIDTH];
+static uint8_t menu_size = 0;
+
+static uint8_t menu_selected = 0;
+
 static uint8_t strlen(const char *s)
 {
     uint8_t len = 0;
@@ -18,15 +24,17 @@ static uint8_t strlen(const char *s)
     return len;
 }
 
-static uint8_t strdup(char *dest, const char *src)
+
+static uint8_t strncpy(char *dest, const char *src, uint8_t n)
 {
     uint8_t i = 0;
-    while (src[i] != '\0')
+    while (src[i] != '\0' && i < n)
     {
         dest[i] = src[i];
         i++;
     }
-    dest[i] = '\0';
+    if (i < n)
+        dest[i] = '\0';
     return i;
 }
 
@@ -61,48 +69,76 @@ void print_status_arg(const char *s, uint8_t arg)
 {
     static const char hex[] = "0123456789ABCDEF";
     char buf[32];
-    uint8_t len = strdup(buf, s);
+    uint8_t len = strncpy(buf, s, 32);
     buf[len]        = hex[arg >> 4];
     buf[len + 1]    = hex[arg & 0xF];
     buf[len + 2]    = '\0';
     print_status(buf);
 }
 
-void draw_menu(void)
-{
-    uint8_t x, y;
-    uint8_t start_x = MENU_X;
-    uint8_t start_y = MENU_Y;
-
-    OSD_TEXT[start_y * OSD_WIDTH + start_x] = BOX2_TL;
-    OSD_TEXT[start_y * OSD_WIDTH + (start_x + MENU_WIDTH - 1)] = BOX2_TR;
-    OSD_TEXT[(start_y + MENU_HEIGHT - 1) * OSD_WIDTH + start_x] = BOX2_BL;
-    OSD_TEXT[(start_y + MENU_HEIGHT - 1) * OSD_WIDTH + (start_x + MENU_WIDTH - 1)] = BOX2_BR;
-    for (x = 1; x < MENU_WIDTH - 1; ++x)
-    {
-        OSD_TEXT[start_y * OSD_WIDTH + (start_x + x)] = BOX2_H;
-        OSD_TEXT[(start_y + MENU_HEIGHT - 1) * OSD_WIDTH + (start_x + x)] = BOX2_H;
-    }
-    for (y = 1; y < MENU_HEIGHT - 1; ++y)
-    {
-        OSD_TEXT[(start_y + y) * OSD_WIDTH + start_x] = BOX2_V;
-        OSD_TEXT[(start_y + y) * OSD_WIDTH + (start_x + MENU_WIDTH - 1)] = BOX2_V;
-    }
-}
-
-void menu_item(uint8_t row, const char *s)
+static void menu_item(uint8_t item, const char *s)
 {
     /* Inside the frame: one space margin on each side */
-    volatile uint8_t *p = &OSD_TEXT[(MENU_Y + 1 + row) * OSD_WIDTH + MENU_X + 2];
+    volatile uint8_t *text = &OSD_TEXT[(MENU_Y + 1 + item) * OSD_WIDTH + MENU_X + 2];
+    volatile uint8_t *attr = &OSD_ATTR[(MENU_Y + 1 + item) * OSD_WIDTH + MENU_X + 2];
     uint8_t i;
 
-    if (row >= MENU_ITEMS)
+    if (item >= MENU_ITEMS)
+    {
         return;
+    }
     for (i = 0; i < MENU_WIDTH - 4; ++i)
     {
         if (*s)
-            p[i] = *s++;
+        {
+            text[i] = *s++;
+        }
         else
-            p[i] = ' ';
+        {
+            text[i] = ' ';
+        }
+        if (item == menu_selected)
+        {
+            attr[i] = ATTR(C_WHITE, C_LGRAY) | ATTR_PRESENT;
+        }
+        else
+        {
+            attr[i] = ATTR(C_WHITE, C_DGRAY) | ATTR_PRESENT;
+        }
     }
+}
+
+
+void draw_menu(void)
+{
+    uint8_t i;
+
+    OSD_TEXT[MENU_Y * OSD_WIDTH + MENU_X] = BOX2_TL;
+    OSD_TEXT[MENU_Y * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_TR;
+    OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + MENU_X] = BOX2_BL;
+    OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_BR;
+    for (i = 1; i < MENU_WIDTH - 1; ++i)
+    {
+        OSD_TEXT[MENU_Y * OSD_WIDTH + (MENU_X + i)] = BOX2_H;
+        OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + i)] = BOX2_H;
+    }
+    for (i = 1; i < MENU_HEIGHT - 1; ++i)
+    {
+        OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + MENU_X] = BOX2_V;
+        OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_V;
+    }
+
+    for (i = 0; i < menu_size; ++i)
+    {
+        menu_item(i, menu_names[i]);
+    }
+}
+
+void add_menu_item(const char *s)
+{
+    if (menu_size >= MENU_ITEMS)
+        return;
+    strncpy(menu_names[menu_size], s, MENU_BUF_WIDTH - 1);
+    menu_names[menu_size][MENU_BUF_WIDTH - 1] = '\0';
+    ++menu_size;
 }

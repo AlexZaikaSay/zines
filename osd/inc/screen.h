@@ -9,4 +9,4 @@ void print_status(const char *s);
 void print_status_arg(const char *s, uint8_t arg);
 void draw_menu(void);
 /* Write s on menu line row (0..MENU_ITEMS-1), padded with spaces */
-void menu_item(uint8_t row, const char *s);
+void add_menu_item(const char *s);

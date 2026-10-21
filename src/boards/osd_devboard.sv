@@ -26,6 +26,7 @@ module osd_devboard
     logic [7:0]     ram_data;
     logic [7:0]     rom_data;
     logic [7:0]     char_code;
+    logic [7:0]     attr_code;
     logic [7:0]     sd_data;
 
     logic [7:0]     osd_pixels;
@@ -47,6 +48,7 @@ module osd_devboard
     wire rom_selected           = cpu_addr[15];                 // $8000-$FFFF
     wire sd_buffer_selected     = cpu_addr[15:9] == 7'b0011000; // $3000-$31FF
     wire osd_text_selected      = cpu_addr[15:11] == 5'b00100;  // $2000-$27FF
+    wire osd_attr_selected      = cpu_addr[15:11] == 5'b00101;  // $2800-$2FFF
     wire sd_regs_selected       = cpu_addr[15:3] == MEMIO_SD_REGS[15:3]; // $4020-$4027
 
     mos6502 cpu (
@@ -101,6 +103,7 @@ module osd_devboard
     ) charmap_inst (
         .clk(clk),
         .char_code(char_code[6:0]),
+        .attr_code(attr_code),
         .row(scanline[2:0]),
         .col(cycle[2:0]),
         .pixels(osd_pixels)
@@ -116,6 +119,9 @@ module osd_devboard
     wire osd_text_write = osd_text_selected && !cpu_rw;
     wire [10:0] osd_text_addr = osd_text_write ? cpu_addr[10:0] : osd_pos;
 
+    wire osd_attr_write = osd_attr_selected && !cpu_rw;
+    wire [10:0] osd_attr_addr = osd_attr_write ? cpu_addr[10:0] : osd_pos;
+
     assign pixel_palette = (osd_pixels != 0) && osd_visible_char ? osd_pixels : ppu_pixels;
 
     // text frame buffer
@@ -129,6 +135,19 @@ module osd_devboard
         .cs_n(0),
         .oe_n(0),
         .data_out(char_code)
+    );
+
+    // attribute frame buffer
+    mem #(
+        .ADDR_WIDTH(11)
+    ) osd_attr_mem (
+        .clk(clk),
+        .addr(osd_attr_addr),
+        .data_in(cpu_data),
+        .rw(!osd_attr_write),
+        .cs_n(0),
+        .oe_n(0),
+        .data_out(attr_code)
     );
 
     // SD card: disk is the command processor, sim_sd_card stands in for the

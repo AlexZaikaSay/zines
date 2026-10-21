@@ -31,7 +31,7 @@ static uint8_t list_root_dirs(void)
             continue;
         if (fno.fname[0] == '.')        /* "." and ".." */
             continue;
-        menu_item(count, fno.fname);
+        add_menu_item(fno.fname);
         ++count;
     }
     return count;
@@ -41,16 +41,17 @@ int main(void)
 {
     FRESULT res;
 
-    draw_menu();
-
     res = pf_mount(&fs);
     if (res != FR_OK)
     {
         print_status_arg("SD CARD ERROR: ", res);
     }
-    else if (list_root_dirs() == 0) {
-        menu_item(0, "NO FOLDERS");
+    else if (list_root_dirs() == 0)
+    {
+        add_menu_item("NO FOLDERS");
     }
+
+    draw_menu();
 
     for (;;) {
     }
