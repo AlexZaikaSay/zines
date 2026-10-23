@@ -15,6 +15,7 @@ module osd_devboard
 (
     input logic clk,
     input logic rst_n,
+    input logic  [7:0] pad_buttons,
     output logic [8:0] scanline,
     output logic [8:0] cycle,
     output logic [7:0] pixel_palette
@@ -32,24 +33,31 @@ module osd_devboard
     logic [7:0]     osd_pixels;
     logic [7:0]     ppu_pixels;
     
+    logic [7:0]     pad_previous;
+
     logic cpu_rw;
     logic undef;
 
-    localparam MEMIO_OSD_TEXT = 16'h2000;
-    localparam MEMIO_OSD_ATTR = 16'h2800;
+    localparam MEMIO_RAM            = 16'h0000;
+    localparam MEMIO_OSD_TEXT       = 16'h2000;
+    localparam MEMIO_OSD_ATTR       = 16'h2800;
+    localparam MEMIO_SD_SECTOR      = 16'h3000;
+    localparam MEMIO_BTN            = 16'h4008;
+    localparam MEMIO_BTN_PRESSED    = 16'h4009;
+    localparam MEMIO_SD_REGS        = 16'h4020; // $4020-$4027 SD_CMD..SD_LBA3
+    localparam MEMIO_ROM            = 16'h8000;
 
     localparam PPU_WIDTH = 256;
     localparam PPU_HEIGHT = 240;
 
-    localparam MEMIO_SD_BUF     = 16'h3000; // $3000-$31FF sector buffer
-    localparam MEMIO_SD_REGS    = 16'h4020; // $4020-$4027 SD_CMD..SD_LBA3
-
-    wire ram_selected           = cpu_addr[15:13] == 3'b000;    // $0000-$1FFF
-    wire rom_selected           = cpu_addr[15];                 // $8000-$FFFF
-    wire sd_buffer_selected     = cpu_addr[15:9] == 7'b0011000; // $3000-$31FF
-    wire osd_text_selected      = cpu_addr[15:11] == 5'b00100;  // $2000-$27FF
-    wire osd_attr_selected      = cpu_addr[15:11] == 5'b00101;  // $2800-$2FFF
-    wire sd_regs_selected       = cpu_addr[15:3] == MEMIO_SD_REGS[15:3]; // $4020-$4027
+    wire ram_selected           = cpu_addr[15:13] == MEMIO_RAM[15:13];      // $0000-$1FFF
+    wire sd_buffer_selected     = cpu_addr[15:9]  == MEMIO_SD_SECTOR[15:9]; // $3000-$31FF
+    wire osd_text_selected      = cpu_addr[15:11] == MEMIO_OSD_TEXT[15:11]; // $2000-$27FF
+    wire osd_attr_selected      = cpu_addr[15:11] == MEMIO_OSD_ATTR[15:11]; // $2800-$2FFF
+    wire btn_selected           = cpu_addr        == MEMIO_BTN;             // $4008
+    wire btn_pressed_selected   = cpu_addr        == MEMIO_BTN_PRESSED;     // $4009
+    wire sd_regs_selected       = cpu_addr[15:3]  == MEMIO_SD_REGS[15:3];   // $4020-$4027
+    wire rom_selected           = cpu_addr[15]    == MEMIO_ROM[15];         // $8000-$FFFF
 
     mos6502 cpu (
         .clk(clk),
@@ -65,8 +73,19 @@ module osd_devboard
 
     assign cpu_in_data = ram_selected ? ram_data :
                       rom_selected ? rom_data :
+                      btn_selected ? pad_buttons :
+                      btn_pressed_selected ? ((pad_previous == pad_buttons) ? 0 : 1) :
                       (sd_buffer_selected || sd_regs_selected) ? sd_data :
                       8'h00;
+
+    // latch previous pad state on button write
+    always_ff @(posedge clk or negedge rst_n) begin
+        if(!rst_n)
+            pad_previous <= 8'h00;
+        else if(btn_selected && cpu_rw)
+            pad_previous <= pad_buttons;
+    end
+
 
     // Async read: mos6502 samples data in the same cycle it drives addr
     mem #(
@@ -115,40 +134,26 @@ module osd_devboard
     wire osd_visible_char = cycle < PPU_WIDTH && scanline < PPU_HEIGHT;
     wire [10:0] osd_pos = (osd_y << 6) + osd_x;
     
-    // CPU writes to $2000-$27FF go to the text buffer; otherwise the display reads it
+    // Text ($2000-$27FF) and attribute ($2800-$2FFF) buffers: the CPU
+    // writes through its own port, the display reads at osd_pos, so CPU
+    // writes never disturb the picture.
     wire osd_text_write = osd_text_selected && !cpu_rw;
-    wire [10:0] osd_text_addr = osd_text_write ? cpu_addr[10:0] : osd_pos;
-
     wire osd_attr_write = osd_attr_selected && !cpu_rw;
-    wire [10:0] osd_attr_addr = osd_attr_write ? cpu_addr[10:0] : osd_pos;
+
+    logic [7:0] osd_text [0:2047];
+    logic [7:0] osd_attr [0:2047];
+
+    always_ff @(posedge clk) begin
+        if (osd_text_write)
+            osd_text[cpu_addr[10:0]] <= cpu_data;
+        if (osd_attr_write)
+            osd_attr[cpu_addr[10:0]] <= cpu_data;
+    end
+
+    assign char_code = osd_text[osd_pos];
+    assign attr_code = osd_attr[osd_pos];
 
     assign pixel_palette = (osd_pixels != 0) && osd_visible_char ? osd_pixels : ppu_pixels;
-
-    // text frame buffer
-    mem #(
-        .ADDR_WIDTH(11)
-    ) osd_text_mem (
-        .clk(clk),
-        .addr(osd_text_addr),
-        .data_in(cpu_data),
-        .rw(!osd_text_write),
-        .cs_n(0),
-        .oe_n(0),
-        .data_out(char_code)
-    );
-
-    // attribute frame buffer
-    mem #(
-        .ADDR_WIDTH(11)
-    ) osd_attr_mem (
-        .clk(clk),
-        .addr(osd_attr_addr),
-        .data_in(cpu_data),
-        .rw(!osd_attr_write),
-        .cs_n(0),
-        .oe_n(0),
-        .data_out(attr_code)
-    );
 
     // SD card: disk is the command processor, sim_sd_card stands in for the
     // card on the SPI pins and works on SD_FILE

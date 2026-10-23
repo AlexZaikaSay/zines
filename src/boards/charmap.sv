@@ -43,9 +43,9 @@ module charmap #(
 
     initial $readmemh(FONT_FILE, rom);
 
-    // Font pixel set -> FG color, clear -> BG color. BG color 0 is
-    // transparent (pixels = 0, the game shows through), so untouched cells
-    // (attr 0) do not cover the picture. attr_code must arrive together
+    // Font pixel set -> FG color, clear -> BG color. Without bit 7 the BG
+    // is transparent (pixels = 0, the game shows through), so untouched
+    // cells (attr 0) do not cover the picture. attr_code must arrive together
     // with char_code, so both share the 1-cycle ROM latency.
     always_ff @(posedge clk)
         if (rom[{char_code, row}][7-col])
@@ -53,6 +53,6 @@ module charmap #(
         else if (!attr_code[7])
             pixels <= 8'h00;
         else
-            pixels <= PIXEL_COLOR[attr_code[6:4]];
+            pixels <= PIXEL_COLOR[{1'b0, attr_code[6:4]}];
 
 endmodule

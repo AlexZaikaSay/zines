@@ -13,6 +13,7 @@ module osdvideo (
     logic [8:0] scanline;
     logic [8:0] cycle;
     logic [7:0] pixel_palette;
+    logic [7:0] pad_buttons;
 
      // clk is driven by utils/sim_main.cpp; reset is held for 50 clocks.
     logic [7:0] rst_cnt = 8'd0;
@@ -30,23 +31,29 @@ module osdvideo (
     u_osd_devboard (
         .clk(clk),
         .rst_n(rst_n),
+        .pad_buttons(pad_buttons),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette)
     );
 
-    initial begin
-        $dumpfile("osdvideo.vcd");
-        $dumpvars(0, osdvideo);
-    end
+    // initial begin
+    //     $dumpfile("osdvideo.vcd");
+    //     $dumpvars(0, osdvideo);
+    // end
 
     import "DPI-C" function void sdl_display_init(input string title);
     import "DPI-C" function void sdl_display_pixel(input int x, input int y, input int palette_index);
     import "DPI-C" function int  sdl_display_present();
     import "DPI-C" function void sdl_display_close();
+    import "DPI-C" function int sdl_display_buttons();
 
     initial sdl_display_init("test OSD");
 
+    always @(posedge clk)
+        if (scanline == 240 && cycle == 0) begin
+            pad_buttons <= 8'(sdl_display_buttons());
+        end
 
      // Gamepad simulation, W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start
     always @(posedge clk or negedge rst_n) begin

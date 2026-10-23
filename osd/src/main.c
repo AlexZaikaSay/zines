@@ -2,6 +2,7 @@
 
 #include "pff.h"
 #include "screen.h"
+#include "memio.h"
 
 static FATFS fs;
 static DIR dir;
@@ -31,7 +32,7 @@ static uint8_t list_root_dirs(void)
             continue;
         if (fno.fname[0] == '.')        /* "." and ".." */
             continue;
-        add_menu_item(fno.fname);
+        menu_add_item(fno.fname);
         ++count;
     }
     return count;
@@ -48,12 +49,29 @@ int main(void)
     }
     else if (list_root_dirs() == 0)
     {
-        add_menu_item("NO FOLDERS");
+        menu_add_item("NO FOLDERS");
     }
 
-    draw_menu();
+    menu_draw();
 
     for (;;) {
+        if (PAD1_PRESSED)
+        {
+            uint8_t buttons = PAD1;
+            if (buttons & BTN_UP)
+            {
+                menu_up();
+            }
+            if (buttons & BTN_DOWN)
+            {
+                menu_down();
+            }
+            if (buttons & BTN_SELECT)
+            {
+                menu_select();
+            }
+        }
+       
     }
 
     return 0;

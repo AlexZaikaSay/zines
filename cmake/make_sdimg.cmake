@@ -27,7 +27,7 @@ if(NOT rc EQUAL 0)
 endif()
 
 run(${MFORMAT} -i ${IMG} -F -v SDCARD ::)
-run(${MMD} -i ${IMG} ::/test1 ::/test2)
+run(${MMD} -i ${IMG} ::/test1 ::/test2 ::/test3)
 
 # 10-byte zero-filled save slots
 set(SAVES)

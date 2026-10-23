@@ -53,9 +53,11 @@
 
 /* Attribute byte, one per character cell (same layout as OSD_TEXT):
  *   [3:0] FG color index (16-color palette)
- *   [7:4] BG color index (16-color palette)
+ *   [6:4] BG color index (colors 0..7 only)
+ *   [7]   ATTR_PRESENT: 1 = draw the BG color, 0 = BG transparent
  */
-#define ATTR(fg, bg)      ((uint8_t)(((fg) & 0x0F) | (((bg) & 0x0F) << 4)))
+#define ATTR(fg, bg)      ((uint8_t)(((fg) & 0x0F) | (((bg) & 0x07) << 4)))
+#define ATTR_FG(fg)       ((uint8_t)((fg) & 0x0F))   /* transparent BG */
  
 /* Fixed palette (CGA order) */
 enum {
@@ -63,7 +65,7 @@ enum {
     C_DGRAY, C_LBLUE, C_LGREEN, C_LCYAN, C_LRED, C_LMAGENTA, C_YELLOW, C_WHITE
 };
 
-#define ATTR_PRESENT 0x80        // attribute bit: transparent cell
+#define ATTR_PRESENT 0x80        // attribute bit: opaque BG (see ATTR)
 
 /* ---------------- SD card ---------------- */
 #define SD_BUF        MEM8(0x3000)
