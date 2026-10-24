@@ -1,6 +1,7 @@
 #include "font.h"
 #include "memio.h"
 #include "screen.h"
+#include "stdio.h"
 
 uint8_t pos_x = 0;
 uint8_t pos_y = 0;
@@ -8,35 +9,6 @@ uint8_t pos_y = 0;
 #define MENU_X      ((OSD_VIS_WIDTH - MENU_WIDTH) / 2)
 #define MENU_Y      ((OSD_VIS_HEIGHT - MENU_HEIGHT) / 2)
 
-#define MENU_BUF_WIDTH 13
-static char menu_names[MENU_ITEMS][MENU_BUF_WIDTH];
-static uint8_t menu_size = 0;
-
-static uint8_t menu_selected = 0;
-
-static uint8_t strlen(const char *s)
-{
-    uint8_t len = 0;
-    while (s[len] != '\0')
-    {
-        len++;
-    }
-    return len;
-}
-
-
-static uint8_t strncpy(char *dest, const char *src, uint8_t n)
-{
-    uint8_t i = 0;
-    while (src[i] != '\0' && i < n)
-    {
-        dest[i] = src[i];
-        i++;
-    }
-    if (i < n)
-        dest[i] = '\0';
-    return i;
-}
 
 static void posinc(void)
 {
@@ -76,7 +48,7 @@ void print_status_arg(const char *s, uint8_t arg)
     print_status(buf);
 }
 
-static void menu_draw_item(uint8_t item, const char *s)
+static void menu_draw_item(uint8_t item, const char *s, uint8_t selected)
 {
     /* Inside the frame: one space margin on each side */
     volatile uint8_t *text = &OSD_TEXT[(MENU_Y + 1 + item) * OSD_WIDTH + MENU_X + 2];
@@ -97,7 +69,7 @@ static void menu_draw_item(uint8_t item, const char *s)
         {
             text[i] = ' ';
         }
-        if (item == menu_selected)
+        if (item == selected)
         {
             attr[i] = ATTR(C_WHITE, C_LGRAY) | ATTR_PRESENT;
         }
@@ -108,16 +80,29 @@ static void menu_draw_item(uint8_t item, const char *s)
     }
 }
 
-static void menu_draw_all_items(void)
+void menu_draw_items(struct menu_item *items, uint8_t count, uint8_t selected)
 {
     uint8_t i;
-    for (i = 0; i < menu_size; ++i)
+    for (i = 0; i < count; ++i)
     {
-        menu_draw_item(i, menu_names[i]);
+        menu_draw_item(i, items[i].label, selected);
     }
 }
 
-void menu_draw(void)
+void menu_clean_items()
+{
+    uint8_t i, j;
+    for (i = 0; i < MENU_ITEMS; ++i)
+    {
+        for (j = 0; j < MENU_WIDTH - 4; ++j)
+        {
+            OSD_TEXT[(MENU_Y + 1 + i) * OSD_WIDTH + MENU_X + 2 + j] = ' ';
+            OSD_ATTR[(MENU_Y + 1 + i) * OSD_WIDTH + MENU_X + 2 + j] = 0;
+        }
+    }
+}
+
+void menu_draw_frame()
 {
     uint8_t i;
 
@@ -135,38 +120,4 @@ void menu_draw(void)
         OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + MENU_X] = BOX2_V;
         OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_V;
     }
-
-    menu_draw_all_items();
-}
-
-void menu_add_item(const char *s)
-{
-    if (menu_size >= MENU_ITEMS)
-        return;
-    strncpy(menu_names[menu_size], s, MENU_BUF_WIDTH - 1);
-    menu_names[menu_size][MENU_BUF_WIDTH - 1] = '\0';
-    ++menu_size;
-}
-
-void menu_up()
-{
-    if (menu_selected > 0)
-    {
-        --menu_selected;
-        menu_draw_all_items();
-    }
-}
-
-void menu_down()
-{
-    if (menu_selected < menu_size - 1)
-    {
-        ++menu_selected;
-        menu_draw_all_items();
-    }
-}
-
-void menu_select()
-{
-    // Implement menu select action here
 }
