@@ -5,6 +5,7 @@
 #include "diskio.h"
 #include "screen.h"
 #include "memio.h"
+#include <string.h>
 
 static uint8_t do_cmd(uint8_t cmd)
 {
@@ -36,8 +37,6 @@ static DWORD buf_sector = 0xFFFFFFFF;
 /* Read `count` bytes at `offset` within `sector` into `buff` */
 DRESULT disk_readp(BYTE *buff, DWORD sector, UINT offset, UINT count)
 {
-    UINT i;
-
     if (!(SD_STATUS & SD_READY))
         return RES_NOTRDY;
 
@@ -56,10 +55,12 @@ DRESULT disk_readp(BYTE *buff, DWORD sector, UINT offset, UINT count)
     }
 
     /* buff == NULL: data forwarding is not used, nothing to copy */
+    /* cc65's memcpy is hand-written assembly, much faster than a C loop.
+     * SD_BUF is plain RAM while the card is idle, so dropping volatile
+     * for the copy is safe. */
     if (buff)
     {
-        for (i = 0; i < count; ++i)
-            buff[i] = SD_BUF[offset + i];
+        memcpy(buff, (const BYTE *)SD_BUF + offset, count);
     }
     return RES_OK;
 }
