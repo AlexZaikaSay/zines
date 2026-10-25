@@ -1,7 +1,10 @@
-`include "cartridge/cartridge_sim.sv"
+`include "cartridge/cartridge.sv"
+`include "cartridge/cartridge_loader.sv"
 
 `define ASSET_FILE "../assets/SMB.nes"
 
+// cartridge_new loaded from SMB.nes by cartridge_file_loader; checks PRG,
+// CHR and nametable mirroring against the file.
 module tb_102_cartridge;
     localparam integer ASSET_BYTES = 40976;
     localparam string  ASSET_FILE = `ASSET_FILE;
@@ -9,7 +12,8 @@ module tb_102_cartridge;
     localparam integer PRG_START = 16;
     localparam integer CHR_START = PRG_START + PRG_BYTES;
 
-    logic clk;
+    logic clk = 1'b0;
+    logic reset_n = 1'b0;
 
     logic [15:0] cpu_addr = 16'h0000;
     logic [7:0]  cpu_data_out;
@@ -17,65 +21,80 @@ module tb_102_cartridge;
     logic [13:0] ppu_addr = 14'h0000;
     logic        ppu_rd_n = 1'b1;
     logic [7:0]  ppu_data_out;
-    logic        loaded;
-    logic        error;
-    logic [7:0]  error_code;
     logic        ciram_a10;
     logic        ciram_ce_n;
 
-    logic [7:0] asset_image [0:ASSET_BYTES-1];
-    integer asset_file;
+    // Loader -> cartridge init port
+    logic        set_w, prg_w, chr_w;
+    logic [7:0]  prg_banks, chr_banks;
+    logic        vertical;
+    logic [14:0] init_addr;
+    logic [7:0]  init_data;
+    logic        done, error;
+    logic [7:0]  error_code;
+
+    // Expected contents, read independently of the loader
+    logic [7:0] image [0:ASSET_BYTES-1];
+    integer file;
     integer bytes_read;
 
     always #5 clk = ~clk;
 
-    cartridge_sim #(
-        .ROM_FILE(`ASSET_FILE)
-    ) dut (
-        .clk,
-        .cpu_addr,
-        .cpu_data_in(8'h00),
-        .cpu_data_out,
+    cartridge_loader #(
+        .ROM_FILE(ASSET_FILE)
+    ) loader (
+        .clk, .rst_n(reset_n),
+        .set_w, .prg_w, .chr_w,
+        .prg_banks, .chr_banks, .vertical,
+        .init_addr, .init_data,
+        .done, .error, .error_code
+    );
+
+    cartridge dut (
+        .clk(clk),
+        .cpu_addr(cpu_addr),
+        .cpu_data_out(cpu_data_out),
         .cpu_rw(1'b1),
-        .cpu_ce_n,
-        .ppu_addr,
+        .cpu_ce_n(cpu_ce_n),
+        .ppu_addr(ppu_addr),
         .ppu_rd_n(ppu_rd_n),
         .ppu_wr_n(1'b1),
         .ppu_data_in(8'h00),
-        .ppu_data_out,
-        .ciram_a10,
-        .ciram_ce_n,
-        .loaded,
-        .error,
-        .error_code
+        .ppu_data_out(ppu_data_out),
+        .ciram_a10(ciram_a10),
+        .ciram_ce_n(ciram_ce_n),
+        .vertical(vertical),
+        .prg_banks(prg_banks),
+        .chr_banks(chr_banks),
+        .set_w(set_w),
+        .prg_w(prg_w),
+        .chr_w(chr_w),
+        .init_data_in(init_data),
+        .init_addr(init_addr)
     );
 
     task automatic check_prg(input logic [15:0] addr, input integer file_offset);
         begin
-            if (file_offset < 0 || file_offset >= ASSET_BYTES)
-                $fatal(1, "check_prg: file offset %0d outside the image", file_offset);
             cpu_addr = addr;
             cpu_ce_n = 1'b0;
             repeat (2) @(posedge clk);
             #1;
-            if (cpu_data_out !== asset_image[file_offset])
+            if (cpu_data_out !== image[file_offset])
                 $fatal(1, "PRG[%04h] expected %02h, got %02h",
-                       addr, asset_image[file_offset], cpu_data_out);
+                       addr, image[file_offset], cpu_data_out);
             cpu_ce_n = 1'b1;
         end
     endtask
 
     task automatic check_chr(input logic [13:0] addr, input integer file_offset);
         begin
-            if (file_offset < 0 || file_offset >= ASSET_BYTES)
-                $fatal(1, "check_chr: file offset %0d outside the image", file_offset);
             ppu_addr = addr;
             ppu_rd_n = 1'b0;
             repeat (2) @(posedge clk);
             #1;
-            if (ppu_data_out !== asset_image[file_offset])
+            if (ppu_data_out !== image[file_offset])
                 $fatal(1, "CHR[%04h] expected %02h, got %02h",
-                       addr, asset_image[file_offset], ppu_data_out);
+                       addr, image[file_offset], ppu_data_out);
             ppu_rd_n = 1'b1;
         end
     endtask
@@ -85,7 +104,7 @@ module tb_102_cartridge;
     task automatic check_ciram(input logic [13:0] addr);
         logic expected_a10;
         begin
-            expected_a10 = asset_image[6][0] ? addr[10] : addr[11];
+            expected_a10 = image[6][0] ? addr[10] : addr[11];
             ppu_addr = addr;
             #1;
             if (ciram_ce_n !== !addr[13])
@@ -98,20 +117,21 @@ module tb_102_cartridge;
     initial begin
         $dumpfile("tb_102_cartridge.vcd");
         $dumpvars(0, tb_102_cartridge);
-        clk = 1'b0;
-        asset_file = $fopen(ASSET_FILE, "rb");
-        if (asset_file == 0)
-            $fatal(1, "Unable to open %s", ASSET_FILE);
-        bytes_read = $fread(asset_image, asset_file);
-        $fclose(asset_file);
-        if (bytes_read != ASSET_BYTES)
-            $fatal(1, "Expected %0d asset bytes, read %0d", ASSET_BYTES, bytes_read);
 
-        #1;
+        file = $fopen(ASSET_FILE, "rb");
+        if (file == 0)
+            $fatal(1, "Unable to open %s", ASSET_FILE);
+        bytes_read = $fread(image, file);
+        $fclose(file);
+        if (bytes_read != ASSET_BYTES)
+            $fatal(1, "Expected %0d bytes, read %0d", ASSET_BYTES, bytes_read);
+
+        repeat (2) @(posedge clk);
+        reset_n = 1'b1;
+        wait (done || error);
         if (error)
-            $fatal(1, "Cartridge error, code %02h", error_code);
-        if (!loaded)
-            $fatal(1, "Cartridge not loaded");
+            $fatal(1, "Loader error %02h", error_code);
+        @(posedge clk);
 
         check_prg(16'h8000, PRG_START);
         check_prg(16'hFFFF, PRG_START + PRG_BYTES - 1);
@@ -124,12 +144,13 @@ module tb_102_cartridge;
         check_ciram(14'h2C00);
 
         $display("%s cartridge test passed: PRG[8000]=%02h CHR[0000]=%02h",
-                 ASSET_FILE, asset_image[PRG_START], asset_image[CHR_START]);
+                 ASSET_FILE, image[PRG_START], image[CHR_START]);
         $finish;
     end
 
     initial begin
-        repeat (1000) @(posedge clk);
+        // Loader writes one byte per clock: 40 KB plus checks
+        repeat (100_000) @(posedge clk);
         $fatal(1, "Timed out");
     end
 endmodule

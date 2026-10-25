@@ -1,5 +1,6 @@
 `include "nes.sv"
-`include "cartridge/cartridge_sim.sv"
+`include "cartridge/cartridge.sv"
+`include "cartridge/cartridge_loader.sv"
 `include "joystick/joystick_sim.sv"
 
 `timescale 1ns/1ps
@@ -44,6 +45,10 @@ module video (
         if (rst_cnt != 8'd50) rst_cnt <= rst_cnt + 8'd1;
     assign rst_n = (rst_cnt == 8'd50);
 
+    // The NES stays in reset until the cartridge is loaded from the file
+    logic cart_loaded;
+    wire  nes_rst_n = rst_n && cart_loaded;
+
     always_ff @(posedge clk) begin
         phase   <= (phase == 2'd2) ? 2'd0 : phase + 2'd1;
         cpu_clk <= (phase == 2'd2);
@@ -52,7 +57,7 @@ module video (
     nes dut (
         .cpu_clk(cpu_clk),
         .ppu_clk(clk),
-        .rst_n(rst_n),
+        .rst_n(nes_rst_n),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
@@ -80,14 +85,37 @@ module video (
         .undef(cpu_undef)
     );
 
-    cartridge_sim #
-    (
+    // Cartridge: cartridge_file_loader streams the iNES file into
+    // cartridge_new after reset
+    logic        cart_set_w, cart_prg_w, cart_chr_w;
+    logic [7:0]  cart_prg_banks, cart_chr_banks;
+    logic        cart_vertical;
+    logic [14:0] cart_init_addr;
+    logic [7:0]  cart_init_data;
+    logic        cart_error;
+    logic [7:0]  cart_error_code;
+
+    cartridge_loader #(
         .ROM_FILE("../assets/SMB.nes")
-    )
-    u_cartridge (
+    ) u_cart_loader (
+        .clk(clk),
+        .rst_n(rst_n),
+        .set_w(cart_set_w),
+        .prg_w(cart_prg_w),
+        .chr_w(cart_chr_w),
+        .prg_banks(cart_prg_banks),
+        .chr_banks(cart_chr_banks),
+        .vertical(cart_vertical),
+        .init_addr(cart_init_addr),
+        .init_data(cart_init_data),
+        .done(cart_loaded),
+        .error(cart_error),
+        .error_code(cart_error_code)
+    );
+
+    cartridge u_cartridge (
         .clk(clk),
         .cpu_addr(cart_cpu_addr),
-        .cpu_data_in(cart_cpu_data_out),
         .cpu_data_out(cart_cpu_data_in),
         .cpu_rw(cart_cpu_rw),
         .cpu_ce_n(cart_cpu_ce_n),
@@ -98,10 +126,19 @@ module video (
         .ppu_data_out(cart_ppu_data_in),
         .ciram_a10(cart_ciram_a10),
         .ciram_ce_n(cart_ciram_ce_n),
-        .loaded(),
-        .error(),
-        .error_code()
+        .set_w(cart_set_w),
+        .prg_w(cart_prg_w),
+        .chr_w(cart_chr_w),
+        .vertical(cart_vertical),
+        .prg_banks(cart_prg_banks),
+        .chr_banks(cart_chr_banks),
+        .init_data_in(cart_init_data),
+        .init_addr(cart_init_addr)
     );
+
+    always @(posedge clk)
+        if (cart_error)
+            $fatal(1, "video: cartridge load failed, error %02h", cart_error_code);
 
     logic [7:0] pad_buttons = 8'h00;
 
