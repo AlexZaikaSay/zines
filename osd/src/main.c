@@ -1,9 +1,11 @@
 /* OSD firmware entry point. */
 
+#include "memio.h"
+#include "nes.h"
 #include "pff.h"
 #include "screen.h"
-#include "stdio.h"
-#include "memio.h"
+#include <string.h>
+
 
 static FATFS fs;
 
@@ -126,8 +128,14 @@ static void option_down()
 
 static void option_select()
 {
+    uint8_t res;
     // Implement the action for selecting an option here
-    print_status("Game selected");
+    
+    res = load_nes(games[game_selected].name, options[0].name, options[option_selected].name);
+    if (res != 0)
+    {
+        print_status_arg("LOAD NES ERROR: ", res);
+    }
 }
 
 static void menu_up(void)

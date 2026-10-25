@@ -1,5 +1,5 @@
 # Builds a test SD card image: one MBR partition (FAT32, starts at 1 MiB)
-# with folders test1/ and test2/; test1/ holds a ROM and four save slots.
+# with folders SMB/, test2/, test3/; SMB/ holds the ROM and four save slots.
 # Invoked with -DOUT=<image> -DROM=<nes file> -DWORK=<tmp dir>
 #   -DSFDISK=... -DMFORMAT=... -DMMD=... -DMCOPY=... -DDD=...
 set(ENV{MTOOLS_SKIP_CHECK} 1)
@@ -27,14 +27,13 @@ if(NOT rc EQUAL 0)
 endif()
 
 run(${MFORMAT} -i ${IMG} -F -v SDCARD ::)
-run(${MMD} -i ${IMG} ::/test1 ::/test2 ::/test3)
+run(${MMD} -i ${IMG} ::/SMB ::/test2 ::/test3)
 
 # 10-byte zero-filled save slots
 set(SAVES)
 foreach(i 0 1 2 3)
-    run(${DD} if=/dev/zero of=${WORK}/test1.sv${i} bs=10 count=1)
-    list(APPEND SAVES ${WORK}/test1.sv${i})
+    run(${DD} if=/dev/zero of=${WORK}/save${i}.sav bs=10 count=1)
+    list(APPEND SAVES ${WORK}/save${i}.sav)
 endforeach()
-file(COPY_FILE ${ROM} ${WORK}/test1.nes)
 
-run(${MCOPY} -i ${IMG} ${WORK}/test1.nes ${SAVES} ::/test1/)
+run(${MCOPY} -i ${IMG} ${ROM} ${SAVES} ::/SMB/)

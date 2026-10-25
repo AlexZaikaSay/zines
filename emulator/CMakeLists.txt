@@ -136,7 +136,7 @@ find_program(MFORMAT mformat REQUIRED)
 find_program(MMD mmd REQUIRED)
 find_program(MCOPY mcopy REQUIRED)
 find_program(DD dd REQUIRED)
-set(SDIMG_ROM ${CMAKE_SOURCE_DIR}/assets/color_test.nes)
+set(SDIMG_ROM ${CMAKE_SOURCE_DIR}/assets/SMB.nes)
 set(SDIMG ${CMAKE_BINARY_DIR}/data/sd.img)
 set(SDIMG_SCRIPT ${CMAKE_SOURCE_DIR}/cmake/make_sdimg.cmake)
 add_custom_command(OUTPUT ${SDIMG}

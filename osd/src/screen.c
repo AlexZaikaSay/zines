@@ -1,7 +1,7 @@
 #include "font.h"
 #include "memio.h"
 #include "screen.h"
-#include "stdio.h"
+#include <string.h>
 
 uint8_t pos_x = 0;
 uint8_t pos_y = 0;
@@ -41,7 +41,12 @@ void print_status_arg(const char *s, uint8_t arg)
 {
     static const char hex[] = "0123456789ABCDEF";
     char buf[32];
-    uint8_t len = strncpy(buf, s, 32);
+    uint8_t len;
+
+    /* Keep room for two hex digits and the terminator */
+    strncpy(buf, s, sizeof(buf) - 3);
+    buf[sizeof(buf) - 3] = '\0';
+    len = (uint8_t)strlen(buf);
     buf[len]        = hex[arg >> 4];
     buf[len + 1]    = hex[arg & 0xF];
     buf[len + 2]    = '\0';
