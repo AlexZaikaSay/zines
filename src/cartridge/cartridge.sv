@@ -18,16 +18,21 @@ module cartridge (
     output logic        ciram_ce_n,     // active low: PPU access to nametable RAM
 
     // Init side
-    input  logic        set_w,          // 1 = write to set registers
-    input  logic        prg_w,          // 1 = write to PRG-ROM
-    input  logic        chr_w,          // 1 = write to CHR-ROM
-    input  logic        vertical,       // mappeer vertical
-    input  logic [7:0]  prg_banks,      // 16 KiB PRG
-    input  logic [7:0]  chr_banks,      // 8 KiB CHR
+    input  logic [2:0]  fill_w,         // 0 = not set, 
+                                        // 1 = vertical, 
+                                        // 2 = prg_banks, 
+                                        // 3 = chr_banks, 
+                                        // 4 = prg_data, 
+                                        // 5 = chr_data
     input  logic [7:0]  init_data_in,   // Data to write when rom_w or chrom_w is high
     input  logic [14:0] init_addr       // Address to write when rom_w or chrom_w is high
 );
 
+    localparam FILL_VERTICAL  = 1;
+    localparam FILL_PRG_BANKS = 2;
+    localparam FILL_CHR_BANKS = 3;
+    localparam FILL_PRG_DATA  = 4;
+    localparam FILL_CHR_DATA  = 5;
 
     // ----------------------------------------------------------------
     // Memories (inferred dual-clock block RAM)
@@ -39,35 +44,27 @@ module cartridge (
     logic [7:0] chr_rom [0:8191];
     logic [7:0] chr_ram [0:8191];
 
-    logic vertical_reg;
-    logic [7:0] prg_banks_reg;
-    logic [7:0] chr_banks_reg;
-
+    logic vertical;
+    logic [7:0] prg_banks;
+    logic [7:0] chr_banks;
 
     // Loader write ports
     always_ff @(posedge clk) begin
-        if (set_w) begin
-            vertical_reg <= vertical;
-            prg_banks_reg <= prg_banks;
-            chr_banks_reg <= chr_banks;
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (prg_w)
-            prg_mem[init_addr[14:0]] <= init_data_in;
-    end
-
-    always_ff @(posedge clk) begin
-        if (chr_w)
-            chr_rom[init_addr[12:0]] <= init_data_in;
+        case (fill_w) 
+            FILL_VERTICAL:  vertical  <= init_data_in[0];
+            FILL_PRG_BANKS: prg_banks <= init_data_in;
+            FILL_CHR_BANKS: chr_banks <= init_data_in;
+            FILL_PRG_DATA:  prg_mem[init_addr[14:0]] <= init_data_in;
+            FILL_CHR_DATA:  chr_rom[init_addr[12:0]] <= init_data_in;
+            default: ;
+        endcase 
     end
 
     // ----------------------------------------------------------------
     // NROM CPU side: PRG-ROM at $8000-$FFFF, mirrored when 16 KiB
     // ----------------------------------------------------------------
-    wire [14:0] prg_addr    = (prg_banks_reg == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
-    wire        chr_is_ram  = (chr_banks_reg == 8'd0);
+    wire [14:0] prg_addr    = (prg_banks == 8'd1) ? {1'b0, cpu_addr[13:0]} : cpu_addr[14:0];
+    wire        chr_is_ram  = (chr_banks == 8'd0);
 
     always_ff @(posedge clk) begin
         if (!cpu_ce_n && cpu_rw && cpu_addr[15])
@@ -98,7 +95,7 @@ module cartridge (
     assign ppu_data_out = chr_is_ram ? chr_ram_q : chr_rom_q;
 
     // Four-screen is not supported; mirroring follows flags6 bit 0.
-    assign ciram_a10 = vertical_reg ? ppu_addr[10] : ppu_addr[11];
+    assign ciram_a10 = vertical ? ppu_addr[10] : ppu_addr[11];
     assign ciram_ce_n  = ~ppu_addr[13];
 
 endmodule

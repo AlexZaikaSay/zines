@@ -13,18 +13,12 @@ module cartridge_loader #(
     input  logic        rst_n,
 
     // cartridge_new init port
-    output logic        set_w,
-    output logic        prg_w,
-    output logic        chr_w,
-    output logic [7:0]  prg_banks,
-    output logic [7:0]  chr_banks,
-    output logic        vertical,
-    output logic [14:0] init_addr,
-    output logic [7:0]  init_data,
+    output logic [2:0]  fill_w,
+    output logic [14:0] addr,
+    output logic [7:0]  data,
 
     // Status
     output logic        done,
-    output logic        error,
     output logic [7:0]  error_code
 );
     localparam logic [7:0] E_OPEN      = 8'h20;    // missing file or not iNES
@@ -45,11 +39,7 @@ module cartridge_loader #(
         integer     bytes_read;
         logic [7:0] mapper;
 
-        error      = 1'b0;
-        error_code = 8'h00;
-        prg_banks  = 8'd0;
-        chr_banks  = 8'd0;
-        vertical   = 1'b0;
+        error_code = 0;
         prg_size   = 0;
         chr_size   = 0;
         prg_start  = 16;
@@ -64,40 +54,39 @@ module cartridge_loader #(
         if (bytes_read < 16 ||
             image[0] != 8'h4E || image[1] != 8'h45 ||
             image[2] != 8'h53 || image[3] != 8'h1A) begin
-            error = 1'b1; error_code = E_OPEN;
+            error_code = E_OPEN;
             $display("cartridge_file_loader: %s is missing or not an iNES file", ROM_FILE);
         end
         else begin
             mapper    = {image[7][7:4], image[6][7:4]};
-            prg_banks = image[4];
-            chr_banks = image[5];
-            vertical  = image[6][0];
             prg_start = image[6][2] ? 16 + 512 : 16;
             prg_size  = image[4] * 16384;
             chr_size  = image[5] * 8192;
 
             if (mapper != 8'd0) begin
-                error = 1'b1; error_code = E_MAPPER;
+                error_code = E_MAPPER;
                 $display("cartridge_file_loader: only mapper 0 is supported, got %0d", mapper);
             end
             else if (image[6][3]) begin
-                error = 1'b1; error_code = E_FOUR_SCR;
+                error_code = E_FOUR_SCR;
                 $display("cartridge_file_loader: four-screen mirroring is not supported");
             end
             else if (image[4] == 8'd0 || image[4] > 8'd2 || image[5] > 8'd1) begin
-                error = 1'b1; error_code = E_SIZE;
+                error_code = E_SIZE;
                 $display("cartridge_file_loader: unsupported ROM size");
             end
             else if (bytes_read < prg_start + prg_size + chr_size) begin
-                error = 1'b1; error_code = E_TRUNCATED;
+                error_code = E_TRUNCATED;
                 $display("cartridge_file_loader: %s is truncated", ROM_FILE);
             end
         end
     end
 
     // ---------------- Write FSM ----------------
-    typedef enum logic [1:0] {
-        LOAD_INIT,
+    typedef enum logic [2:0] {
+        LOAD_VERTICAL,
+        LOAD_PRG_BANKS,
+        LOAD_CHR_BANKS,
         LOAD_PRG,
         LOAD_CHR,
         LOAD_DONE
@@ -108,33 +97,41 @@ module cartridge_loader #(
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state      <= LOAD_INIT;
+            state      <= LOAD_VERTICAL;
             byte_index <= 0;
-            done       <= 1'b0;
-            set_w      <= 1'b0;
-            prg_w      <= 1'b0;
-            chr_w      <= 1'b0;
-            init_addr  <= '0;
-            init_data  <= 8'h00;
+            done       <= 0;
+            fill_w     <= 0;
+            addr       <= 0;
+            data       <= 0;
         end
         else begin
-            set_w <= 1'b0;
-            prg_w <= 1'b0;
-            chr_w <= 1'b0;
-
+            fill_w <= 0;
             case (state)
-                LOAD_INIT: begin
+                LOAD_VERTICAL: begin
                     // Nothing is written for a bad file; done stays low
-                    if (!error) begin
-                        set_w <= 1'b1;
-                        state <= LOAD_PRG;
+                    if (error_code == 0) begin
+                        fill_w <= 1;
+                        data[0] <= image[6][0];
+                        state <= LOAD_PRG_BANKS;
                     end
+                    else
+                        state <= LOAD_DONE;
+                end
+                LOAD_PRG_BANKS: begin
+                    fill_w <= 2;
+                    data <= image[4];
+                    state <= LOAD_CHR_BANKS;
+                end
+                LOAD_CHR_BANKS: begin
+                    fill_w <= 3;
+                    data <= image[5];
+                    state <= LOAD_PRG;
                 end
                 LOAD_PRG: begin
+                    fill_w <= 4;
                     if (byte_index < prg_size) begin
-                        init_addr  <= 15'(byte_index);
-                        init_data  <= image[prg_start + byte_index];
-                        prg_w      <= 1'b1;
+                        addr  <= 15'(byte_index);
+                        data  <= image[prg_start + byte_index];
                         byte_index <= byte_index + 1;
                     end
                     else begin
@@ -143,16 +140,17 @@ module cartridge_loader #(
                     end
                 end
                 LOAD_CHR: begin
+                    fill_w <= 5;
                     if (byte_index < chr_size) begin
-                        init_addr  <= 15'(byte_index);
-                        init_data  <= image[prg_start + prg_size + byte_index];
-                        chr_w      <= 1'b1;
+                        addr  <= 15'(byte_index);
+                        data  <= image[prg_start + prg_size + byte_index];
                         byte_index <= byte_index + 1;
                     end
                     else
                         state <= LOAD_DONE;
                 end
-                LOAD_DONE: done <= 1'b1;
+                LOAD_DONE: done <= 1;
+                default: state <= LOAD_DONE;
             endcase
         end
     end
