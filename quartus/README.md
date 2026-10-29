@@ -30,7 +30,7 @@ module and shows the first CHR byte on the 7-segment display.
 
 # NES project
 
-`nes/nes.qpf` runs the whole console (`src/nes_sim.sv`) on the board, the FPGA
+`nes/nes.qpf` runs the whole console (`src/nes.sv`) on the board, the FPGA
 counterpart of `emulator/tb_200_video.sv`:
 
 - Copy a mapper-0 (NROM) `.nes` file raw to the SD card starting at LBA 0

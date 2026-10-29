@@ -2,7 +2,7 @@
 `include "cpu/sync_ram.sv"
 `include "ppu/ppu2C02.sv"
 
-module nes_sim (
+module nes (
     input  logic       cpu_clk,
     input  logic       ppu_clk,
     input  logic       rst_n,
@@ -19,7 +19,6 @@ module nes_sim (
 
     // Cartridge edge connector
     output logic [15:0] cart_cpu_addr,
-    output logic [7:0]  cart_cpu_data_out,
     input  logic [7:0]  cart_cpu_data_in,
     output logic        cart_cpu_rw,
     output logic        cart_cpu_ce_n,
@@ -138,7 +137,6 @@ module nes_sim (
     );
 
     assign cart_cpu_addr     = cpu_addr;
-    assign cart_cpu_data_out = cpu_data_out;
     assign cart_cpu_rw       = cpu_rw;
     assign cart_cpu_ce_n     = !cartridge_selected;
     assign cart_ppu_addr     = ppu_addr;

@@ -2,6 +2,7 @@ set_global_assignment -name FAMILY "Cyclone 10 LP"
 set_global_assignment -name DEVICE 10CL080YU484C8G
 set_global_assignment -name TOP_LEVEL_ENTITY cartridge_demo
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/cartridge/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE cartridge_demo.sv
 set_global_assignment -name SDC_FILE cartridge_demo.sdc

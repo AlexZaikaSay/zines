@@ -1,41 +1,41 @@
-`include "nes_sim.sv"
-`include "cartridge/cartridge_sim.sv"
-`include "joystick_sim.sv"
+`include "nes.sv"
+`include "cartridge/cartridge.sv"
+`include "cartridge/cartridge_loader.sv"
+`include "joystick/joystick_sim.sv"
 
 `timescale 1ns/1ps
 
-module tb_200_video (
+module video (
     input logic clk
 );
-    logic rst_n;
-    logic [1:0] phase;
-    logic cpu_clk;
-    logic [8:0] scanline;
-    logic [8:0] cycle;
-    logic [7:0] pixel_palette;
-    logic       joy1_strob;
-    logic       joy1_oe_n;
-    logic [7:0] joy1_data;
-    logic       joy2_oe_n;
-    logic [7:0] joy2_data;
-    logic [15:0] cpu_addr;
-    logic cpu_undef;
-    logic [15:0] cart_cpu_addr;
-    logic [7:0]  cart_cpu_data_out;
-    logic [7:0]  cart_cpu_data_in;
-    logic        cart_cpu_rw;
-    logic        cart_cpu_ce_n;
-    logic [13:0] cart_ppu_addr;
-    logic        cart_ppu_rd_n;
-    logic        cart_ppu_wr_n;
-    logic [7:0]  cart_ppu_data_out;
-    logic [7:0]  cart_ppu_data_in;
-    logic        cart_ciram_a10;
-    logic        cart_ciram_ce_n;
-    logic [3:0]  audio1;
-    logic [3:0]  audio2;
-    logic [3:0]  audio3;
-    logic [3:0]  audio4;
+    logic           rst_n;
+    logic [1:0]     phase;
+    logic           cpu_clk;
+    logic [8:0]     scanline;
+    logic [8:0]     cycle;
+    logic [7:0]     pixel_palette;
+    logic           joy1_strob;
+    logic           joy1_oe_n;
+    logic [7:0]     joy1_data;
+    logic           joy2_oe_n;
+    logic [7:0]     joy2_data;
+    logic [15:0]    cpu_addr;
+    logic           cpu_undef;
+    logic [15:0]    cart_cpu_addr;
+    logic [7:0]     cart_cpu_data_in;
+    logic           cart_cpu_rw;
+    logic           cart_cpu_ce_n;
+    logic [13:0]    cart_ppu_addr;
+    logic           cart_ppu_rd_n;
+    logic           cart_ppu_wr_n;
+    logic [7:0]     cart_ppu_data_out;
+    logic [7:0]     cart_ppu_data_in;
+    logic           cart_ciram_a10;
+    logic           cart_ciram_ce_n;
+    logic [3:0]     audio1;
+    logic [3:0]     audio2;
+    logic [3:0]     audio3;
+    logic [3:0]     audio4;
     integer i;
 
     // clk is driven by utils/sim_main.cpp; reset is held for 50 clocks.
@@ -44,15 +44,19 @@ module tb_200_video (
         if (rst_cnt != 8'd50) rst_cnt <= rst_cnt + 8'd1;
     assign rst_n = (rst_cnt == 8'd50);
 
+    // The NES stays in reset until the cartridge is loaded from the file
+    logic cart_loaded;
+    wire  nes_rst_n = rst_n && cart_loaded;
+
     always_ff @(posedge clk) begin
         phase   <= (phase == 2'd2) ? 2'd0 : phase + 2'd1;
         cpu_clk <= (phase == 2'd2);
     end
 
-    nes_sim dut (
+    nes dut (
         .cpu_clk(cpu_clk),
         .ppu_clk(clk),
-        .rst_n(rst_n),
+        .rst_n(nes_rst_n),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
@@ -62,7 +66,6 @@ module tb_200_video (
         .joy2_oe_n(joy2_oe_n),
         .joy2_data(joy2_data),
         .cart_cpu_addr(cart_cpu_addr),
-        .cart_cpu_data_out(cart_cpu_data_out),
         .cart_cpu_data_in(cart_cpu_data_in),
         .cart_cpu_rw(cart_cpu_rw),
         .cart_cpu_ce_n(cart_cpu_ce_n),
@@ -80,14 +83,28 @@ module tb_200_video (
         .undef(cpu_undef)
     );
 
-    cartridge_sim #
-    (
+    // Cartridge: cartridge_loader streams the iNES file into
+    // cartridge after reset
+    logic [2:0]  cart_fill_w;
+    logic [14:0] cart_init_addr;
+    logic [7:0]  cart_init_data;
+    logic [7:0]  cart_error_code;
+
+    cartridge_loader #(
         .ROM_FILE("../assets/SMB.nes")
-    )
-    u_cartridge (
+    ) u_cart_loader (
+        .clk(clk),
+        .rst_n(rst_n),
+        .fill_w(cart_fill_w),
+        .addr(cart_init_addr),
+        .data(cart_init_data),
+        .done(cart_loaded),
+        .error_code(cart_error_code)
+    );
+
+    cartridge u_cartridge (
         .clk(clk),
         .cpu_addr(cart_cpu_addr),
-        .cpu_data_in(cart_cpu_data_out),
         .cpu_data_out(cart_cpu_data_in),
         .cpu_rw(cart_cpu_rw),
         .cpu_ce_n(cart_cpu_ce_n),
@@ -98,10 +115,14 @@ module tb_200_video (
         .ppu_data_out(cart_ppu_data_in),
         .ciram_a10(cart_ciram_a10),
         .ciram_ce_n(cart_ciram_ce_n),
-        .loaded(),
-        .error(),
-        .error_code()
+        .fill_w(cart_fill_w),
+        .init_data_in(cart_init_data),
+        .init_addr(cart_init_addr)
     );
+
+    always @(posedge clk)
+        if (cart_loaded && cart_error_code != 0)
+            $fatal(1, "video: cartridge load failed, error %02h", cart_error_code);
 
     logic [7:0] pad_buttons = 8'h00;
 
@@ -123,8 +144,8 @@ module tb_200_video (
     assign cpu_addr = dut.cpu_addr;
 
     initial begin
-        // $dumpfile("tb_201_video.vcd");
-        // $dumpvars(0, tb_201_video);
+        // $dumpfile("video.vcd");
+        // $dumpvars(0, video);
         
         for (i = 0; i < 2048; i = i + 1) begin
             dut.u_cpu_ram.data[i] = 8'h00;
@@ -152,15 +173,9 @@ module tb_200_video (
     initial sdl_audio_init();
     initial sdl_display_init("zines NES");
 
-    // Same sampling as nes_video_capture: visible area is scanlines 0-239, dots 1-256.
     // Gamepad simulation, W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start
     always @(posedge clk or negedge rst_n) begin
         if (rst_n === 1'b1) begin
-            // if (dut.u_cpu.core_write_apu_status)
-            //     $display("apu[%04h] = %02h", dut.u_cpu.core_addr, dut.u_cpu.apu_data_in);
-
-            // if (dut.u_cpu.core_write_apu && dut.u_cpu.core_addr == 16'h4008 /* && (dut.u_cpu.u_apu.data_in[4] == 1'b1) */)
-            //     $display("apu[%04h] = %02h", dut.u_cpu.u_apu.addr, dut.u_cpu.u_apu.data_in);
             if (scanline < 240 && cycle >= 1 && cycle <= 256)
                 sdl_display_pixel(int'(cycle) - 1, int'(scanline),
                                   (^pixel_palette === 1'bx) ? 0 : int'(pixel_palette[5:0]));
@@ -184,7 +199,7 @@ module tb_200_video (
 
     always @(posedge clk) begin
         if (cpu_undef === 1'b1)
-            $fatal(1, "tb_201_video: undefined opcode at %04h", cpu_addr);
+            $fatal(1, "video: undefined opcode at %04h", cpu_addr);
     end
 
 endmodule

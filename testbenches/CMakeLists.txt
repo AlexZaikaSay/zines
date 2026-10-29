@@ -41,17 +41,19 @@ foreach(TESTVECTOR ${TESTVECTORS})
     
 endforeach()
 
-add_custom_target(copy_testvectors DEPENDS ${COPIED_TESTVECTORS})
+add_custom_target(copy_testvectors ALL DEPENDS ${COPIED_TESTVECTORS})
 
-add_custom_target(sim_all ALL
+# `ninja` only builds the testbenches; `ninja test` (CTest) runs them all.
+# The sim_* targets below run a single testbench or a group on demand.
+add_custom_target(sim_all
     COMMENT "Running all testbenches"
 )
 
-add_custom_target(sim_cartridge ALL
+add_custom_target(sim_cartridge
     COMMENT "Running cartridge testbenches"
 )
 
-add_custom_target(sim_ppu ALL
+add_custom_target(sim_ppu
     COMMENT "Running PPU testbenches"
 )
 
@@ -120,7 +122,6 @@ foreach(TB_FILE ${TESTBENCHS})
         OUTPUT "${SIM_EXE}"
         COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
-            ${RTL_SOURCES}
             ${TB_FILE}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         DEPENDS
@@ -139,19 +140,22 @@ foreach(TB_FILE ${TESTBENCHS})
         -DRESULT_DIR=${TB_RESULT_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/run_tb.cmake)
 
+    add_custom_target(build_${TB_NAME} ALL DEPENDS "${SIM_EXE}")
+
+    if(TARGET ${TEST_NAME})
+        # The test target produces the generated memory image consumed by the
+        # testbench at runtime (for example, tests/001_cld.tv).
+        add_dependencies(build_${TB_NAME} ${TEST_NAME})
+    endif()
+
     add_custom_target(sim_${TB_NAME}
         COMMAND ${TB_RUN_COMMAND}
-        DEPENDS "${SIM_EXE}" copy_testvectors
+        DEPENDS build_${TB_NAME} copy_testvectors
         USES_TERMINAL
         VERBATIM
     )
 
-    
-    if(TARGET ${TEST_NAME})
-        # The test target produces the generated memory image consumed by the
-        # testbench at runtime (for example, tests/001_cld.tv).
-        add_dependencies(sim_${TB_NAME} ${TEST_NAME})
-    endif()
+    add_test(NAME ${TB_NAME} COMMAND ${TB_RUN_COMMAND})
 
     add_dependencies(sim_all sim_${TB_NAME})
 

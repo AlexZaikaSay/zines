@@ -218,7 +218,7 @@ module nes_top (
         .scan(Scan_Sig)
     );
 
-    nes_sim u_nes (
+    nes u_nes (
         .cpu_clk(cpu_clk),
         .ppu_clk(ppu_clk),
         .rst_n(nes_rst_n),

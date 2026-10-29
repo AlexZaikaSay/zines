@@ -2,6 +2,7 @@ set_global_assignment -name FAMILY "Cyclone 10 LP"
 set_global_assignment -name DEVICE 10CL080YU484C8G
 set_global_assignment -name TOP_LEVEL_ENTITY top_device
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_card.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sd_card/sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE top_device.sv
 set_global_assignment -name SDC_FILE sd_loader.sdc
 set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"

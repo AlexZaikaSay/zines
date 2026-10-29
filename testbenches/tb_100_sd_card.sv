@@ -1,237 +1,187 @@
-`include "sd_card/sd_card.sv"
+`include "cpu/mem.sv"
+`include "sd_card/disk.sv"
+`include "sd_card/sim_sd_card.sv"
 
+// disk + sim_sd_card through the CPU registers: command before init fails,
+// init, read a sector, write a sector, read it back, check the image file.
 module tb_100_sd_card;
-    localparam integer LOAD_WORDS = 128;
+    localparam string  SD_FILE = "tb_100_sd.img";
+    localparam integer SECTORS = 8;
 
-    logic clk;
-    logic reset_n = 1'b0;
-    logic sd_clk;
-    logic sd_cmd;
-    logic sd_dat0;
-    logic sd_cs_n;
-    logic busy;
-    logic done;
-    logic error;
-    logic [7:0]  error_code;
-    logic        rx_valid;
-    logic [7:0]  rx_data;
-    logic [31:0] rx_index;
-    logic [7:0]  received [0:LOAD_WORDS*4-1];
+    localparam logic [7:0] SD_BUSY  = 8'h01;
+    localparam logic [7:0] SD_ERROR = 8'h02;
+    localparam logic [7:0] SD_READY = 8'h04;
+    localparam logic [7:0] SD_SDHC  = 8'h08;
 
-    logic [7:0] command [0:5];
-    logic [7:0] command_shift;
-    logic [7:0] response_queue [0:1023];
-    integer command_index;
-    integer command_bit;
-    integer response_head;
-    integer response_tail;
-    integer response_bit;
-    logic collecting_command;
-    integer command_number;
-    integer byte_index;
+    localparam logic [7:0] SD_CMD_INIT  = 8'h01;
+    localparam logic [7:0] SD_CMD_READ  = 8'h02;
+    localparam logic [7:0] SD_CMD_WRITE = 8'h03;
+
+    localparam logic [7:0] E_NOT_INIT = 8'h02;
+
+    logic       clk = 1'b0;
+    logic       rst_n = 1'b0;
+    logic       reg_sel = 1'b0;
+    logic       buf_sel = 1'b0;
+    logic [8:0] addr = '0;
+    logic       rw = 1'b1;
+    logic [7:0] data_in = '0;
+    logic [7:0] data_out;
+
+    logic sd_clk, sd_mosi, sd_miso, sd_cs_n;
+
+    // Sector buffer, shared like on the board
+    logic [7:0] reg_data, buf_data;
+    logic       buf_active, buf_we;
+    logic [8:0] buf_addr;
+    logic [7:0] buf_wdata;
+
+    assign data_out = buf_sel ? buf_data : reg_data;
+
+    mem #(
+        .ADDR_WIDTH(9)
+    ) sector_buf (
+        .clk,
+        .addr(buf_active ? buf_addr : addr),
+        .data_in(buf_active ? buf_wdata : data_in),
+        .rw(!(buf_active ? buf_we : (buf_sel && !rw))),
+        .cs_n(1'b0),
+        .oe_n(1'b0),
+        .data_out(buf_data)
+    );
 
     always #5 clk = ~clk;
 
-    sd_card #(
+    disk #(
         .CLK_FREQ_HZ(8_000_000),
         .INIT_SPI_HZ(400_000),
-        .RUN_SPI_HZ(1_000_000),
-        .LOAD_WORDS(LOAD_WORDS),
-        .START_LBA(32'd7)
+        .RUN_SPI_HZ(1_000_000)
     ) dut (
-        .clk,
-        .reset_n,
-        .sd_clk,
-        .sd_cmd,
-        .sd_dat0,
-        .sd_cs_n,
-        .sd_cd_n(1'b0),
-        .busy,
-        .done,
-        .error,
-        .error_code,
-        .byte_valid(rx_valid),
-        .byte_data(rx_data),
-        .byte_index(rx_index)
+        .clk, .rst_n,
+        .reg_sel, .reg_addr(addr[2:0]), .rw, .data_in, .data_out(reg_data),
+        .buf_active, .buf_addr, .buf_we, .buf_wdata, .buf_rdata(buf_data),
+        .sd_clk, .sd_cmd(sd_mosi), .sd_dat0(sd_miso), .sd_cs_n,
+        .sd_cd_n(1'b0)
     );
 
-    always @(posedge clk) begin
-        if (rx_valid) begin
-            if (rx_index >= LOAD_WORDS * 4)
-                $fatal(1, "byte_index %0d is outside the %0d-byte load", rx_index, LOAD_WORDS * 4);
-            received[rx_index] <= rx_data;
-        end
-    end
+    sim_sd_card #(
+        .SD_FILE(SD_FILE)
+    ) card (
+        .clk, .rst_n,
+        .sd_clk, .sd_cmd(sd_mosi), .sd_cs_n, .sd_dat0(sd_miso)
+    );
 
-    task automatic queue_byte(input logic [7:0] value);
-        begin
-            response_queue[response_tail] = value;
-            response_tail = response_tail + 1;
-        end
-    endtask
-
-    task automatic queue_sector;
-        begin
-            queue_byte(8'h00);
-            for (byte_index = 0; byte_index < 300; byte_index = byte_index + 1)
-                queue_byte(8'hFF);
-            queue_byte(8'hFE);
-            for (byte_index = 0; byte_index < 512; byte_index = byte_index + 1)
-                queue_byte(byte_index[7:0]);
-            queue_byte(8'h00);
-            queue_byte(8'h00);
-        end
-    endtask
-
-    // SD command indexes in the order the controller has to send them;
-    // everything after CMD58 is a CMD17 block read.
-    function automatic logic [5:0] expected_command(input integer number);
-        case (number)
-            0: return 6'd0;
-            1: return 6'd8;
-            2: return 6'd55;
-            3: return 6'd41;
-            4: return 6'd58;
-            default: return 6'd17;
-        endcase
+    function automatic logic [7:0] pattern(input integer sector, input integer i);
+        return 8'((sector * 37) ^ i ^ (i >> 8));
     endfunction
 
-    task automatic respond_to_command;
-        begin
-            if (command[0] !== {2'b01, expected_command(command_number)})
-                $fatal(1, "Command %0d: got CMD%0d (%02h), expected CMD%0d",
-                       command_number, command[0][5:0], command[0],
-                       expected_command(command_number));
-            case (command_number)
-                0: queue_byte(8'h01); // CMD0: idle
-                1: begin              // CMD8: SD v2, 2.7-3.6 V
-                    queue_byte(8'h01);
-                    queue_byte(8'h00);
-                    queue_byte(8'h00);
-                    queue_byte(8'h01);
-                    queue_byte(8'hAA);
-                end
-                2: queue_byte(8'h01); // CMD55: application command prefix
-                3: queue_byte(8'h00); // ACMD41: ready
-                4: begin              // CMD58: CCS set, SDHC
-                    queue_byte(8'h00);
-                    queue_byte(8'h40);
-                    queue_byte(8'h00);
-                    queue_byte(8'h00);
-                    queue_byte(8'h00);
-                end
-                5: queue_sector;      // CMD17: one 512-byte block
-                default: begin
-                    $fatal(1, "Unexpected SD command number %0d", command_number);
-                end
-            endcase
-            command_number = command_number + 1;
+    // ---------------- CPU bus ----------------
+    task automatic bus_write(input logic regs, input logic [8:0] a, input logic [7:0] d);
+        @(negedge clk);
+        reg_sel = regs; buf_sel = !regs; addr = a; rw = 1'b0; data_in = d;
+        @(negedge clk);
+        reg_sel = 1'b0; buf_sel = 1'b0; rw = 1'b1;
+    endtask
+
+    task automatic bus_read(input logic regs, input logic [8:0] a, output logic [7:0] d);
+        @(negedge clk);
+        reg_sel = regs; buf_sel = !regs; addr = a; rw = 1'b1;
+        #1 d = data_out;
+        @(negedge clk);
+        reg_sel = 1'b0; buf_sel = 1'b0;
+    endtask
+
+    task automatic command(input logic [7:0] cmd, input logic [31:0] lba,
+                           output logic [7:0] status);
+        integer timeout;
+        bus_write(1, 9'd4, lba[7:0]);
+        bus_write(1, 9'd5, lba[15:8]);
+        bus_write(1, 9'd6, lba[23:16]);
+        bus_write(1, 9'd7, lba[31:24]);
+        bus_write(1, 9'd0, cmd);
+        timeout = 0;
+        do begin
+            bus_read(1, 9'd1, status);
+            timeout++;
+            if (timeout > 1_000_000)
+                $fatal(1, "command %0d timed out", cmd);
+        end while (status & SD_BUSY);
+    endtask
+
+    task automatic check_buffer(input integer sector);
+        logic [7:0] d;
+        for (int i = 0; i < 512; i++) begin
+            bus_read(0, 9'(i), d);
+            if (d !== pattern(sector, i))
+                $fatal(1, "sector %0d byte %0d: %02h, expected %02h",
+                       sector, i, d, pattern(sector, i));
         end
     endtask
 
-    // Capture command bytes on SPI rising edges. The response starts on the
-    // following falling edge, matching SPI mode 0.
-    initial forever begin
-        @(posedge sd_clk);
-        if (!sd_cs_n) begin
-            if (!collecting_command && (sd_cmd == 1'b0)) begin
-                collecting_command = 1'b1;
-                command_index = 0;
-                command_bit = 0;
-                command_shift = 0;
-            end
-
-            if (collecting_command) begin
-                command_shift = {command_shift[6:0], sd_cmd};
-                if (command_bit == 7) begin
-                    command[command_index] = command_shift;
-                    if (command_index == 5) begin
-                        respond_to_command();
-                        collecting_command = 1'b0;
-                        command_index = 0;
-                        command_bit = 0;
-                    end
-                    else begin
-                        command_index = command_index + 1;
-                        command_bit = 0;
-                    end
-                end
-                else begin
-                    command_bit = command_bit + 1;
-                end
-            end
-        end
-    end
-
-    // Present the next response bit before each SPI rising edge.
-    initial forever begin
-        @(negedge sd_clk);
-        if (!sd_cs_n) begin
-            if (response_head < response_tail) begin
-                sd_dat0 = response_queue[response_head][7 - response_bit];
-                if (response_bit == 7) begin
-                    response_bit = 0;
-                    response_head = response_head + 1;
-                end
-                else begin
-                    response_bit = response_bit + 1;
-                end
-            end
-            else begin
-                sd_dat0 = 1'b1;
-            end
-        end
-    end
-
-    initial forever begin
-        @(negedge sd_cs_n);
-        command_index = 0;
-        command_bit = 0;
-        command_shift = 0;
-        collecting_command = 1'b0;
-        response_head = 0;
-        response_tail = 0;
-        response_bit = 0;
-        sd_dat0 = 1'b1;
-    end
+    // ---------------- Test ----------------
+    integer     fd, n;
+    logic [7:0] status, errcode, d;
+    logic [7:0] image [0:SECTORS*512-1];
 
     initial begin
         $dumpfile("tb_100_sd_card.vcd");
         $dumpvars(0, tb_100_sd_card);
-        clk = 1'b0;
-        command_index = 0;
-        command_bit = 0;
-        command_shift = 0;
-        collecting_command = 1'b0;
-        response_head = 0;
-        response_tail = 0;
-        response_bit = 0;
-        command_number = 0;
-        sd_dat0 = 1'b1;
+
+        // Test image: every sector filled with its own pattern
+        fd = $fopen(SD_FILE, "wb");
+        for (int s = 0; s < SECTORS; s++)
+            for (int i = 0; i < 512; i++)
+                $fwrite(fd, "%c", pattern(s, i));
+        $fclose(fd);
 
         repeat (4) @(posedge clk);
-        reset_n = 1'b1;
+        rst_n = 1'b1;
 
-        wait (done || error);
+        // Read before init is rejected
+        command(SD_CMD_READ, 32'd1, status);
+        bus_read(1, 9'd2, errcode);
+        if (!(status & SD_ERROR) || errcode != E_NOT_INIT)
+            $fatal(1, "read before init: status %02h errcode %02h", status, errcode);
 
-        if (error) begin
-            $fatal(1, "SD controller entered error state, code %02h", error_code);
-        end
-        if (busy)
-            $fatal(1, "SD controller still busy after done");
-        if ({received[3], received[2], received[1], received[0]} !== 32'h03020100)
-            $fatal(1, "Unexpected first word: %02h%02h%02h%02h",
-                   received[3], received[2], received[1], received[0]);
-        if ({received[511], received[510], received[509], received[508]} !== 32'hFFFEFDFC)
-            $fatal(1, "Unexpected last word: %02h%02h%02h%02h",
-                   received[511], received[510], received[509], received[508]);
+        // Init
+        command(SD_CMD_INIT, 32'd0, status);
+        bus_read(1, 9'd2, errcode);
+        if (status != (SD_READY | SD_SDHC))
+            $fatal(1, "init: status %02h errcode %02h", status, errcode);
 
-        $display("SD-card read test passed");
+        // Read sector 3
+        command(SD_CMD_READ, 32'd3, status);
+        if (status != (SD_READY | SD_SDHC))
+            $fatal(1, "read: status %02h", status);
+        check_buffer(3);
+
+        // Write sector 5 with sector 6's pattern, read it back
+        for (int i = 0; i < 512; i++)
+            bus_write(0, 9'(i), pattern(6, i));
+        command(SD_CMD_WRITE, 32'd5, status);
+        if (status != (SD_READY | SD_SDHC))
+            $fatal(1, "write: status %02h", status);
+
+        for (int i = 0; i < 512; i++)
+            bus_write(0, 9'(i), 8'h00);
+        command(SD_CMD_READ, 32'd5, status);
+        check_buffer(6);
+
+        // The write reached the file and left its neighbours alone
+        fd = $fopen(SD_FILE, "rb");
+        n = $fread(image, fd);
+        $fclose(fd);
+        for (int s = 0; s < SECTORS; s++)
+            for (int i = 0; i < 512; i++)
+                if (image[s*512 + i] !== pattern(s == 5 ? 6 : s, i))
+                    $fatal(1, "image sector %0d byte %0d: %02h", s, i, image[s*512 + i]);
+
+        $display("SD card disk test passed");
         $finish;
     end
 
     initial begin
-        repeat (250_000) @(posedge clk);
-        $fatal(1, "Timed out waiting for SD-card read");
+        repeat (20_000_000) @(posedge clk);
+        $fatal(1, "Timed out");
     end
 endmodule

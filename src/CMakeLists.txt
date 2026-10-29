@@ -10,5 +10,8 @@ add_subdirectory(sd_card)
 add_subdirectory(vga)
 
 set(RTL_SOURCES  ${APU_SOURCES} ${BOARDS_SOURCES} ${CARTRIDGE_SOURCES} ${CPU_SOURCES} ${PPU_SOURCES} ${SD_CARD_SOURCES} ${VGA_SOURCES})
+# Dependency list only: testbenches pull RTL in through `include, so these
+# files must not be passed to Verilator again (duplicate modules)
+set(RTL_SOURCES ${RTL_SOURCES} PARENT_SCOPE)
 
 set(SOURCE_DIR ${SOURCE_DIR} PARENT_SCOPE)

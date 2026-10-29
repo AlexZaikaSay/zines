@@ -1,12 +1,13 @@
-# Interactive SDL emulator testbenches (video, joysticks, audio).
-# Verilator only; clk is driven by utils/sim_main.cpp, never part of sim_all.
+# Interactive SDL emulators (video + joysticks, audio).
+# Verilator only; clk is driven by utils/sim_main.cpp. `ninja` builds them,
+# `ninja video` / `ninja audio` runs them. Never part of `ninja test`.
 set(EMULATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(TESTBENCH_DIR ${CMAKE_SOURCE_DIR}/testbenches)
 set(TEST_ASSETS
     ${CMAKE_SOURCE_DIR}/assets/SMB.nes
     ${CMAKE_SOURCE_DIR}/assets/color_test.nes
 )
-set(EMULATOR_TBS tb_200_video tb_300_audio)
+set(EMULATOR_TBS video audio osdvideo)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
 
@@ -36,7 +37,6 @@ endif()
 
 foreach(TB_NAME ${EMULATOR_TBS})
     set(TB_FILE ${EMULATOR_DIR}/${TB_NAME}.sv)
-    string(REGEX REPLACE "^tb_" "" TEST_NAME ${TB_NAME})
     set(OBJ_DIR "${CMAKE_BINARY_DIR}/obj_${TB_NAME}")
     set(SIM_EXE "${OBJ_DIR}/V${TB_NAME}")
 
@@ -93,7 +93,6 @@ foreach(TB_NAME ${EMULATOR_TBS})
         OUTPUT "${SIM_EXE}"
         COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
-            ${RTL_SOURCES}
             ${TB_FILE}
             ${TB_EXTRA_SOURCES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -106,15 +105,52 @@ foreach(TB_NAME ${EMULATOR_TBS})
         VERBATIM
     )
 
+    add_custom_target(build_${TB_NAME} ALL DEPENDS "${SIM_EXE}")
+
     # Interactive: run directly so output streams and no PASS/FAIL is recorded.
-    add_custom_target(sim_${TB_NAME}
+    add_custom_target(${TB_NAME}
         COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_BINARY_DIR}" "${SIM_EXE}"
-        DEPENDS "${SIM_EXE}"
+        DEPENDS build_${TB_NAME}
         USES_TERMINAL
         VERBATIM
     )
-
-    if(TARGET ${TEST_NAME})
-        add_dependencies(sim_${TB_NAME} ${TEST_NAME})
-    endif()
 endforeach()
+
+# OSD character font for charmap.sv, generated from the unscii-8 glyphs
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(FONT_SRC ${CMAKE_SOURCE_DIR}/assets/unscii-8.hex)
+set(FONT_HEX ${CMAKE_BINARY_DIR}/data/font.hex)
+add_custom_command(OUTPUT ${FONT_HEX}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/toold/make_font.py
+            ${FONT_SRC} ${FONT_HEX}
+    DEPENDS ${FONT_SRC} ${CMAKE_SOURCE_DIR}/toold/make_font.py
+    COMMENT "Generating data/font.hex"
+    VERBATIM)
+add_custom_target(font ALL DEPENDS ${FONT_HEX})
+
+# Test SD card image: MBR + FAT32 with test1/{test1.nes,test1.sv0..3} and test2/
+find_program(SFDISK sfdisk REQUIRED
+    HINTS /opt/homebrew/opt/util-linux/sbin /usr/local/opt/util-linux/sbin)
+find_program(MFORMAT mformat REQUIRED)
+find_program(MMD mmd REQUIRED)
+find_program(MCOPY mcopy REQUIRED)
+find_program(DD dd REQUIRED)
+set(SDIMG_ROM ${CMAKE_SOURCE_DIR}/assets/SMB.nes)
+set(SDIMG ${CMAKE_BINARY_DIR}/data/sd.img)
+set(SDIMG_SCRIPT ${CMAKE_SOURCE_DIR}/cmake/make_sdimg.cmake)
+add_custom_command(OUTPUT ${SDIMG}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+    COMMAND ${CMAKE_COMMAND}
+            -DOUT=${SDIMG} -DROM=${SDIMG_ROM} -DWORK=${CMAKE_BINARY_DIR}/sdimg
+            -DSFDISK=${SFDISK} -DMFORMAT=${MFORMAT} -DMMD=${MMD}
+            -DMCOPY=${MCOPY} -DDD=${DD}
+            -P ${SDIMG_SCRIPT}
+    DEPENDS ${SDIMG_SCRIPT} ${SDIMG_ROM}
+    COMMENT "Generating data/sd.img"
+    VERBATIM)
+add_custom_target(sdimg ALL DEPENDS ${SDIMG})
+
+# osdvideo loads the OSD firmware image (data/osd.tv), font (data/font.hex)
+# and SD card image (data/sd.img) at runtime
+add_dependencies(osdvideo osd font sdimg)
