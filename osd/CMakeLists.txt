@@ -22,6 +22,20 @@ set(OSD_DA65_INFO ${CMAKE_CURRENT_BINARY_DIR}/osd.da65)
 set(OSD_TV ${CMAKE_CURRENT_BINARY_DIR}/osd.tv)
 set(OSD_TV_DATA ${CMAKE_BINARY_DIR}/data/osd.tv)
 
+# memio_regs.h: register addresses and codes generated from the RTL package,
+# so the firmware always matches the hardware
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(OSD_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen)
+set(MEMIO_REGS_H ${OSD_GEN_DIR}/memio_regs.h)
+set(ZINES_PKG ${CMAKE_SOURCE_DIR}/rtl/common/zines_pkg.sv)
+set(GEN_MEMIO_REGS ${CMAKE_SOURCE_DIR}/tools/gen_memio_regs.py)
+add_custom_command(OUTPUT ${MEMIO_REGS_H}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${OSD_GEN_DIR}
+    COMMAND ${Python3_EXECUTABLE} ${GEN_MEMIO_REGS} ${ZINES_PKG} ${MEMIO_REGS_H}
+    DEPENDS ${ZINES_PKG} ${GEN_MEMIO_REGS}
+    COMMENT "Generating memio_regs.h from zines_pkg.sv"
+    VERBATIM)
+
 foreach(SRC ${OSD_SOURCES})
     file(RELATIVE_PATH REL ${CMAKE_CURRENT_SOURCE_DIR} ${SRC})
     set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/obj/${REL}.o)
@@ -31,10 +45,11 @@ foreach(SRC ${OSD_SOURCES})
         COMMAND ${CL65_EXECUTABLE} -t none -O -c
             -I ${OSD_INCLUDE_DIR}
             -I ${PFF_DIR}
+            -I ${OSD_GEN_DIR}
             --create-dep ${DEP}
             -o ${OBJ}
             ${SRC}
-        DEPENDS ${SRC}
+        DEPENDS ${SRC} ${MEMIO_REGS_H}
         DEPFILE ${DEP}
         COMMENT "Compiling OSD ${REL}"
         VERBATIM)

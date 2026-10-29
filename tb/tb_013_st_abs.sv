@@ -1,0 +1,74 @@
+/* verilator lint_off STMTDLY */
+
+module tb_013_st_abs;
+    parameter CYCLE_LEN = 10;
+    localparam RESET_CYCLES = 7; // reset sequence length before the first fetch
+    parameter MEM_FILE = "./tests/013_st_abs.tv";
+    logic clk;
+    logic rst_n;
+
+    mos_devboard #(
+        .MEM_FILE(MEM_FILE)
+    )
+    db_device
+    (
+        .clk(clk),
+        .rst_n(rst_n)
+    );
+
+    initial begin
+        $dumpfile("tb_013_st_abs.vcd");
+        $dumpvars(0, tb_013_st_abs);
+        #1 rst_n = 0; #2; rst_n = 1;
+    end
+
+    initial begin
+        for (integer i = 0; i < 20 + RESET_CYCLES; i++) begin
+            clk = 1; #(CYCLE_LEN/2);
+            clk = 0; #(CYCLE_LEN/2);
+            case (i - RESET_CYCLES)
+                2: begin
+                    // check LDA imm
+                    if (db_device.cpu.a !== 8'h15)
+                        $error("TEST FAILED: LDA IMM"); 
+                end
+                6: begin
+                    // check STA abs
+                    if (db_device.memory.data[16'h0200] !== 8'h15)
+                        $error("TEST FAILED: STA ABS"); 
+                end
+                8: begin
+                    // check LDX imm
+                    if (db_device.cpu.x !== 8'h16)
+                        $error("TEST FAILED: LDX IMM"); 
+                end
+                12: begin
+                    // check STX abs
+                    if (db_device.memory.data[16'h0200] !== 8'h16)
+                        $error("TEST FAILED: STX ABS"); 
+                end
+                14: begin
+                    // check LDY imm
+                    if (db_device.cpu.y !== 8'h17)
+                        $error("TEST FAILED: LDY IMM"); 
+                end
+                18: begin
+                    // check STY abs
+                    if (db_device.memory.data[16'h0200] !== 8'h17)
+                        $error("TEST FAILED: STY ABS"); 
+                end
+                default: begin
+                    // No specific check for this cycle
+                end
+            endcase
+        end
+    end
+
+    always @(negedge clk)
+    begin
+        // Check for specific memory write conditions here
+    end
+  
+endmodule
+
+/* verilator lint_on STMTDLY */

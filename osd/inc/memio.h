@@ -3,6 +3,7 @@
 #ifndef MEMIO_H
 #define MEMIO_H
 #include <stdint.h>
+#include "memio_regs.h"   // generated from rtl/common/zines_pkg.sv
 
 #define REG8(a)  (*(volatile uint8_t *)(a))
 #define MEM8(a)  ((volatile uint8_t *)(a))
@@ -16,6 +17,11 @@
  * $8000-$FFFF  ROM 32 KB (vectors at $FFFA)
  */
 
+/* ---------------- Planned, not decoded by the hardware yet ----------------
+ * SYS_ID, NES_CTRL, SYS_STATUS, OSD_CTRL/FG/BG, LD_*, CART_*, ST_*, FRAMES*:
+ * move each one into zines_pkg (@c-export section) when it is implemented.
+ */
+
 /* ---------------- System / NES control ---------------- */
 #define SYS_ID        REG8(0x4000)  // R: hardware version
 #define NES_CTRL      REG8(0x4001)  // RW
@@ -26,8 +32,8 @@
 #define   ST_HOTKEY     0x02        //   long press detected, cleared on read
 
 /* ---------------- Gamepad ---------------- */
-#define PAD1          REG8(0x4008)  // R: current buttons
-#define PAD1_PRESSED  REG8(0x4009)  // R: new presses since last read (cleared on read)
+#define PAD1          REG8(OSD_ADDR_PAD1)          // R: current buttons
+#define PAD1_PRESSED  REG8(OSD_ADDR_PAD1_PRESSED)  // R: nonzero if changed since last PAD1 read
 #define   BTN_A       0x01
 #define   BTN_B       0x02
 #define   BTN_SELECT  0x04
@@ -38,8 +44,8 @@
 #define   BTN_RIGHT   0x80
 
 /* ---------------- OSD ---------------- */
-#define OSD_TEXT      MEM8(0x2000)
-#define OSD_ATTR      MEM8(0x2800)
+#define OSD_TEXT      MEM8(OSD_ADDR_TEXT)
+#define OSD_ATTR      MEM8(OSD_ADDR_ATTR)
 #define OSD_WIDTH     64
 #define OSD_HEIGHT    32
 #define OSD_VIS_WIDTH  32
@@ -67,40 +73,19 @@ enum {
 
 #define ATTR_PRESENT 0x80        // attribute bit: opaque BG (see ATTR)
 
-/* ---------------- SD card ---------------- */
-#define SD_BUF        MEM8(0x3000)
-#define SD_CMD        REG8(0x4020)  // W: start command
-#define   SD_CMD_INIT   0x01
-#define   SD_CMD_READ   0x02        //   sector SD_LBA -> SD_BUF
-#define   SD_CMD_WRITE  0x03        //   SD_BUF -> sector SD_LBA
-#define SD_STATUS     REG8(0x4021)  // R
-#define   SD_BUSY       0x01
-#define   SD_ERROR      0x02
-#define   SD_READY      0x04        //   init done
-#define   SD_SDHC       0x08        //   block addressing (info only, HW converts)
-#define SD_ERRCODE    REG8(0x4022)  // R: error code of the last failed command (sd_card.sv E_*)
-#define   SD_ERR_NONE           0x00
-#define   SD_ERR_NO_CARD        0x01    //   card detect: no card inserted
-#define   SD_ERR_NOT_INIT       0x02    //   read/write before a successful init
-#define   SD_ERR_BAD_OP         0x03    //   internal: unknown operation
-#define   SD_ERR_R1_TIMEOUT     0x10    //   card did not answer a command
-#define   SD_ERR_CMD0           0x11    //   CMD0 (go idle) rejected
-#define   SD_ERR_CMD8           0x12    //   CMD8 (interface condition) bad answer
-#define   SD_ERR_CMD55          0x13    //   CMD55 (app command) rejected
-#define   SD_ERR_ACMD41         0x14    //   ACMD41 (start init) rejected
-#define   SD_ERR_ACMD41_TIMEOUT 0x15    //   card stayed in idle state
-#define   SD_ERR_CMD58          0x16    //   CMD58 (read OCR) rejected
-#define   SD_ERR_CMD16          0x17    //   CMD16 (block size 512) rejected
-#define   SD_ERR_READ_R1        0x20    //   CMD17 (read block) rejected
-#define   SD_ERR_READ_TOKEN     0x21    //   error token instead of data
-#define   SD_ERR_READ_TIMEOUT   0x22    //   no data token in time
-#define   SD_ERR_WRITE_R1       0x30    //   CMD24 (write block) rejected
-#define   SD_ERR_WRITE_REJECT   0x31    //   data response not "accepted"
-#define   SD_ERR_WRITE_TIMEOUT  0x32    //   card busy too long after write
-#define SD_LBA0       REG8(0x4024)  // RW: sector number, 32 bit
-#define SD_LBA1       REG8(0x4025)
-#define SD_LBA2       REG8(0x4026)
-#define SD_LBA3       REG8(0x4027)
+/* ---------------- SD card ----------------
+ * Commands SD_CMD_*, status bits SD_BUSY/SD_ERROR/SD_READY/SD_SDHC and
+ * error codes SD_ERR_* come from memio_regs.h.
+ */
+#define SD_BUF        MEM8(OSD_ADDR_SD_BUF)
+#define SD_REG(r)     REG8(OSD_ADDR_SD_REGS + (r))
+#define SD_CMD        SD_REG(SD_REG_CMD)      // W: start command
+#define SD_STATUS     SD_REG(SD_REG_STATUS)   // R
+#define SD_ERRCODE    SD_REG(SD_REG_ERRCODE)  // R: error code of the last failed command
+#define SD_LBA0       SD_REG(SD_REG_LBA0)     // RW: sector number, 32 bit
+#define SD_LBA1       SD_REG(SD_REG_LBA1)
+#define SD_LBA2       SD_REG(SD_REG_LBA2)
+#define SD_LBA3       SD_REG(SD_REG_LBA3)
 
 /* ---------------- Cartridge loader (NES memories) ----------------
  * Write LD_SEL + LD_ADDR, then stream bytes through LD_DATA.
