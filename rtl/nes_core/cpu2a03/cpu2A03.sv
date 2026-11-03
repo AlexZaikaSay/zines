@@ -112,6 +112,7 @@ module cpu2A03 (
     mos6502 u_core (
         .clk(core_clk),
         .rst_n(rst_n),
+        .ce(1'b1),
         .nmi_n(nmi_n),
         .irq_n(irq_n && apu_irq_n),     // IRQ line is wired-AND with the APU
         .data_in(core_data_in),

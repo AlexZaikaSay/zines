@@ -1,0 +1,67 @@
+/* verilator lint_off STMTDLY */
+
+module tb_6502_functional_stall;
+
+    parameter CYCLE_LEN = 10;
+    parameter MEM_FILE = "./tests/6502_functional_test.tv";
+
+    integer i = 0;
+    logic clk;
+    logic rst_n;
+
+    logic [1:0] count;
+
+    always_ff @(posedge clk or negedge rst_n)
+    begin
+        if (!rst_n)
+            count <= 0;
+        else begin
+            count <= count + 1;
+            if (count == 2)
+                count <= 0;
+        end
+    end
+
+    wire ce = (count == 0);
+
+    mos_devboard #(
+        .MEM_FILE(MEM_FILE)
+    )
+    db_device
+    (
+        .clk(clk),
+        .rst_n(rst_n),
+        .ce(ce)
+    );
+
+    initial begin
+        #1; rst_n = 0; #(CYCLE_LEN * 2 + 1); rst_n = 1;
+    end
+
+    initial begin
+        for (; i < 140000 * 3; i++)
+        begin
+            clk = 1; #(CYCLE_LEN/2);
+            clk = 0; #(CYCLE_LEN/2);
+        end
+        $error("TEST FAILED: reached end of simulation without passing");
+    end
+
+    always @(negedge clk)
+    begin
+        // Check for specific memory write conditions here
+        if (!db_device.cpu.rw && db_device.cpu.addr == 16'h0200 && db_device.cpu.data_in == 8'h28)
+        begin
+            $display("Memory write: data = %h at address = %h (clk = %0d)", db_device.cpu.data_in, db_device.cpu.addr, i);
+            $finish;
+        end
+        if (db_device.cpu.undef) 
+        begin
+            $error("Undefined instruction %h at address %h (clk = %0d)", db_device.cpu.data_in, db_device.cpu.addr, i);
+            $finish;
+        end
+    end
+  
+endmodule
+
+/* verilator lint_on STMTDLY */

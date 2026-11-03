@@ -1,6 +1,7 @@
 module mos6502 (
     input logic clk,
     input logic rst_n,
+    input logic ce,
     input logic nmi_n,
     input logic irq_n,
     input logic [7:0] data_in,
@@ -83,7 +84,7 @@ module mos6502 (
         .clk,
         .rst_n,
         .d(alu_result),
-        .en(w_a),
+        .en(ce && w_a),
         .q(a)
     );
 
@@ -91,7 +92,7 @@ module mos6502 (
         .clk,
         .rst_n,
         .d(alu_result),
-        .en(w_x),
+        .en(ce && w_x),
         .q(x)
     );
 
@@ -100,7 +101,7 @@ module mos6502 (
         .clk,
         .rst_n,
         .d(alu_result),
-        .en(w_y),
+        .en(ce && w_y),
         .q(y)
     );
 
@@ -108,7 +109,7 @@ module mos6502 (
         .clk,
         .rst_n,
         .d(alu_result),
-        .en(w_s),
+        .en(ce && w_s),
         .q(s)
     );
 
@@ -124,6 +125,7 @@ module mos6502 (
     (
         .clk,
         .rst_n,
+        .ce,
         .nmi_n,
         .irq_n,
         .imm(data_in),

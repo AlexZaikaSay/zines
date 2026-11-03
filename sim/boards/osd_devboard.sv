@@ -47,6 +47,7 @@ module osd_devboard
     mos6502 cpu (
         .clk(clk),
         .rst_n(rst_n),
+        .ce(1'b1),
         .addr(cpu_addr),
         .data_out(cpu_data),
         .data_in(cpu_in_data),

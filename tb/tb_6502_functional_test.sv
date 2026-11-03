@@ -19,8 +19,6 @@ module tb_6502_functional_test;
     );
 
     initial begin
-        $dumpfile("tb_6502_functional_test.vcd");
-        $dumpvars(0, tb_6502_functional_test);
         #1; rst_n = 0; #(CYCLE_LEN * 2 + 1); rst_n = 1;
     end
 
