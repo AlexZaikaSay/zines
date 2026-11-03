@@ -27,10 +27,10 @@ module tb_072_irq_nmi;
         irq_n = 1;
         #1 rst_n = 0; #2; rst_n = 1;
         #(51 + RESET_CYCLES * CYCLE_LEN); irq_n = 0; #18; irq_n = 1;
-        #150; nmi_n = 0; #1; nmi_n = 1;  // 2 clk earlier: nmi is synchronized in the CPU
-        #160; nmi_n = 0; #1; nmi_n = 1;
-        #50; irq_n = 0; #127; irq_n = 1;
-        #1; nmi_n = 0; #1; nmi_n = 1;
+        #160; nmi_n = 0; #CYCLE_LEN; nmi_n = 1;  // 1 clk earlier: nmi is sampled on the clock edge
+        #151; nmi_n = 0; #CYCLE_LEN; nmi_n = 1;
+        #31; irq_n = 0; #127; irq_n = 1;
+        #11; nmi_n = 0; #CYCLE_LEN; nmi_n = 1;
     end
 
     initial begin
