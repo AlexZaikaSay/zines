@@ -45,6 +45,19 @@ module tb_200_smb_frames;
         cpu_clk <= (phase == 2'd2);
     end
 
+    logic cpu_ce, apu_ce;
+    clock_enable_gen  # (
+        .RESET_PHASE(2'd2)
+    ) u_clock_enable_gen (
+        .clk(clk),
+        .rst_n(rst_n),
+        .cpu_ce(cpu_ce),
+        .apu_ce(apu_ce)
+    );
+
+    always @(posedge clk) if (rst_n && cpu_ce !== cpu_clk) $error("cpu_ce does not match cpu_clk");
+
+
     logic [8:0]  scanline, cycle;
     logic [7:0]  pixel_palette;
     logic        joy1_strob, joy1_oe_n, joy2_oe_n;
