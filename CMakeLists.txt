@@ -72,6 +72,7 @@ set(RTL_LINT_TOPS
     hdmi_tx
     charmap
     nes_audio_sampler
+    clock_enable_gen
     nes_pad_poller
     nes_pad_port
 )

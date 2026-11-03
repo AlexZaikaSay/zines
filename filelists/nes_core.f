@@ -7,4 +7,5 @@ rtl/nes_core/apu/apu2A03.sv
 rtl/nes_core/cpu2a03/cpu2A03.sv
 rtl/nes_core/ppu/palette_ram.sv
 rtl/nes_core/ppu/ppu2C02.sv
+rtl/nes_core/clock_enable_gen.sv
 rtl/nes_core/nes.sv
