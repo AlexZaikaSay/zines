@@ -30,6 +30,7 @@ module rp_devboard
     cpu2A03 cpu (
         .clk,
         .rst_n,
+        .ce(1'b1),
         .addr,
         .data_out(cpu_data),
         .data_in(bus_data),

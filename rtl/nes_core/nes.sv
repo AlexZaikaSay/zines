@@ -1,7 +1,7 @@
 module nes (
-    input  logic       cpu_clk,
     input  logic       ppu_clk,
     input  logic       rst_n,
+    input  logic       cpu_ce,
     output logic [8:0] scanline,
     output logic [8:0] cycle,
     output logic [7:0] pixel_palette,
@@ -55,12 +55,13 @@ module nes (
         if (!rst_n)
             cpu_strobe <= 1'b0;
         else
-            cpu_strobe <= cpu_clk;
+            cpu_strobe <= cpu_ce;
     end
 
     cpu2A03 u_cpu (
-        .clk(cpu_clk),
+        .clk(ppu_clk),
         .rst_n(rst_n),
+        .ce(cpu_ce),
         .nmi_n(nmi_n),
         .irq_n(1'b1),
         .data_in(cpu_data_in),
@@ -77,9 +78,10 @@ module nes (
         .undef(undef)
     );
 
-    // Block RAM needs a registered read, so the RAM runs on ppu_clk (3x cpu_clk):
-    // the CPU address is stable for three PPU clocks, read data is ready after one,
-    // well before the next cpu_clk edge. A write repeats harmlessly on each of them.
+    // Block RAM needs a registered read, so the RAM runs every ppu_clk. The CPU bus
+    // is stable for the three PPU clocks between cpu_ce edges: read data is ready
+    // after one, well before the next cpu_ce. A write repeats harmlessly on each of them.
+
     sync_ram #(
         .ADDR_WIDTH(11)
     ) u_cpu_ram (

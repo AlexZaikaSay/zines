@@ -46,5 +46,9 @@ counterpart of `sim/top/video.sv`:
   (the pad runs from the board's 3.3 V; DO polarity is `JOY_DO_ACTIVE_LOW` in nes_top.sv).
 
 `nes_pll` makes four clocks from `CLOCK_50` (VCO 1260 MHz): `ppu_clk` 5.362 MHz,
-`pix_clk` 25.2 MHz, `sd_clk` 50.4 MHz and `tmds_clk` 126 MHz (HDMI serializer);
-`cpu_clk` is `ppu_clk / 3`.
+`pix_clk` 25.2 MHz, `sd_clk` 50.4 MHz and `tmds_clk` 126 MHz (HDMI serializer). `sd_clk` is
+currently unused: the cartridge SD loader runs on `ppu_clk`.
+
+The NES core runs entirely on `ppu_clk`; the CPU and APU advance on `cpu_ce`,
+a clock enable that is high for one `ppu_clk` in three (`clock_enable_gen`).
+
