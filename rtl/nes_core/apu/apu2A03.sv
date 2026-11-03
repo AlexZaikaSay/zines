@@ -39,6 +39,7 @@ module apu2A03 (
     apu_frame_counter u_frame_counter (
         .clk,
         .rst_n,
+        .ce,
         .apu_ce,
         .mode,
         .irq_inhibit(fc_int_inhibit),
@@ -106,6 +107,7 @@ module apu2A03 (
     ) u_pulse1 (
         .clk,
         .rst_n,
+        .ce,
         .apu_ce,
         .quarter_frame,
         .half_frame,
@@ -124,6 +126,7 @@ module apu2A03 (
     ) u_pulse2 (
         .clk,
         .rst_n,
+        .ce,
         .apu_ce,
         .quarter_frame,
         .half_frame,
@@ -140,6 +143,7 @@ module apu2A03 (
     apu_triangle u_triangle (
         .clk,
         .rst_n,
+        .ce,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[2]),
@@ -154,6 +158,7 @@ module apu2A03 (
     apu_noise u_noise (
         .clk,
         .rst_n,
+        .ce,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[3]),
@@ -171,7 +176,7 @@ module apu2A03 (
             fc_int_flag <= 1'b0;
             control_en <= 4'b0000;
             control <= 2'b00;
-        end else begin
+        end else if (ce) begin
             fc_int_flag <= fc_int_latch;
             if (r_apu_status)
                 fc_int_flag <= 1'b0;

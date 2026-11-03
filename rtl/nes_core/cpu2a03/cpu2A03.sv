@@ -30,7 +30,6 @@ module cpu2A03 (
     logic [7:0] dma_index;
     logic [7:0] dma_data;
     logic       odd_cycle;
-    logic       core_enabled;
     logic       apu_irq_n;
 
     logic [15:0] core_addr;
@@ -46,7 +45,6 @@ module cpu2A03 (
     localparam MEMIO_PAD1           = 16'h4016;
     localparam MEMIO_PAD2           = 16'h4017;
 
-    wire core_clk               = clk && core_enabled;
     wire dma_active             = (dma_state != DMA_IDLE);
     wire core_write_dma         = !core_rw && core_addr == MEMIO_DMA;
     wire core_write_pad1        = !core_rw && core_addr == MEMIO_PAD1;
@@ -56,23 +54,18 @@ module cpu2A03 (
     wire core_read_pad1         = core_rw && core_addr == MEMIO_PAD1;
     wire core_read_pad2         = core_rw && core_addr == MEMIO_PAD2;
     
-
-    // Core clock gate: enable changes only while clk is low
-    always_ff @(negedge clk or negedge rst_n) begin
-        if (!rst_n)
-            core_enabled <= 1'b1;
-        else
-            core_enabled <= !dma_active;
-    end
+    wire core_ce = !dma_active;
 
     // Output logic for out0 based on core writes to pad1, pad2
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out0    <= 1'b0;
-        end else 
-            if (core_enabled)
+        end else begin
+            if (core_ce) begin
                 if (core_write_pad1 || core_write_pad2)
                     out0 <= data_out[0];
+            end
+        end
     end
 
     // DMA state machine and control logic
@@ -88,7 +81,7 @@ module cpu2A03 (
 
             case (dma_state)
                 DMA_IDLE: begin
-                    if (core_enabled && core_write_dma) begin
+                    if (core_ce && core_write_dma) begin
                         dma_page  <= core_data_out;
                         dma_index <= 8'd0;
                         dma_state <= DMA_HALT;
@@ -110,9 +103,9 @@ module cpu2A03 (
     end
 
     mos6502 u_core (
-        .clk(core_clk),
+        .clk(clk),
         .rst_n(rst_n),
-        .ce(1'b1),
+        .ce(core_ce),
         .nmi_n(nmi_n),
         .irq_n(irq_n && apu_irq_n),     // IRQ line is wired-AND with the APU
         .data_in(core_data_in),
@@ -123,7 +116,7 @@ module cpu2A03 (
     );
 
     apu2A03 u_apu (
-        .clk(core_clk),
+        .clk(clk),
         .rst_n(rst_n),
         .ce(1'b1),
         .addr(core_addr),
@@ -137,8 +130,8 @@ module cpu2A03 (
         .audio4(audio4)
     );
 
-    // Bus ownership. While the core is gated off (including the cycle after
-    // DMA ends) the bus is parked on a harmless cartridge read.
+    // Bus ownership. While DMA owns the bus (core_ce = 0)
+    // the bus is parked on a harmless cartridge read.
     // Every output gets a default first so the block stays purely combinational
     // (no latches); internal register accesses also appear on the external bus,
     // as on the real 2A03.
@@ -151,7 +144,7 @@ module cpu2A03 (
         oe1_n        = 1'b1;
         oe2_n        = 1'b1;
 
-        if (core_enabled && !dma_active) begin
+        if (core_ce) begin
             if (core_read_pad1)
                 oe1_n = 1'b0;
             else if (core_read_pad2)
