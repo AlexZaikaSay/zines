@@ -34,6 +34,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/storage/sd/sd_card.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/storage/sd/disk.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/storage/sd/sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cart/cartridge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cart/cart_sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/nes_pad_poller.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/nes_pad_port.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/charmap.sv

@@ -34,8 +34,7 @@ module sd_loader #(
     output logic [31:0] byte_index
 );
 
-    localparam logic [1:0] OP_INIT = 2'd0;
-    localparam logic [1:0] OP_READ = 2'd1;
+    import zines_pkg::*;
 
     localparam integer SECTORS = (LOAD_WORDS + 127) / 128;
 
@@ -83,7 +82,7 @@ module sd_loader #(
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
             req     <= 1'b0;
-            op      <= OP_INIT;
+            op      <= SD_OP_INIT;
             sector  <= 0;
             started <= 1'b0;
             busy    <= 1'b1;
@@ -95,7 +94,7 @@ module sd_loader #(
 
             if (!started && sd_ready) begin
                 started <= 1'b1;
-                op      <= OP_INIT;
+                op      <= SD_OP_INIT;
                 req     <= 1'b1;
             end
             else if (sd_error) begin
@@ -104,14 +103,14 @@ module sd_loader #(
             end
             else if (sd_done) begin
                 // Init finished, or one more sector loaded
-                if (op == OP_READ && sector + 1 == SECTORS) begin
+                if (op == SD_OP_READ && sector + 1 == SECTORS) begin
                     busy <= 1'b0;
                     done <= 1'b1;
                 end
                 else begin
-                    if (op == OP_READ)
+                    if (op == SD_OP_READ)
                         sector <= sector + 1'b1;
-                    op  <= OP_READ;
+                    op  <= SD_OP_READ;
                     req <= 1'b1;
                 end
             end
