@@ -90,7 +90,6 @@ module main_fsm
     logic i_flag;
 
     logic [7:0] inst;
-    logic nmi_request;
 
     parameter FLAGS_RESET_VALUE = 8'b01100110;
     parameter C_FLAG = 0;
@@ -260,40 +259,28 @@ module main_fsm
     parameter OP_INC_ABS_X  = 8'hFE;
 
 
-    // The falling edge of nmi toggles nmi_edge (asynchronous to clk); it is passed through a
-    // two-flop synchronizer before Fetch copies it into nmi_seen.
-    // nmi_request is high from the edge until Fetch consumes it, and a held-low nmi does not re-trigger it.
-    logic nmi_edge;
-    logic nmi_edge_sync1;
-    logic nmi_edge_sync2;
-    logic nmi_seen;
-
-    always_ff @(negedge nmi_n or negedge rst_n) begin
-        if (!rst_n)
-            nmi_edge <= 0;
-        else
-            nmi_edge <= ~nmi_edge;
-    end
+    // sampled on ce, falling edge = previous 1 and now 0, 
+    // pending until Fetch takes it, and a held-low line doesn't re-trigger. 
+    
+    logic nmi_prev;
+    logic nmi_pending;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            nmi_edge_sync1 <= 0;
-            nmi_edge_sync2 <= 0;
+            nmi_prev <= 1'b1;
+            nmi_pending <= 1'b0;
         end
-        else begin
-            nmi_edge_sync1 <= nmi_edge;
-            nmi_edge_sync2 <= nmi_edge_sync1;
+        else if (ce) begin
+            nmi_prev <= nmi_n;
+            if (nmi_pending && state == Fetch)
+                nmi_pending <= 1'b0;
+            if (nmi_prev && !nmi_n)
+                nmi_pending <= 1'b1;
         end
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            nmi_seen <= 0;
-        else if (ce && (state == Fetch))
-            nmi_seen <= nmi_edge_sync2;
-    end
 
-    assign nmi_request = nmi_edge_sync2 != nmi_seen;
+    wire nmi_request = nmi_pending;
     logic [2:0] counter;
 
     always_ff @(posedge clk or negedge rst_n) begin

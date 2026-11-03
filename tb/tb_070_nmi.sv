@@ -23,9 +23,9 @@ module tb_070_nmi;
         $dumpvars(0, tb_070_nmi);
         nmi_n = 1;
         #1 rst_n = 0; #2; rst_n = 1;
-        #(31 + RESET_CYCLES * CYCLE_LEN); nmi_n = 0; #1; nmi_n = 1;  // 2 clk earlier: nmi is synchronized in the CPU
-        #200; nmi_n = 0; #1; nmi_n = 1;
-        #160; nmi_n = 0; #1; nmi_n = 1;
+        #(41 + RESET_CYCLES * CYCLE_LEN); nmi_n = 0; #CYCLE_LEN; nmi_n = 1;  // 1 clk earlier: nmi is sampled on the clock edge
+        #191; nmi_n = 0; #CYCLE_LEN; nmi_n = 1;
+        #151; nmi_n = 0; #CYCLE_LEN; nmi_n = 1;
     end
 
     initial begin
