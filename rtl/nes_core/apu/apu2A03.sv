@@ -1,6 +1,7 @@
 module apu2A03 (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        ce,
     input  logic [15:0] addr,
     input  logic [7:0]  data_in,
     input  logic        rw,
@@ -18,27 +19,27 @@ module apu2A03 (
     wire mode           = control[1];
     wire fc_int_inhibit = control[0];
 
-    logic pulse_clk;
+    logic apu_phase;
     logic [3:0] control_en;   // $4015 channel enables
 
-    // generate pulse clock from cpu clock
+    // APU clock enable: every second CPU cycle
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            pulse_clk <= 1'b0;
-        end else begin
-            if (clk) begin
-                pulse_clk <= ~pulse_clk;
-            end
-        end
+        if (!rst_n)
+            apu_phase <= 1'b0;
+        else if (ce)
+            apu_phase <= ~apu_phase;
     end
+
+    wire apu_ce = ce && apu_phase == 0;
 
     logic quarter_frame;
     logic half_frame;
     logic fc_int_latch;
 
     apu_frame_counter u_frame_counter (
-        .pulse_clk,
+        .clk,
         .rst_n,
+        .apu_ce,
         .mode,
         .irq_inhibit(fc_int_inhibit),
         .quarter_frame,
@@ -105,7 +106,7 @@ module apu2A03 (
     ) u_pulse1 (
         .clk,
         .rst_n,
-        .pulse_clk,
+        .apu_ce,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[0]),
@@ -123,7 +124,7 @@ module apu2A03 (
     ) u_pulse2 (
         .clk,
         .rst_n,
-        .pulse_clk,
+        .apu_ce,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[1]),
@@ -139,7 +140,6 @@ module apu2A03 (
     apu_triangle u_triangle (
         .clk,
         .rst_n,
-        .pulse_clk,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[2]),
@@ -154,7 +154,6 @@ module apu2A03 (
     apu_noise u_noise (
         .clk,
         .rst_n,
-        .pulse_clk,
         .quarter_frame,
         .half_frame,
         .enabled(control_en[3]),

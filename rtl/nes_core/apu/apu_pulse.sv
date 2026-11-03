@@ -12,7 +12,7 @@ module apu_pulse #(
 ) (
     input  logic        clk,
     input  logic        rst_n,
-    input  logic        pulse_clk,      // APU clock (CPU clock / 2)
+    input  logic        apu_ce,         // APU clock enable, every second CPU cycle
     input  logic        quarter_frame,  // envelope clock
     input  logic        half_frame,     // length counter and sweep clock
     input  logic        enabled,        // $4015 channel enable bit
@@ -66,11 +66,11 @@ module apu_pulse #(
     logic [2:0]  sequencer_timer;
 
     // timer and duty sequencer
-    always_ff @(posedge pulse_clk or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             sequencer_timer <= 0;
             counter <= 0;
-        end else begin
+        end else if (apu_ce) begin
             if (counter == 0) begin
                 sequencer_timer <= sequencer_timer - 1;
                 if (sequencer_timer == 0)
@@ -126,7 +126,7 @@ module apu_pulse #(
                     len_counter <= pulse_lengths[data_in[7:3]];
             end
 
-            if (half_frame && pulse_clk) begin
+            if (half_frame) begin
                 if (!halt && len_counter != 0)
                     len_counter <= len_counter - 1;
 
@@ -139,7 +139,7 @@ module apu_pulse #(
                     sweep_counter <= sweep_counter - 1;
             end
 
-            if (quarter_frame && pulse_clk) begin
+            if (quarter_frame) begin
                 if (env_start == 0) begin
                     env_divider <= env_divider - 1;
                     if (env_divider == 0) begin

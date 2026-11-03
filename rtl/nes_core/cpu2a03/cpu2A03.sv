@@ -125,6 +125,7 @@ module cpu2A03 (
     apu2A03 u_apu (
         .clk(core_clk),
         .rst_n(rst_n),
+        .ce(1'b1),
         .addr(core_addr),
         .data_in(apu_data_in),
         .rw(core_rw),

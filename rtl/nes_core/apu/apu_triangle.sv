@@ -8,7 +8,6 @@
 module apu_triangle (
     input  logic        clk,            // CPU clock
     input  logic        rst_n,
-    input  logic        pulse_clk,      // APU clock (CPU clock / 2)
     input  logic        quarter_frame,  // linear counter clock
     input  logic        half_frame,     // length counter clock
     input  logic        enabled,        // $4015 channel enable bit
@@ -97,11 +96,11 @@ module apu_triangle (
                 if (enabled)
                     len_counter <= triangle_lengths[data_in[7:3]];
             end
-            if (half_frame && pulse_clk) begin
+            if (half_frame) begin
                 if (!lin_counter_ctl && len_counter != 0)
                     len_counter <= len_counter - 1;
             end
-            if (quarter_frame && pulse_clk) begin
+            if (quarter_frame) begin
                 if (lin_counter_reload)
                     lin_counter <= lin_counter_reload_value;
                 else if (lin_counter != 0)
