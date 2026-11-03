@@ -4,6 +4,7 @@
 module cpu2A03 (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        ce,
     input  logic        nmi_n,
     input  logic        irq_n,
     input  logic [7:0]  data_in,
@@ -54,7 +55,7 @@ module cpu2A03 (
     wire core_read_pad1         = core_rw && core_addr == MEMIO_PAD1;
     wire core_read_pad2         = core_rw && core_addr == MEMIO_PAD2;
     
-    wire core_ce = !dma_active;
+    wire core_ce = ce && !dma_active;
 
     // Output logic for out0 based on core writes to pad1, pad2
     always_ff @(posedge clk or negedge rst_n) begin
@@ -76,7 +77,7 @@ module cpu2A03 (
             dma_index <= 8'd0;
             dma_data  <= 8'd0;
             odd_cycle <= 1'b0;
-        end else begin
+        end else if (ce) begin
             odd_cycle <= !odd_cycle;
 
             case (dma_state)
@@ -118,7 +119,7 @@ module cpu2A03 (
     apu2A03 u_apu (
         .clk(clk),
         .rst_n(rst_n),
-        .ce(1'b1),
+        .ce(ce),
         .addr(core_addr),
         .data_in(apu_data_in),
         .rw(core_rw),
@@ -144,7 +145,7 @@ module cpu2A03 (
         oe1_n        = 1'b1;
         oe2_n        = 1'b1;
 
-        if (core_ce) begin
+        if (!dma_active) begin
             if (core_read_pad1)
                 oe1_n = 1'b0;
             else if (core_read_pad2)

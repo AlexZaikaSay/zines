@@ -7,33 +7,23 @@ module clock_enable_gen #
 (
     input  logic clk,
     input  logic rst_n,
-    output logic cpu_ce,
-    output logic apu_ce
+    output logic cpu_ce
 );
 
     logic [1:0] phase;
-    logic       phase_toggle;
-
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             phase <= RESET_PHASE;
-            phase_toggle <= 1'b0;
-            apu_ce <= 1'b0;
             cpu_ce <= 1'b0;
         end else begin
             phase <= phase + 2'd1;
-            apu_ce <= 1'b0;
             cpu_ce <= 1'b0;
             if (phase == 2'd2) begin
                 phase <= 2'd0;
                 cpu_ce <= 1'b1;
-                phase_toggle <= ~phase_toggle;
-                if (phase_toggle == 1'b1)
-                    apu_ce <= 1'b1;
             end
         end
     end
-
 
 endmodule

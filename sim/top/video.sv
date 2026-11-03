@@ -4,8 +4,6 @@ module video (
     input logic clk
 );
     logic           rst_n;
-    logic [1:0]     phase;
-    logic           cpu_clk;
     logic [8:0]     scanline;
     logic [8:0]     cycle;
     logic [7:0]     pixel_palette;
@@ -43,15 +41,17 @@ module video (
     logic cart_loaded;
     wire  nes_rst_n = rst_n && cart_loaded;
 
-    always_ff @(posedge clk) begin
-        phase   <= (phase == 2'd2) ? 2'd0 : phase + 2'd1;
-        cpu_clk <= (phase == 2'd2);
-    end
+    logic cpu_ce;
+    clock_enable_gen u_clock_enable_gen (
+        .clk(clk),
+        .rst_n(rst_n),
+        .cpu_ce(cpu_ce)
+    );
 
     nes dut (
-        .cpu_clk(cpu_clk),
         .ppu_clk(clk),
         .rst_n(nes_rst_n),
+        .cpu_ce(cpu_ce),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
@@ -176,7 +176,7 @@ module video (
                                   (^pixel_palette === 1'bx) ? 0 : int'(pixel_palette[5:0]));
 
             // Once per CPU clock (PPU clk / 3), the rate the SDL audio side expects.
-            if (cpu_clk)
+            if (cpu_ce)
                 sdl_audio_sample((^audio1 === 1'bx) ? 0 : int'(audio1),
                                  (^audio2 === 1'bx) ? 0 : int'(audio2),
                                  (^audio3 === 1'bx) ? 0 : int'(audio3),
