@@ -5,6 +5,7 @@ module mos_devboard
 (
     input logic clk,
     input logic rst_n,
+    input logic ce = 1'b1,
     input logic nmi_n = 1'b1,
     input logic irq_n = 1'b1
 );
@@ -18,6 +19,7 @@ module mos_devboard
     mos6502 cpu (
         .clk,
         .rst_n,
+        .ce,
         .addr(addr),
         .data_out(cpu_data),
         .data_in(mem_data),
@@ -37,6 +39,7 @@ module mos_devboard
     ) memory (
         .clk,
         .addr(addr),
+        .cs_n(!ce),
         .data_out(mem_data),
         .data_in(cpu_data),
         .rw(rw)

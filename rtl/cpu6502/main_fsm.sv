@@ -4,6 +4,7 @@ module main_fsm
 (
     input logic         clk,
     input logic         rst_n,
+    input logic         ce,
     input logic         nmi_n,
     input logic         irq_n,
     input logic [7:0]   imm,
@@ -288,7 +289,7 @@ module main_fsm
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             nmi_seen <= 0;
-        else if (state == Fetch)
+        else if (ce && (state == Fetch))
             nmi_seen <= nmi_edge_sync2;
     end
 
@@ -301,7 +302,7 @@ module main_fsm
             counter <= 0;
             undef <= 0;
         end 
-        else begin
+        else if (ce) begin
             case (state)
                 Reset: begin
                     // Handle the reset state
