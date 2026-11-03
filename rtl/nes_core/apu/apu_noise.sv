@@ -8,7 +8,6 @@
 module apu_noise (
     input  logic        clk,
     input  logic        rst_n,
-    input  logic        pulse_clk,      // APU clock (CPU clock / 2)
     input  logic        quarter_frame,  // envelope clock
     input  logic        half_frame,     // length counter
     input  logic        enabled,        // $4015 channel enable bit
@@ -97,12 +96,12 @@ module apu_noise (
                     len_counter <= noise_lengths[data_in[7:3]];
             end
 
-            if (half_frame && pulse_clk) begin
+            if (half_frame) begin
                 if (!halt && len_counter != 0)
                     len_counter <= len_counter - 1;
             end
 
-            if (quarter_frame && pulse_clk) begin
+            if (quarter_frame) begin
                 if (env_start == 0) begin
                     env_divider <= env_divider - 1;
                     if (env_divider == 0) begin
