@@ -8,6 +8,7 @@
 module apu_noise (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        ce,
     input  logic        quarter_frame,  // envelope clock
     input  logic        half_frame,     // length counter
     input  logic        enabled,        // $4015 channel enable bit
@@ -59,7 +60,7 @@ module apu_noise (
         if (!rst_n) begin
             lfsr <= 1;
             counter <= 0;
-        end else begin
+        end else if (ce) begin
             if (counter == 0) begin
                 lfsr <= {lfsr[0] ^ lfsr[mode ? 6 : 1], lfsr[14:1]};
                 counter <= noise_period - 1;
@@ -83,7 +84,7 @@ module apu_noise (
             env_start <= 0;
             env_divider <= 0;
             env_decay_level <= 0;
-        end else begin
+        end else if (ce) begin
             if (w_settings)
                 settings <= data_in[5:0];
             if (w_mode) begin

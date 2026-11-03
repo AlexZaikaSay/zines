@@ -12,6 +12,7 @@ module apu_pulse #(
 ) (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        ce,
     input  logic        apu_ce,         // APU clock enable, every second CPU cycle
     input  logic        quarter_frame,  // envelope clock
     input  logic        half_frame,     // length counter and sweep clock
@@ -109,7 +110,7 @@ module apu_pulse #(
             env_decay_level <= 0;
             sweep_reload <= 0;
             sweep_counter <= 0;
-        end else begin
+        end else if (ce) begin
             if (w_settings)
                 settings <= data_in;
             if (w_sweep) begin

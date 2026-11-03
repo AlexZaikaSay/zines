@@ -6,6 +6,7 @@
 module apu_frame_counter (
     input  logic clk,
     input  logic rst_n,
+    input  logic ce,
     input  logic apu_ce,
     input  logic mode,          // $4017 bit 7
     input  logic irq_inhibit,   // $4017 bit 6
@@ -28,7 +29,7 @@ module apu_frame_counter (
             half_frame      <= 1'b0;
             quarter_frame   <= 1'b0;
             irq_latch       <= 1'b0;
-        end else begin
+        end else if (ce) begin
             quarter_frame   <= 1'b0;  // every clock -> pulses last one clk
             half_frame      <= 1'b0;
             irq_latch       <= 1'b0;
