@@ -63,6 +63,7 @@ endforeach()
 set(RTL_LINT_TOPS
     nes
     cartridge
+    cart_sd_loader
     disk
     sd_loader
     mos6502

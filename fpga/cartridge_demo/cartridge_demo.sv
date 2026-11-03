@@ -24,18 +24,34 @@ module cartridge_demo (
     logic [7:0]  displayed_byte;
     logic [3:0]  displayed_nibble;
 
-    cartridge cartridge_inst (
+    // cart_sd_loader streams the .nes image from SD (raw, LBA 0) into the cartridge
+    logic [2:0]  fill_w;
+    logic [14:0] init_addr;
+    logic [7:0]  init_data;
+
+    cart_sd_loader #(
+        .CLK_FREQ_HZ(50_000_000),
+        .RUN_SPI_HZ(10_000_000)
+    ) loader_inst (
         .clk(CLOCK_50),
-        .bus_clk(CLOCK_50),
-        .reset_n(RESET_N),
+        .rst_n(RESET_N),
         .sd_clk(SD_CLK),
         .sd_cmd(SD_CMD),
         .sd_dat0(SD_DAT0),
         .sd_cs_n(SD_CS_N),
-        .sd_cd(SD_CD),
+        .sd_cd_n(SD_CD),
+        .fill_w,
+        .addr(init_addr),
+        .data(init_data),
+        .loaded,
+        .error,
+        .error_code
+    );
+
+    cartridge cartridge_inst (
+        .clk(CLOCK_50),
         // First PRG-ROM byte is at $8000.
         .cpu_addr(16'h8000),
-        .cpu_data_in(8'h00),
         .cpu_data_out,
         .cpu_rw(1'b1),
         .cpu_ce_n(1'b0),
@@ -46,9 +62,9 @@ module cartridge_demo (
         .ppu_data_out,
         .ciram_a10(),
         .ciram_ce_n(),
-        .loaded,
-        .error,
-        .error_code
+        .fill_w,
+        .init_data_in(init_data),
+        .init_addr(init_addr)
     );
 
     // Show the error code until the ROM is loaded, then the first PRG byte.

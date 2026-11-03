@@ -1,4 +1,4 @@
-// RP2A03 wrapper: 6502 core + OAM DMA ($4014). APU is not implemented.
+// RP2A03 wrapper: 6502 core + OAM DMA ($4014) + APU.
 // The addr/data_out/rw pins are the shared CPU bus: the core drives them
 // normally, the DMA unit drives them while the core is halted.
 module cpu2A03 (

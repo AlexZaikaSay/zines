@@ -24,11 +24,6 @@ module cartridge_loader #(
 );
     import zines_pkg::*;
 
-    localparam logic [7:0] E_OPEN      = 8'h20;    // missing file or not iNES
-    localparam logic [7:0] E_MAPPER    = 8'h21;
-    localparam logic [7:0] E_SIZE      = 8'h22;
-    localparam logic [7:0] E_FOUR_SCR  = 8'h23;
-    localparam logic [7:0] E_TRUNCATED = 8'h24;
 
     logic [7:0] image [0:MAX_FILE_BYTES-1];
 
@@ -57,7 +52,7 @@ module cartridge_loader #(
         if (bytes_read < 16 ||
             image[0] != 8'h4E || image[1] != 8'h45 ||
             image[2] != 8'h53 || image[3] != 8'h1A) begin
-            error_code = E_OPEN;
+            error_code = CART_ERR_HEADER;
             $display("cartridge_loader: %s is missing or not an iNES file", ROM_FILE);
         end
         else begin
@@ -67,19 +62,19 @@ module cartridge_loader #(
             chr_size  = image[5] * 8192;
 
             if (mapper != 8'd0) begin
-                error_code = E_MAPPER;
+                error_code = CART_ERR_MAPPER;
                 $display("cartridge_loader: only mapper 0 is supported, got %0d", mapper);
             end
             else if (image[6][3]) begin
-                error_code = E_FOUR_SCR;
+                error_code = CART_ERR_FOUR_SCREEN;
                 $display("cartridge_loader: four-screen mirroring is not supported");
             end
             else if (image[4] == 8'd0 || image[4] > 8'd2 || image[5] > 8'd1) begin
-                error_code = E_SIZE;
+                error_code = CART_ERR_SIZE;
                 $display("cartridge_loader: unsupported ROM size");
             end
             else if (bytes_read < prg_start + prg_size + chr_size) begin
-                error_code = E_TRUNCATED;
+                error_code = CART_ERR_TRUNCATED;
                 $display("cartridge_loader: %s is truncated", ROM_FILE);
             end
         end

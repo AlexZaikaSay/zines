@@ -75,5 +75,13 @@ package zines_pkg;
     localparam logic [2:0]  FILL_PRG_DATA        = 3'd4;       // PRG byte at init_addr
     localparam logic [2:0]  FILL_CHR_DATA        = 3'd5;       // CHR byte at init_addr
 
+    // ---- iNES image load errors (cart_sd_loader, cartridge_loader) ----
+    // Above the SD_ERR_* range, so one error_code byte can carry either kind
+    localparam logic [7:0]  CART_ERR_HEADER      = 8'h40;      // missing file or no "NES\x1A" magic
+    localparam logic [7:0]  CART_ERR_MAPPER      = 8'h41;      // only mapper 0 (NROM) is supported
+    localparam logic [7:0]  CART_ERR_SIZE        = 8'h42;      // PRG must be 16/32 KiB, CHR 0/8 KiB
+    localparam logic [7:0]  CART_ERR_FOUR_SCREEN = 8'h43;      // four-screen mirroring is not supported
+    localparam logic [7:0]  CART_ERR_TRUNCATED   = 8'h44;      // file shorter than its header says
+
 endpackage
 /* verilator lint_on UNUSEDPARAM */
