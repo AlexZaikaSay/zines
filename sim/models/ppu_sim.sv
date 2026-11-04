@@ -7,16 +7,16 @@ module ppu_sim (
 );
 
 
-    palette_ram u_palette_ram (
+    ppu_palette u_palette (
         .clk(clk),
-        .addr(0),
-        .data_in(0),
-        .rw(1),
-        .cs_n(1),
-        .oe_n(1),
-        .pixel_addr(0),
-        .data_out(),
-        .pixel_data_out(pixel_color)
+        .ce(1'b1),
+        .addr(14'd0),
+        .we(1'b0),
+        .wdata(8'd0),
+        .sel(),
+        .rdata(),
+        .pixel_index(5'd0),
+        .pixel_color(pixel_color)
     );
 
     logic       odd_frame;

@@ -1,7 +1,8 @@
 module nes (
     input  logic       ppu_clk,
     input  logic       rst_n,
-    input  logic       cpu_ce,
+    input  logic       cpu_ce,      // CPU cycle: one ppu_clk in three
+    input  logic       ppu_ce,      // PPU dot: every ppu_clk; 0 together with cpu_ce pauses the console
     output logic [8:0] scanline,
     output logic [8:0] cycle,
     output logic [7:0] pixel_palette,
@@ -54,7 +55,7 @@ module nes (
     always_ff @(posedge ppu_clk or negedge rst_n) begin
         if (!rst_n)
             cpu_strobe <= 1'b0;
-        else
+        else if (ppu_ce)                // held over paused clocks: the PPU takes it on its next dot
             cpu_strobe <= cpu_ce;
     end
 
@@ -118,6 +119,7 @@ module nes (
     ppu2C02 u_ppu (
         .clk(ppu_clk),
         .rst_n(rst_n),
+        .ce(ppu_ce),
         .ppu_cs_n(!ppu_register_access),
         .cpu_rw(cpu_rw),
         .cpu_addr(cpu_addr[2:0]),

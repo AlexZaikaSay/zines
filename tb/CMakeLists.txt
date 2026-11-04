@@ -173,6 +173,17 @@ foreach(TB_FILE ${TESTBENCHS})
 
 endforeach()
 
+# SMB again with the console paused on random clocks: same reference, so every
+# register of the core must respect cpu_ce / ppu_ce
+add_test(NAME tb_200_smb_frames_pause
+    COMMAND ${CMAKE_COMMAND}
+        -DTB_NAME=tb_200_smb_frames_pause
+        -DSIM_EXE=${CMAKE_BINARY_DIR}/obj_tb_200_smb_frames/Vtb_200_smb_frames
+        -DSIM_ARG=+pause
+        -DWORK_DIR=${CMAKE_BINARY_DIR}
+        -DRESULT_DIR=${TB_RESULT_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/run_tb.cmake)
+
 set_property(DIRECTORY APPEND PROPERTY
     ADDITIONAL_CLEAN_FILES "${GENERATED_FILES};${COPIED_TESTVECTORS}"
 )
