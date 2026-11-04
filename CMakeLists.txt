@@ -75,6 +75,19 @@ set(RTL_LINT_TOPS
     clock_enable_gen
     nes_pad_poller
     nes_pad_port
+    ppu_timing
+    ppu_mixer
+    ppu_sprite_unit
+    ppu_sprites
+    ppu_oam
+    ppu_sprite_eval
+    ppu_status
+    ppu_scroll
+    ppu_regs
+    ppu_vram_bus
+    ppu2C02
+    ppu_bg_shifter
+    ppu_palette
 )
 add_custom_target(lint COMMENT "Linting RTL")
 foreach(TOP ${RTL_LINT_TOPS})

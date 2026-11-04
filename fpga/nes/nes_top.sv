@@ -103,6 +103,7 @@ module nes_top (
     clock_enable_gen u_clock_enable_gen (
         .clk(ppu_clk),
         .rst_n(rst_n),
+        .ce(1'b1),
         .cpu_ce(cpu_ce)
     );
 
@@ -217,6 +218,7 @@ module nes_top (
         .ppu_clk(ppu_clk),
         .rst_n(nes_rst_n),
         .cpu_ce(cpu_ce),
+        .ppu_ce(1'b1),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),

@@ -38,12 +38,24 @@ module tb_200_smb_frames;
     wire        nes_rst_n = rst_n && cart_loaded;
 
 
+    // +pause: the console is paused on random clocks (cpu_ce and ppu_ce low together).
+    // Every frame must still hash exactly like the reference: proves that each
+    // register of the core respects its clock enable.
+    logic        pause_mode;
+    logic [15:0] lfsr = 16'hACE1;
+    always @(posedge clk)
+        lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
+    // Only once the console runs: while the cartridge loads, the CPU phase must
+    // advance on every clock, as without pauses
+    wire run = !pause_mode || !nes_rst_n || lfsr[0];
+
     logic cpu_ce;
     clock_enable_gen  # (
         .RESET_PHASE(2'd2)
     ) u_clock_enable_gen (
         .clk(clk),
         .rst_n(rst_n),
+        .ce(run),
         .cpu_ce(cpu_ce)
     );
 
@@ -65,6 +77,7 @@ module tb_200_smb_frames;
         .ppu_clk(clk),
         .rst_n(nes_rst_n),
         .cpu_ce(cpu_ce),
+        .ppu_ce(run),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
@@ -149,7 +162,7 @@ module tb_200_smb_frames;
             dut.u_ciram.data[i] = 8'h00;
         end
         for (int i = 0; i < 32; i++)
-            dut.u_ppu.u_palette_ram.data[i] = 8'h0F;
+            dut.u_ppu.u_ppu_palette.data[i] = 8'h0F;
     end
 
     // FNV-1a over the visible pixels of a frame and over the audio of a frame
@@ -172,7 +185,8 @@ module tb_200_smb_frames;
     logic        update;
 
     initial begin
-        update = $test$plusargs("update");
+        update     = $test$plusargs("update");
+        pause_mode = $test$plusargs("pause");
         if (update) begin
             update_fd = $fopen(UPDATE_FILE, "w");
             if (update_fd == 0)
@@ -190,7 +204,7 @@ module tb_200_smb_frames;
     end
 
     always @(posedge clk) begin
-        if (nes_rst_n) begin
+        if (nes_rst_n && run) begin
             if (scanline < 240 && cycle >= 1 && cycle <= 256)
                 video_hash <= fnv(video_hash, {2'b00, pixel_palette[5:0]});
 
@@ -222,7 +236,8 @@ module tb_200_smb_frames;
                         $display("Recorded %0d frames to %s", FRAMES, UPDATE_FILE);
                     end
                     else
-                        $display("SMB: %0d frames match %s", FRAMES, GOLDEN_FILE);
+                        $display("SMB: %0d frames match %s%s", FRAMES, GOLDEN_FILE,
+                                 pause_mode ? " (with random pauses)" : "");
                     $finish;
                 end
             end

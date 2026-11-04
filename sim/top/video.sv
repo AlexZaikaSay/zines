@@ -45,6 +45,7 @@ module video (
     clock_enable_gen u_clock_enable_gen (
         .clk(clk),
         .rst_n(rst_n),
+        .ce(1'b1),
         .cpu_ce(cpu_ce)
     );
 
@@ -52,6 +53,7 @@ module video (
         .ppu_clk(clk),
         .rst_n(nes_rst_n),
         .cpu_ce(cpu_ce),
+        .ppu_ce(1'b1),
         .scanline(scanline),
         .cycle(cycle),
         .pixel_palette(pixel_palette),
@@ -147,7 +149,7 @@ module video (
             dut.u_ciram.data[i] = 8'h00;
         end
         for (i = 0; i < 32; i = i + 1)
-            dut.u_ppu.u_palette_ram.data[i] = 8'h0F;
+            dut.u_ppu.u_ppu_palette.data[i] = 8'h0F;
     end
 
     import "DPI-C" function void sdl_display_init(input string title);
