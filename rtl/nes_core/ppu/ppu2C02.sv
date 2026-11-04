@@ -290,12 +290,14 @@ module ppu2C02 (
     logic [7:0] bg_lo;
     logic [1:0] bg_at;
 
-    wire        status_rd   = !cpu_rw && (cpu_addr == PPUSTATUS);
+    
     wire [14:0] v_step      = ppu_ctrl[CTRL_INC] ? 32 : 1;
 
-    wire ppu_cs             = !ppu_cs_n;
-    wire cpu_read           = cpu_rw && ppu_cs;
-    wire cpu_write          = !cpu_rw && ppu_cs;
+    wire        ppu_cs      = !ppu_cs_n;
+    wire        cpu_read    = cpu_rw && ppu_cs;
+    wire        cpu_write   = !cpu_rw && ppu_cs;
+
+    wire        status_rd   = cpu_read && (cpu_addr == PPUSTATUS);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
