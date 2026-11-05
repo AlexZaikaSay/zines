@@ -138,7 +138,6 @@ static void option_select()
         print_status_arg("LOAD NES ERROR: ", res);
         return;
     }
-    screen_clear();
     game_running = 1;   /* TODO: hotkey to bring the menu back */
 }
 

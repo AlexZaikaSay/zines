@@ -34,6 +34,24 @@ if(WIN32)
     string(REPLACE "-lSDL2main" "" SDL2_LIBS "${SDL2_LIBS}")
 endif()
 
+# Profile-guided optimisation of the zines binary (clang only): the model is built
+# once instrumented, trained by utils/pgo_main.cpp (menu, SD load, 300 frames of
+# SMB, no window), and built again with the profile. ~18% faster, so the whole
+# console simulates above real time. Costs about a minute more per rebuild.
+execute_process(COMMAND c++ --version OUTPUT_VARIABLE ZINES_CXX_VERSION ERROR_QUIET)
+if(ZINES_CXX_VERSION MATCHES "clang")
+    find_program(LLVM_PROFDATA llvm-profdata)
+    if(NOT LLVM_PROFDATA AND APPLE)
+        execute_process(COMMAND xcrun --find llvm-profdata
+            OUTPUT_VARIABLE LLVM_PROFDATA OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+endif()
+if(LLVM_PROFDATA)
+    option(ZINES_PGO "Build the zines simulator with profile-guided optimisation" ON)
+else()
+    set(ZINES_PGO OFF)
+endif()
+
 foreach(TB_NAME ${EMULATOR_TBS})
     set(TB_FILE ${EMULATOR_DIR}/${TB_NAME}.sv)
     set(OBJ_DIR "${CMAKE_BINARY_DIR}/obj_${TB_NAME}")
@@ -86,8 +104,38 @@ foreach(TB_NAME ${EMULATOR_TBS})
         ${OBJ_DIR}/sim_main.cpp
         ${EMULATOR_DIR}/utils/sdl_display.cpp)
 
+    set(PGO_COMMANDS)
+    set(PGO_DEPENDS)
+    if(TB_NAME STREQUAL "zines" AND ZINES_PGO)
+        set(PGO_DIR "${CMAKE_BINARY_DIR}/obj_zines_pgo")
+        set(PGO_RAW "${PGO_DIR}/zines.profraw")
+        set(PGO_DATA "${PGO_DIR}/zines.profdata")
+        # Same Verilator flags as the real build, so the generated model is identical
+        set(PGO_FLAGS ${VERILATOR_FLAGS})
+        list(TRANSFORM PGO_FLAGS REPLACE "^${OBJ_DIR}$" "${PGO_DIR}")
+        set(PGO_COMMANDS
+            COMMAND ${VERILATOR_COMMAND} ${PGO_FLAGS}
+                -CFLAGS -fprofile-instr-generate -LDFLAGS -fprofile-instr-generate
+                ${TB_FILE}
+                ${EMULATOR_DIR}/utils/pgo_main.cpp
+                ${EMULATOR_DIR}/utils/pgo_stub.cpp
+            COMMAND ${CMAKE_COMMAND} -E rm -f ${PGO_RAW}
+            COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}
+                ${CMAKE_COMMAND} -E env LLVM_PROFILE_FILE=${PGO_RAW} ${PGO_DIR}/V${TB_NAME}
+            COMMAND ${LLVM_PROFDATA} merge -o ${PGO_DATA} ${PGO_RAW})
+        list(APPEND VERILATOR_FLAGS -CFLAGS -fprofile-instr-use=${PGO_DATA}
+            -CFLAGS -Wno-profile-instr-unprofiled -CFLAGS -Wno-profile-instr-out-of-date)
+        set(PGO_DEPENDS
+            ${EMULATOR_DIR}/utils/pgo_main.cpp
+            ${EMULATOR_DIR}/utils/pgo_stub.cpp
+            ${CMAKE_BINARY_DIR}/data/osd.tv
+            ${CMAKE_BINARY_DIR}/data/font.hex
+            ${CMAKE_BINARY_DIR}/data/sd.img)
+    endif()
+
     add_custom_command(
         OUTPUT "${SIM_EXE}"
+        ${PGO_COMMANDS}
         COMMAND ${VERILATOR_COMMAND}
             ${VERILATOR_FLAGS}
             ${TB_FILE}
@@ -98,6 +146,7 @@ foreach(TB_NAME ${EMULATOR_TBS})
             ${TB_FILE}
             ${TB_EXTRA_SOURCES}
             ${TEST_ASSETS}
+            ${PGO_DEPENDS}
         COMMENT "Building ${TB_NAME} with Verilator"
         VERBATIM
     )
@@ -152,5 +201,7 @@ add_custom_target(sdimg ALL DEPENDS ${SDIMG})
 # and SD card image (data/sd.img) at runtime
 add_dependencies(osdvideo osd font sdimg)
 
-# zines: the whole console, same runtime data as osdvideo
+# zines: the whole console, same runtime data as osdvideo; the PGO training run
+# needs it already at build time
 add_dependencies(zines osd font sdimg)
+add_dependencies(build_zines osd font sdimg)

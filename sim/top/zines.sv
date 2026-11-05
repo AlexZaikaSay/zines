@@ -7,6 +7,9 @@
 // (800x525) is ~4.7 NES frames long at the same clock, so the window has two layers:
 // the game straight from the PPU (every NES frame, like `video`), and the OSD taken
 // from the display chain, refreshed once per display frame.
+// The supervisor is ~25% of the simulation time and has nothing to do while the
+// game runs (the firmware only idles then), so its clock stops while the NES runs.
+// Simulation only: on a board sup_clk is clk.
 module zines (
     input logic clk
 );
@@ -22,13 +25,15 @@ module zines (
     assign rst_n = (rst_cnt == 8'd50);
 
     logic [7:0] pad_buttons = 8'h00;
+    logic       nes_running;
+    wire        sup_clk = clk && !nes_running;   // TODO: keep it running for the menu hotkey (Step 5)
     logic       sd_clk, sd_cmd, sd_dat0, sd_cs_n;
     logic [9:0] disp_h, disp_v;
     logic       disp_image;
     logic [5:0] disp_index;
     logic       cpu_ce;
     logic [3:0] audio1, audio2, audio3, audio4;
-    logic       nes_running, nes_undef, sup_undef;
+    logic       nes_undef, sup_undef;
 
     zines_system #(
         .OSD_ROM_FILE(OSD_ROM_FILE),
@@ -36,6 +41,7 @@ module zines (
     ) u_sys (
         .clk(clk),
         .rst_n(rst_n),
+        .sup_clk(sup_clk),
         .pix_clk(clk),
         .pix_rst_n(rst_n),
         .pad1_buttons(pad_buttons),

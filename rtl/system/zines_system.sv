@@ -5,8 +5,11 @@
 //       |  OSD text ----> osd_overlay
 //   nes -- pixels --> frame_buffer --> nes_scaler --> osd_overlay --> display raster
 //
-// clk runs the NES (one clk = one PPU dot), the cartridge and the supervisor;
-// pix_clk runs the display. The board adds the output stage (video_out / HDMI).
+// clk runs the NES (one clk = one PPU dot) and the cartridge, sup_clk the
+// supervisor, pix_clk the display. sup_clk must be clk itself (same edges): the
+// supervisor's outputs (NES_CTRL, the fill port) are used in the clk domain with
+// no synchronisers. It is a separate port so a simulation can stop the supervisor
+// while the game runs (a stopped clock saves simulation time, ce = 0 does not). The board adds the output stage (video_out / HDMI).
 // The NES stays in reset until the firmware has loaded a game and cleared
 // NES_CTRL_RESET; NES_CTRL_PAUSE freezes it, the display keeps the last frame.
 module zines_system #(
@@ -16,6 +19,7 @@ module zines_system #(
 ) (
     input  logic        clk,
     input  logic        rst_n,
+    input  logic        sup_clk,                // = clk on a board
     input  logic        pix_clk,
     input  logic        pix_rst_n,
 
@@ -64,7 +68,7 @@ module zines_system #(
         .ROM_FILE(OSD_ROM_FILE),
         .CLK_FREQ_HZ(CLK_FREQ_HZ)
     ) u_supervisor (
-        .clk(clk),
+        .clk(sup_clk),
         .rst_n(rst_n),
         .pad_buttons(pad1_buttons),
         .nes_reset(nes_reset),
@@ -223,7 +227,7 @@ module zines_system #(
     );
 
     frame_buffer u_frame_buffer (
-        .wclk(clk),
+        .wclk(sup_clk),
         .we(pix_valid),
         .wx(pix_x),
         .wy(pix_y),

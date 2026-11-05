@@ -180,8 +180,10 @@ static uint8_t load_rom(const char* folder, const char* rom_file)
     return 0;
 }
 
-/* Loads the game with the NES held in reset, then starts it.
- * On an error the NES stays in reset. */
+/* Loads the game with the NES held in reset, hides the OSD and starts it.
+ * On an error the NES stays in reset and the OSD keeps the menu.
+ * Starting the NES is the last thing done: the zines simulation stops the
+ * supervisor clock as soon as the NES runs. */
 uint8_t load_nes(const char* folder, const char* rom_file, const char* /*save_file*/)
 {
     uint8_t res;
@@ -191,6 +193,7 @@ uint8_t load_nes(const char* folder, const char* rom_file, const char* /*save_fi
     res = load_rom(folder, rom_file);
     if (res == 0)
     {
+        screen_clear();
         NES_CTRL = 0;
     }
     return res;

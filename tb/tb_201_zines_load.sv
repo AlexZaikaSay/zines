@@ -23,7 +23,7 @@ module tb_201_zines_load;
         .OSD_ROM_FILE("data/osd.tv"),
         .FONT_FILE("data/font.hex")
     ) u_sys (
-        .clk(clk), .rst_n(rst_n), .pix_clk(clk), .pix_rst_n(rst_n),
+        .clk(clk), .rst_n(rst_n), .sup_clk(clk), .pix_clk(clk), .pix_rst_n(rst_n),
         .pad1_buttons(pad), .pad2_buttons(8'h00),
         .sd_clk(sd_clk), .sd_cmd(sd_cmd), .sd_dat0(sd_dat0), .sd_cs_n(sd_cs_n), .sd_cd_n(1'b0),
         .disp_h(), .disp_v(), .disp_image(), .disp_index(), .disp_hsync(), .disp_vsync(),
@@ -82,6 +82,12 @@ module tb_201_zines_load;
 
         wait (nes_running);
         $display("tb_201: NES started at %0t", $time);
+        // The OSD must be hidden before the NES starts: the zines simulation
+        // stops the supervisor at that moment
+        for (int i = 0; i < 64 * 30; i++)
+            if (u_sys.u_osd.text[i] != 8'h20 || u_sys.u_osd.attr[i] != 8'h00)
+                $fatal(1, "tb_201: OSD cell %0d not cleared when the NES started (%02h/%02h)",
+                       i, u_sys.u_osd.text[i], u_sys.u_osd.attr[i]);
 
         while (frames < 40) begin
             @(posedge clk);
