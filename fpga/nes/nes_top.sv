@@ -110,9 +110,9 @@ module nes_top (
     // ----------------------------------------------------------------
     // Console
     // ----------------------------------------------------------------
-    logic [8:0]  scanline;
-    logic [8:0]  cycle;
     logic [7:0]  pixel_palette;
+    logic        pix_valid;
+    logic [7:0]  pix_x, pix_y;
     logic [15:0] cart_cpu_addr;
     logic [7:0]  cart_cpu_data_in;
     logic        cart_cpu_rw;
@@ -219,9 +219,12 @@ module nes_top (
         .rst_n(nes_rst_n),
         .cpu_ce(cpu_ce),
         .ppu_ce(1'b1),
-        .scanline(scanline),
-        .cycle(cycle),
+        .scanline(),
+        .cycle(),
         .pixel_palette(pixel_palette),
+        .pix_valid(pix_valid),
+        .pix_x(pix_x),
+        .pix_y(pix_y),
         .joy1_strob(joy1_strob),
         .joy1_oe_n(joy1_oe_n),
         .joy1_data(joy1_data),
@@ -296,20 +299,70 @@ module nes_top (
     logic [3:0] video_r, video_g, video_b;
     logic [9:0] video_x, video_y;
 
-    nes_vga u_video (
-        .ppu_clk(ppu_clk),
-        .scanline(scanline),
-        .cycle(cycle),
-        .pixel_palette(pixel_palette),
-        .vga_clk(pix_clk),
-        .vga_rst_n(pix_rst_n),
-        .hsync(video_hsync),
-        .vsync(video_vsync),
+    // display raster -> NES picture position -> frame buffer -> RGB
+    logic [9:0] raster_h, raster_v;
+    logic       raster_de, raster_hs, raster_vs;
+    logic [7:0] fb_rx, fb_ry;
+    logic [5:0] fb_index;
+    logic [9:0] img_h, img_v;
+    logic       img_image, img_hs, img_vs;
+
+    video_timing_gen u_timing (
+        .clk(pix_clk),
+        .rst_n(pix_rst_n),
+        .h(raster_h),
+        .v(raster_v),
+        .de(raster_de),
+        .hsync(raster_hs),
+        .vsync(raster_vs)
+    );
+
+    nes_scaler u_scaler (
+        .clk(pix_clk),
+        .rst_n(pix_rst_n),
+        .h(raster_h),
+        .v(raster_v),
+        .de(raster_de),
+        .hsync(raster_hs),
+        .vsync(raster_vs),
+        .rx(fb_rx),
+        .ry(fb_ry),
+        .h_q(img_h),
+        .v_q(img_v),
+        .image_q(img_image),
+        .hsync_q(img_hs),
+        .vsync_q(img_vs)
+    );
+
+    // Written on PPU dots only: while the console is paused the last frame stays
+    frame_buffer u_frame_buffer (
+        .wclk(ppu_clk),
+        .we(pix_valid),
+        .wx(pix_x),
+        .wy(pix_y),
+        .wdata(pixel_palette[5:0]),
+        .rclk(pix_clk),
+        .rx(fb_rx),
+        .ry(fb_ry),
+        .rdata(fb_index)
+    );
+
+    video_out u_video (
+        .clk(pix_clk),
+        .rst_n(pix_rst_n),
+        .h(img_h),
+        .v(img_v),
+        .image(img_image),
+        .index(fb_index),
+        .hsync(img_hs),
+        .vsync(img_vs),
+        .hsync_n(video_hsync),
+        .vsync_n(video_vsync),
         .red(video_r),
         .green(video_g),
         .blue(video_b),
-        .pixel_x(video_x),
-        .pixel_y(video_y)
+        .x(video_x),
+        .y(video_y)
     );
 
 `ifdef VIDEO_HDMI
@@ -361,7 +414,7 @@ module nes_top (
         .tmds_clock_n(TMDS_CLK_N)
     );
 
-    wire unused_video = &{1'b0, video_hsync, video_vsync};
+    wire unused_video = &{1'b0, video_hsync, video_vsync, pixel_palette[7:6]};
 `else
     assign VGA_HS = video_hsync;
     assign VGA_VS = video_vsync;
@@ -369,7 +422,7 @@ module nes_top (
     assign VGA_G  = video_g;
     assign VGA_B  = video_b;
 
-    wire unused_video = &{1'b0, video_x, video_y, tmds_clk, audio1, audio2, audio3, audio4};
+    wire unused_video = &{1'b0, video_x, video_y, pixel_palette[7:6], tmds_clk, audio1, audio2, audio3, audio4};
 `endif
 
     assign LEDR = cart_loaded;

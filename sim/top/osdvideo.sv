@@ -8,9 +8,10 @@ module osdvideo (
     parameter string FONT_FILE = "./data/font.hex";
     parameter string SD_FILE = "./data/sd.img";
 
-    logic [8:0] scanline;
-    logic [8:0] cycle;
-    logic [7:0] pixel_palette;
+    logic [9:0] disp_h;
+    logic [9:0] disp_v;
+    logic       disp_image;
+    logic [5:0] disp_index;
     logic [7:0] pad_buttons;
 
      // clk is driven by utils/sim_main.cpp; reset is held for 50 clocks.
@@ -30,9 +31,10 @@ module osdvideo (
         .clk(clk),
         .rst_n(rst_n),
         .pad_buttons(pad_buttons),
-        .scanline(scanline),
-        .cycle(cycle),
-        .pixel_palette(pixel_palette)
+        .disp_h(disp_h),
+        .disp_v(disp_v),
+        .disp_image(disp_image),
+        .disp_index(disp_index)
     );
 
     // initial begin
@@ -48,19 +50,25 @@ module osdvideo (
 
     initial sdl_display_init("test OSD");
 
+    // The window shows the NES picture 256x240: one display pixel of each 2x2 block.
+    // A frame ends at the first line below the visible 480.
+    wire [9:0] pic_x     = disp_h - 10'd64;
+    wire       pic_pixel = disp_image && !pic_x[0] && !disp_v[0];
+    wire       frame_end = disp_v == 10'd480 && disp_h == 10'd0;
+
     always @(posedge clk)
-        if (scanline == 240 && cycle == 0) begin
+        if (frame_end) begin
             pad_buttons <= 8'(sdl_display_buttons());
         end
 
      // Gamepad simulation, W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start
     always @(posedge clk or negedge rst_n) begin
         if (rst_n === 1'b1) begin
-            if (scanline < 240 && cycle >= 1 && cycle <= 256)
-                sdl_display_pixel(int'(cycle) - 1, int'(scanline),
-                                  (^pixel_palette === 1'bx) ? 0 : int'(pixel_palette[5:0]));
+            if (pic_pixel)
+                sdl_display_pixel(int'(pic_x[8:1]), int'(disp_v[8:1]),
+                                  (^disp_index === 1'bx) ? 0 : int'(disp_index));
 
-            if (scanline == 240 && cycle == 0) begin
+            if (frame_end) begin
                 if (sdl_display_present() != 0) begin
                     sdl_display_close();
                     $finish;

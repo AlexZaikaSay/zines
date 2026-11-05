@@ -50,9 +50,14 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cart/cartridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cart/cart_sd_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/nes_pad_poller.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/nes_pad_port.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/display_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/charmap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/vga.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/nes_vga.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/video_timing_gen.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/frame_buffer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/nes_scaler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/osd_overlay.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/video_out.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/tmds_video_encoder.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/display/hdmi_tx.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/audio/nes_audio_sampler.sv

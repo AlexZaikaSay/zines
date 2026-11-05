@@ -67,7 +67,11 @@ set(RTL_LINT_TOPS
     disk
     sd_loader
     mos6502
-    nes_vga
+    video_timing_gen
+    frame_buffer
+    nes_scaler
+    osd_overlay
+    video_out
     vga
     hdmi_tx
     charmap

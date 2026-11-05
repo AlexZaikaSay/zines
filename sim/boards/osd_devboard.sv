@@ -8,9 +8,11 @@ module osd_devboard
     input logic clk,
     input logic rst_n,
     input logic  [7:0] pad_buttons,
-    output logic [8:0] scanline,
-    output logic [8:0] cycle,
-    output logic [7:0] pixel_palette
+    // display raster (640x480@60 grid) with the picture and the OSD mixed
+    output logic [9:0] disp_h,
+    output logic [9:0] disp_v,
+    output logic       disp_image,      // disp_index is a picture pixel
+    output logic [5:0] disp_index
 );
 
     logic [15:0]    cpu_addr;
@@ -18,12 +20,11 @@ module osd_devboard
     logic [7:0]     cpu_in_data;
     logic [7:0]     ram_data;
     logic [7:0]     rom_data;
-    logic [7:0]     char_code;
-    logic [7:0]     attr_code;
     logic [7:0]     sd_data;
 
-    logic [7:0]     osd_pixels;
     logic [7:0]     ppu_pixels;
+    logic [8:0]     scanline;
+    logic [8:0]     cycle;
     
     logic [7:0]     pad_previous;
 
@@ -31,9 +32,6 @@ module osd_devboard
     logic undef;
 
     import zines_pkg::*;
-
-    localparam PPU_WIDTH = 256;
-    localparam PPU_HEIGHT = 240;
 
     wire ram_selected           = cpu_addr[15:13] == OSD_ADDR_RAM[15:13];     // $0000-$1FFF
     wire sd_buffer_selected     = cpu_addr[15:9]  == OSD_ADDR_SD_BUF[15:9];   // $3000-$31FF
@@ -103,43 +101,85 @@ module osd_devboard
         .cycle(cycle)
     );
 
-    charmap #(
-        .FONT_FILE(FONT_FILE)
-    ) charmap_inst (
+    // ------ display: the PPU writes the frame buffer, the display side reads it
+    //        and puts the OSD text on top; one clock drives both sides here
+    wire       pix_valid = scanline < 9'd240 && cycle >= 9'd1 && cycle <= 9'd256;
+    wire [8:0] pix_x     = cycle - 9'd1;
+
+    logic [9:0] raster_h, raster_v;
+    logic       raster_de, raster_hs, raster_vs;
+    logic [7:0] fb_rx, fb_ry;
+    logic [5:0] fb_index;
+    logic [9:0] img_h, img_v;
+    logic       img_image, img_hs, img_vs;
+
+    video_timing_gen u_timing (
         .clk(clk),
-        .char_code(char_code[6:0]),
-        .attr_code(attr_code),
-        .row(scanline[2:0]),
-        .col(cycle[2:0]),
-        .pixels(osd_pixels)
+        .rst_n(rst_n),
+        .h(raster_h),
+        .v(raster_v),
+        .de(raster_de),
+        .hsync(raster_hs),
+        .vsync(raster_vs)
     );
 
+    nes_scaler u_scaler (
+        .clk(clk),
+        .rst_n(rst_n),
+        .h(raster_h),
+        .v(raster_v),
+        .de(raster_de),
+        .hsync(raster_hs),
+        .vsync(raster_vs),
+        .rx(fb_rx),
+        .ry(fb_ry),
+        .h_q(img_h),
+        .v_q(img_v),
+        .image_q(img_image),
+        .hsync_q(img_hs),
+        .vsync_q(img_vs)
+    );
 
-    wire [5:0] osd_x = cycle[8:3];
-    wire [5:0] osd_y = scanline[8:3];
-    wire osd_visible_char = cycle < PPU_WIDTH && scanline < PPU_HEIGHT;
-    wire [10:0] osd_pos = (osd_y << 6) + osd_x;
-    
-    // Text ($2000-$27FF) and attribute ($2800-$2FFF) buffers: the CPU
-    // writes through its own port, the display reads at osd_pos, so CPU
-    // writes never disturb the picture.
-    wire osd_text_write = osd_text_selected && !cpu_rw;
-    wire osd_attr_write = osd_attr_selected && !cpu_rw;
+    frame_buffer u_frame_buffer (
+        .wclk(clk),
+        .we(pix_valid),
+        .wx(pix_x[7:0]),
+        .wy(scanline[7:0]),
+        .wdata(ppu_pixels[5:0]),
+        .rclk(clk),
+        .rx(fb_rx),
+        .ry(fb_ry),
+        .rdata(fb_index)
+    );
 
-    logic [7:0] osd_text [0:2047];
-    logic [7:0] osd_attr [0:2047];
+    // Text ($2000-$27FF) and attribute ($2800-$2FFF) buffers live in the overlay
+    osd_overlay #(
+        .FONT_FILE(FONT_FILE)
+    ) u_osd (
+        .clk(clk),
+        .rst_n(rst_n),
+        .wclk(clk),
+        .text_we(osd_text_selected && !cpu_rw),
+        .attr_we(osd_attr_selected && !cpu_rw),
+        .waddr(cpu_addr[10:0]),
+        .wdata(cpu_data),
+        .h(raster_h),
+        .v(raster_v),
+        .h1(img_h),
+        .v1(img_v),
+        .image1(img_image),
+        .hsync1(img_hs),
+        .vsync1(img_vs),
+        .index1(fb_index),
+        .h2(disp_h),
+        .v2(disp_v),
+        .image2(disp_image),
+        .hsync2(),
+        .vsync2(),
+        .index2(disp_index)
+    );
 
-    always_ff @(posedge clk) begin
-        if (osd_text_write)
-            osd_text[cpu_addr[10:0]] <= cpu_data;
-        if (osd_attr_write)
-            osd_attr[cpu_addr[10:0]] <= cpu_data;
-    end
-
-    assign char_code = osd_text[osd_pos];
-    assign attr_code = osd_attr[osd_pos];
-
-    assign pixel_palette = (osd_pixels != 0) && osd_visible_char ? osd_pixels : ppu_pixels;
+    wire unused_display = &{1'b0, ppu_pixels[7:6], pix_x[8]};
 
     // SD card: disk is the command processor, sim_sd_card stands in for the
     // card on the SPI pins and works on SD_FILE

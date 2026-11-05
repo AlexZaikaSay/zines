@@ -29,6 +29,9 @@ module ppu2C02
     output logic        ppu_rd_n,
     output logic        ppu_wr_n,
     output logic [7:0]  pixel_color,
+    output logic        pix_valid,     // pixel_color is the picture pixel (pix_x, pix_y) on this dot
+    output logic [7:0]  pix_x,
+    output logic [7:0]  pix_y,
     output logic [8:0]  scanline,
     output logic [8:0]  cycle
 );
@@ -245,7 +248,14 @@ module ppu2C02
         .nmi_n(nmi_n)
     );
 
+    // ------ picture pixel position: pixel_color of dot n is pixel n-1 of the line
+    wire [8:0] cycle_m1 = cycle - 9'd1;
+
+    assign pix_valid = ce && timing.visible_pixel;
+    assign pix_x     = cycle_m1[7:0];
+    assign pix_y     = scanline[7:0];
+
     // PPUCTRL bits 1:0 (nametable select) go to t through wr_ctrl; bit 6 is unused on the NES
-    wire unused = &{1'b0, ppu_ctrl[6], ppu_ctrl[1:0], ppu_mask[7:5], ppu_mask[0]};
+    wire unused = &{1'b0, ppu_ctrl[6], ppu_ctrl[1:0], ppu_mask[7:5], ppu_mask[0], cycle_m1[8]};
 
 endmodule

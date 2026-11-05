@@ -6,6 +6,9 @@ module nes (
     output logic [8:0] scanline,
     output logic [8:0] cycle,
     output logic [7:0] pixel_palette,
+    output logic       pix_valid,   // pixel_palette is picture pixel (pix_x, pix_y)
+    output logic [7:0] pix_x,
+    output logic [7:0] pix_y,
 
     // Joystick interface: strobe is shared by both ports
     output logic       joy1_strob,
@@ -132,6 +135,9 @@ module nes (
         .ppu_rd_n(ppu_rd_n),
         .ppu_wr_n(ppu_wr_n),
         .pixel_color(pixel_palette),
+        .pix_valid(pix_valid),
+        .pix_x(pix_x),
+        .pix_y(pix_y),
         .scanline(scanline),
         .cycle(cycle)
     );
