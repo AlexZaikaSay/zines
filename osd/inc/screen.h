@@ -13,6 +13,7 @@ struct menu_item {
 
 void print_status(const char *s);
 void print_status_arg(const char *s, uint8_t arg);
+void screen_clear(void);
 void menu_draw_frame();
 void menu_clean_items();
 void menu_draw_items(struct menu_item *items, uint8_t count, uint8_t selected);

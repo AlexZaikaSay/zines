@@ -20,6 +20,7 @@ static struct menu_item options[OPTIONS_COUNT];
 static uint8_t option_count = 0;
 
 static uint8_t option_selected = 0;
+static uint8_t game_running = 0;   /* a game was started: the menu is hidden */
 
 void fill_game_list(char *filename)
 {
@@ -135,7 +136,10 @@ static void option_select()
     if (res != 0)
     {
         print_status_arg("LOAD NES ERROR: ", res);
+        return;
     }
+    screen_clear();
+    game_running = 1;   /* TODO: hotkey to bring the menu back */
 }
 
 static void menu_up(void)
@@ -204,7 +208,7 @@ int main(void)
     menu_draw_items(games, game_count, game_selected);
 
     for (;;) {
-        if (PAD1_PRESSED)
+        if (!game_running && PAD1_PRESSED)
         {
             uint8_t buttons = PAD1;
             if (buttons & BTN_UP)

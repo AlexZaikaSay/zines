@@ -33,6 +33,7 @@ void print_status(const char *s)
     for (i = 0; i < len; ++i)
     {
         OSD_TEXT[pos_y * OSD_WIDTH + pos_x] = s[i];
+        OSD_ATTR[pos_y * OSD_WIDTH + pos_x] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
         posinc();
     }
 }
@@ -94,6 +95,17 @@ void menu_draw_items(struct menu_item *items, uint8_t count, uint8_t selected)
     }
 }
 
+/* Blank every visible cell: the game picture shows through */
+void screen_clear(void)
+{
+    uint16_t i;
+    for (i = 0; i < OSD_WIDTH * OSD_VIS_HEIGHT; ++i)
+    {
+        OSD_TEXT[i] = ' ';
+        OSD_ATTR[i] = 0;
+    }
+}
+
 void menu_clean_items()
 {
     uint8_t i, j;
@@ -112,17 +124,25 @@ void menu_draw_frame()
     uint8_t i;
 
     OSD_TEXT[MENU_Y * OSD_WIDTH + MENU_X] = BOX2_TL;
+    OSD_ATTR[MENU_Y * OSD_WIDTH + MENU_X] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     OSD_TEXT[MENU_Y * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_TR;
+    OSD_ATTR[MENU_Y * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + MENU_X] = BOX2_BL;
+    OSD_ATTR[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + MENU_X] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_BR;
+    OSD_ATTR[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     for (i = 1; i < MENU_WIDTH - 1; ++i)
     {
         OSD_TEXT[MENU_Y * OSD_WIDTH + (MENU_X + i)] = BOX2_H;
+        OSD_ATTR[MENU_Y * OSD_WIDTH + (MENU_X + i)] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
         OSD_TEXT[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + i)] = BOX2_H;
+        OSD_ATTR[(MENU_Y + MENU_HEIGHT - 1) * OSD_WIDTH + (MENU_X + i)] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     }
     for (i = 1; i < MENU_HEIGHT - 1; ++i)
     {
         OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + MENU_X] = BOX2_V;
+        OSD_ATTR[(MENU_Y + i) * OSD_WIDTH + MENU_X] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
         OSD_TEXT[(MENU_Y + i) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = BOX2_V;
+        OSD_ATTR[(MENU_Y + i) * OSD_WIDTH + (MENU_X + MENU_WIDTH - 1)] = ATTR_FG(C_WHITE) | ATTR_PRESENT;
     }
 }

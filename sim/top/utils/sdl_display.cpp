@@ -27,6 +27,8 @@ SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 SDL_Texture* texture = nullptr;
 uint32_t framebuffer[WIDTH * HEIGHT];
+uint8_t osd_layer[WIDTH * HEIGHT];      // OSD palette index per pixel, 0 = transparent
+uint32_t screen[WIDTH * HEIGHT];        // framebuffer with osd_layer on top
 char base_title[128] = "";  // title from sdl_display_init; fps is appended to it
 uint32_t last_frame_ticks = 0;
 uint32_t frame_count = 0;
@@ -115,6 +117,12 @@ void sdl_display_pixel(int x, int y, int palette_index) {
     framebuffer[y * WIDTH + x] = 0xFF000000u | kPalette[palette_index & 0x3F];
 }
 
+// OSD layer, drawn over the picture by sdl_display_present; 0 = transparent
+void sdl_display_osd_pixel(int x, int y, int palette_index) {
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+    osd_layer[y * WIDTH + x] = (uint8_t)palette_index;
+}
+
 // Shows the finished frame; returns 1 once the user closes the window (or presses Esc).
 int sdl_display_present(void) {
     if (!window) return 1;
@@ -136,7 +144,9 @@ int sdl_display_present(void) {
     pad_state = held | pending;
     pending = 0;
 
-    SDL_UpdateTexture(texture, nullptr, framebuffer, WIDTH * sizeof(uint32_t));
+    for (int i = 0; i < WIDTH * HEIGHT; ++i)
+        screen[i] = osd_layer[i] ? 0xFF000000u | kPalette[osd_layer[i] & 0x3F] : framebuffer[i];
+    SDL_UpdateTexture(texture, nullptr, screen, WIDTH * sizeof(uint32_t));
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, nullptr, nullptr);
     SDL_RenderPresent(renderer);

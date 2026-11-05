@@ -1,12 +1,12 @@
 # Interactive SDL emulators (video + joysticks, audio).
 # Verilator only; clk is driven by utils/sim_main.cpp. `ninja` builds them,
-# `ninja video` / `ninja audio` runs them. Never part of `ninja test`.
+# `ninja video` / `ninja audio` / `ninja zines` runs them. Never part of `ninja test`.
 set(EMULATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(TEST_ASSETS
     ${CMAKE_SOURCE_DIR}/assets/SMB.nes
     ${CMAKE_SOURCE_DIR}/assets/color_test.nes
 )
-set(EMULATOR_TBS video audio osdvideo)
+set(EMULATOR_TBS video audio osdvideo zines)
 
 find_program(SDL2_CONFIG sdl2-config REQUIRED)
 
@@ -151,3 +151,6 @@ add_custom_target(sdimg ALL DEPENDS ${SDIMG})
 # osdvideo loads the OSD firmware image (data/osd.tv), font (data/font.hex)
 # and SD card image (data/sd.img) at runtime
 add_dependencies(osdvideo osd font sdimg)
+
+# zines: the whole console, same runtime data as osdvideo
+add_dependencies(zines osd font sdimg)

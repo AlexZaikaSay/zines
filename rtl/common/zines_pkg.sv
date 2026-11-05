@@ -60,6 +60,33 @@ package zines_pkg;
     localparam logic [7:0]  SD_ERR_WRITE_REJECT  = 8'h31;      // data response not "accepted"
     localparam logic [7:0]  SD_ERR_WRITE_TIMEOUT = 8'h32;      // card busy too long after write
 
+    // ---- Supervisor: NES control ----
+    localparam logic [15:0] OSD_ADDR_NES_CTRL    = 16'h4001;   // RW: NES_CTRL_* bits
+    localparam logic [7:0]  NES_CTRL_RESET       = 8'h01;      // hold the NES in reset (set after power-on)
+    localparam logic [7:0]  NES_CTRL_PAUSE       = 8'h02;      // freeze CPU / PPU / APU clock enables
+
+    // ---- Supervisor: cartridge loader ($4030-$4037) ----
+    // Write LD_SEL and LD_ADDR, then stream bytes through LD_DATA (address auto-increments)
+    localparam logic [15:0] OSD_ADDR_LOADER      = 16'h4030;
+    localparam logic [2:0]  LD_REG_SEL           = 3'd0;       // RW: LD_SEL_* target memory
+    localparam logic [2:0]  LD_REG_ADDR0         = 3'd1;       // RW: 24-bit byte address, little-endian
+    localparam logic [2:0]  LD_REG_ADDR1         = 3'd2;
+    localparam logic [2:0]  LD_REG_ADDR2         = 3'd3;
+    localparam logic [2:0]  LD_REG_DATA          = 3'd4;       // W: byte to the target memory
+    localparam logic [7:0]  LD_SEL_PRG_ROM       = 8'h00;
+    localparam logic [7:0]  LD_SEL_CHR           = 8'h01;
+    localparam logic [7:0]  LD_SEL_PRG_RAM       = 8'h02;      // battery RAM (not implemented yet)
+
+    // ---- Supervisor: cartridge configuration ($4038-$403B) ----
+    localparam logic [15:0] OSD_ADDR_CART        = 16'h4038;
+    localparam logic [1:0]  CART_REG_MAPPER      = 2'd0;       // RW: iNES mapper number (only 0 so far)
+    localparam logic [1:0]  CART_REG_FLAGS       = 2'd1;       // RW: CART_FLAG_* bits
+    localparam logic [1:0]  CART_REG_PRG_16K     = 2'd2;       // RW: PRG size in 16 KiB
+    localparam logic [1:0]  CART_REG_CHR_8K      = 2'd3;       // RW: CHR size in 8 KiB (0 = CHR RAM)
+    localparam logic [7:0]  CART_FLAG_VERTICAL   = 8'h01;
+    localparam logic [7:0]  CART_FLAG_BATTERY    = 8'h02;
+    localparam logic [7:0]  CART_FLAG_CHR_RAM    = 8'h04;
+
     // @c-export end
 
     // ---- disk <-> sd_card operation codes ----

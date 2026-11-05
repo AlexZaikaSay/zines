@@ -180,8 +180,18 @@ static uint8_t load_rom(const char* folder, const char* rom_file)
     return 0;
 }
 
+/* Loads the game with the NES held in reset, then starts it.
+ * On an error the NES stays in reset. */
 uint8_t load_nes(const char* folder, const char* rom_file, const char* /*save_file*/)
 {
+    uint8_t res;
+
+    NES_CTRL = NES_RESET;
     // TODO: handle save_file
-    return  load_rom(folder, rom_file);
+    res = load_rom(folder, rom_file);
+    if (res == 0)
+    {
+        NES_CTRL = 0;
+    }
+    return res;
 }

@@ -18,15 +18,15 @@
  */
 
 /* ---------------- Planned, not decoded by the hardware yet ----------------
- * SYS_ID, NES_CTRL, SYS_STATUS, OSD_CTRL/FG/BG, LD_*, CART_*, ST_*, FRAMES*:
+ * SYS_ID, SYS_STATUS, OSD_CTRL/FG/BG, ST_*, FRAMES*:
  * move each one into zines_pkg (@c-export section) when it is implemented.
  */
 
 /* ---------------- System / NES control ---------------- */
 #define SYS_ID        REG8(0x4000)  // R: hardware version
-#define NES_CTRL      REG8(0x4001)  // RW
-#define   NES_RESET     0x01        //   1 = hold NES in reset
-#define   NES_PAUSE     0x02        //   1 = freeze CPU/PPU/APU clock enable
+#define NES_CTRL      REG8(OSD_ADDR_NES_CTRL)  // RW
+#define   NES_RESET     NES_CTRL_RESET       //   1 = hold NES in reset (set at power-on)
+#define   NES_PAUSE     NES_CTRL_PAUSE       //   1 = freeze CPU/PPU/APU clock enable
 #define SYS_STATUS    REG8(0x4002)  // R
 #define   ST_VBLANK     0x01        //   set at frame start, cleared on read
 #define   ST_HOTKEY     0x02        //   long press detected, cleared on read
@@ -91,22 +91,24 @@ enum {
  * Write LD_SEL + LD_ADDR, then stream bytes through LD_DATA.
  * LD_ADDR auto-increments on every LD_DATA access.
  */
-#define LD_SEL        REG8(0x4030)  // RW
-#define   LD_PRG_ROM    0x00
-#define   LD_CHR        0x01        //   CHR ROM or CHR RAM
-#define   LD_PRG_RAM    0x02        //   battery RAM ($6000-$7FFF) for .sav
-#define LD_ADDR0      REG8(0x4031)  // RW: 24-bit address
-#define LD_ADDR1      REG8(0x4032)
-#define LD_ADDR2      REG8(0x4033)
-#define LD_DATA       REG8(0x4034)  // RW: data port, auto-increment
+#define LD_REG(r)     REG8(OSD_ADDR_LOADER + (r))
+#define LD_SEL        LD_REG(LD_REG_SEL)    // RW
+#define   LD_PRG_ROM    LD_SEL_PRG_ROM
+#define   LD_CHR        LD_SEL_CHR          //   CHR ROM or CHR RAM
+#define   LD_PRG_RAM    LD_SEL_PRG_RAM      //   battery RAM ($6000-$7FFF) for .sav
+#define LD_ADDR0      LD_REG(LD_REG_ADDR0)  // RW: 24-bit address
+#define LD_ADDR1      LD_REG(LD_REG_ADDR1)
+#define LD_ADDR2      LD_REG(LD_REG_ADDR2)
+#define LD_DATA       LD_REG(LD_REG_DATA)   // W: data port, auto-increment
 
-#define CART_MAPPER   REG8(0x4038)  // RW: 0, 1, 2, 4
-#define CART_FLAGS    REG8(0x4039)  // RW
-#define   CART_VERT_MIRROR 0x01
-#define   CART_BATTERY     0x02
-#define   CART_CHR_RAM     0x04
-#define CART_PRG_16K  REG8(0x403A)  // RW: PRG size in 16 KB units
-#define CART_CHR_8K   REG8(0x403B)  // RW: CHR size in 8 KB units (0 = CHR RAM)
+#define CART_REG(r)   REG8(OSD_ADDR_CART + (r))
+#define CART_MAPPER   CART_REG(CART_REG_MAPPER)   // RW
+#define CART_FLAGS    CART_REG(CART_REG_FLAGS)    // RW
+#define   CART_VERT_MIRROR CART_FLAG_VERTICAL
+#define   CART_BATTERY     CART_FLAG_BATTERY
+#define   CART_CHR_RAM     CART_FLAG_CHR_RAM
+#define CART_PRG_16K  CART_REG(CART_REG_PRG_16K)  // RW: PRG size in 16 KB units
+#define CART_CHR_8K   CART_REG(CART_REG_CHR_8K)   // RW: CHR size in 8 KB units (0 = CHR RAM)
 
 /* ---------------- Save state bus ----------------
  * Flat state address space defined in Verilog (CPU regs, PPU regs,

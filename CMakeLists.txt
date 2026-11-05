@@ -36,6 +36,7 @@ set(RTL_FILELISTS
     display
     input
     audio
+    system
 )
 set(FILELISTS ${RTL_FILELISTS} sim_models sim_boards)
 
@@ -72,6 +73,9 @@ set(RTL_LINT_TOPS
     nes_scaler
     osd_overlay
     video_out
+    supervisor
+    zines_system
+    sync_rom
     vga
     hdmi_tx
     charmap
