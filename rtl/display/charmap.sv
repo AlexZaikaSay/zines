@@ -2,7 +2,7 @@
 // Address = {char_code, row}, data = 8 pixels of one row (bit 7 = leftmost pixel).
 // Synchronous read: 1 cycle latency.
 module charmap #(
-    parameter string FONT_FILE = "font.hex"
+    parameter FONT_FILE = "font.hex"   // untyped: Quartus doesn't support `string`
 ) (
     input  logic       clk,
     input  logic [6:0] char_code,   // character code 0..127

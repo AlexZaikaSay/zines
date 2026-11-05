@@ -102,7 +102,7 @@ module nes_top (
     logic cpu_ce;
     clock_enable_gen u_clock_enable_gen (
         .clk(ppu_clk),
-        .rst_n(rst_n),
+        .rst_n(nes_rst_n),
         .ce(1'b1),
         .cpu_ce(cpu_ce)
     );
