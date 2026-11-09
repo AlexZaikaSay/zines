@@ -115,10 +115,10 @@ module tb_301_apu_pulse_tone;
     endtask
 
     initial begin
-        // A4 / D6 periods and lengths (LEN_8TH -> index 2, LEN_WHOLE -> index 4)
-        exp_period[0] = 'h0FD; exp_len[0] = 20; exp_const[0] = 15;
-        exp_period[1] = 'h05D; exp_len[1] = 20; exp_const[1] = 15;
-        exp_period[2] = 'h0FD; exp_len[2] = 40; exp_const[2] = 0;
+        // A4 / D6 periods and lengths (LEN_SHORT -> index 5, LEN_LONG -> index 0)
+        exp_period[0] = 'h0FD; exp_len[0] = 4;  exp_const[0] = 15;
+        exp_period[1] = 'h05D; exp_len[1] = 4;  exp_const[1] = 15;
+        exp_period[2] = 'h0FD; exp_len[2] = 10; exp_const[2] = 0;
         cyc = 0;
         note = -1;
         note_start = 0;

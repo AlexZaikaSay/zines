@@ -52,7 +52,8 @@ module osd_devboard
         .rw(cpu_rw),
         .nmi_n(1),
         .irq_n(1),
-        .undef(undef)
+        .undef(undef),
+        .sync()
     );
 
     assign cpu_in_data = ram_selected ? ram_data :

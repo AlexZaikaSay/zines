@@ -8,7 +8,8 @@
 // the game straight from the PPU (every NES frame, like `video`), and the OSD taken
 // from the display chain, refreshed once per display frame.
 // The supervisor is ~25% of the simulation time and has nothing to do while the
-// game runs (the firmware only idles then), so its clock stops while the NES runs.
+// game runs (the firmware only idles then), so its clock stops while the NES runs,
+// except while Start + Select are held (the menu hotkey).
 // Simulation only: on a board sup_clk is clk.
 module zines (
     input logic clk
@@ -26,7 +27,10 @@ module zines (
 
     logic [7:0] pad_buttons = 8'h00;
     logic       nes_running;
-    wire        sup_clk = clk && !nes_running;   // TODO: keep it running for the menu hotkey (Step 5)
+    // The supervisor only has to see the menu hotkey while the game runs:
+    // run it while Start + Select are both down.
+    wire        hotkey_down = (pad_buttons & 8'h0C) == 8'h0C;
+    wire        sup_clk = clk && (!nes_running || hotkey_down);
     logic       sd_clk, sd_cmd, sd_dat0, sd_cs_n;
     logic [9:0] disp_h, disp_v;
     logic       disp_image;
@@ -124,7 +128,8 @@ module zines (
     wire disp_frame_end = disp_v == 10'd480 && disp_h == 10'd0;
     wire frame_end      = nes_running ? nes_frame_end : disp_frame_end;
 
-    // W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start
+    // W,S,A,D = Up, Down, Left, Right, right arrow = A, down arrow = B, Enter = Start,
+    // right Shift = Select; Shift + Enter opens the menu
     always @(posedge clk)
         if (frame_end)
             pad_buttons <= 8'(sdl_display_buttons());

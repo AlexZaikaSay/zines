@@ -14,6 +14,7 @@ module tb_304_apu_noise;
     parameter MEM_FILE = "./tests/304_apu_noise.tv";
 
     localparam HALF_FRAME   = 14915;    // CPU cycles between length counter clocks
+    localparam QUARTER_FRAME = 7457;    // envelope restarts at 15 on the first one after $400F
     localparam RUN_CYCLES   = 2500000;
     localparam NOTES        = 3;
     localparam MAX_BITS     = 8192;
@@ -143,9 +144,9 @@ module tb_304_apu_noise;
     endtask
 
     initial begin
-        exp_mode[0] = 'h04; exp_period[0] = 64;  exp_ctrl[0] = 'h1F; exp_len[0] = 20;
-        exp_mode[1] = 'h84; exp_period[1] = 64;  exp_ctrl[1] = 'h1F; exp_len[1] = 20;
-        exp_mode[2] = 'h08; exp_period[2] = 202; exp_ctrl[2] = 'h03; exp_len[2] = 40;
+        exp_mode[0] = 'h04; exp_period[0] = 64;  exp_ctrl[0] = 'h1F; exp_len[0] = 4;
+        exp_mode[1] = 'h84; exp_period[1] = 64;  exp_ctrl[1] = 'h1F; exp_len[1] = 4;
+        exp_mode[2] = 'h08; exp_period[2] = 202; exp_ctrl[2] = 'h03; exp_len[2] = 10;
         cyc = 0;
         note = -1;
         note_start = 0;
@@ -240,7 +241,8 @@ module tb_304_apu_noise;
                     nbits <= nbits + 1;
                 end
 
-                if (audio4 != 0) begin
+                // Until the envelope restarts the output still has the old decay level
+                if (audio4 != 0 && cyc - note_start > QUARTER_FRAME) begin
                     if (exp_ctrl[note][4] == 1'b1 && 32'(audio4) != (exp_ctrl[note] & 'hF))
                         vol_errs <= vol_errs + 1;
                     if (exp_ctrl[note][4] == 1'b0) begin

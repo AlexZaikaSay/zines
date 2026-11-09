@@ -21,7 +21,7 @@ APU_FRAME_CTRL   = $4017
 
 NOTE_A4_PERIOD   = $00FD
 NOTE_D6_PERIOD   = $005D
-LEN_8TH          = %00010000  ; length-table index 2 = 20 half-frames
+LEN_NOTE         = %01001000  ; length-table index 9 = 8 half-frames (sweep updates every 2)
 
 SWEEP_POSITIVE   = %10010001  ; enabled, divider period 1, positive, shift 1
 SWEEP_NEGATIVE   = %10011001  ; enabled, divider period 1, negative, shift 1
@@ -45,7 +45,7 @@ start:
         sta APU_PULSE1_SWEEP
         lda #<NOTE_A4_PERIOD
         sta APU_PULSE1_FREQ1
-        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_NOTE)
         sta APU_PULSE1_FREQ2
         jsr wait_note
 
@@ -54,7 +54,7 @@ start:
         sta APU_PULSE1_SWEEP
         lda #<NOTE_A4_PERIOD
         sta APU_PULSE1_FREQ1
-        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_NOTE)
         sta APU_PULSE1_FREQ2
         jsr wait_note
 
@@ -63,7 +63,7 @@ start:
         sta APU_PULSE1_SWEEP
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1
-        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_NOTE)
         sta APU_PULSE1_FREQ2
         jsr wait_note
 
@@ -72,7 +72,7 @@ start:
         sta APU_PULSE1_SWEEP
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1
-        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_NOTE)
         sta APU_PULSE1_FREQ2
         jsr wait_note
 
@@ -81,7 +81,7 @@ start:
         sta APU_PULSE1_SWEEP
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1
-        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_NOTE)
         sta APU_PULSE1_FREQ2
         jsr wait_note
 done:

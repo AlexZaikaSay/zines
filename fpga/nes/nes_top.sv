@@ -245,6 +245,7 @@ module nes_top (
         .audio2(audio2),
         .audio3(audio3),
         .audio4(audio4),
+        .cpu_sync(),
         .undef()
     );
 

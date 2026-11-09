@@ -63,7 +63,12 @@ package zines_pkg;
     // ---- Supervisor: NES control ----
     localparam logic [15:0] OSD_ADDR_NES_CTRL    = 16'h4001;   // RW: NES_CTRL_* bits
     localparam logic [7:0]  NES_CTRL_RESET       = 8'h01;      // hold the NES in reset (set after power-on)
-    localparam logic [7:0]  NES_CTRL_PAUSE       = 8'h02;      // freeze CPU / PPU / APU clock enables
+    localparam logic [7:0]  NES_CTRL_PAUSE       = 8'h02;      // request a pause; it starts at the next instruction boundary
+    localparam logic [7:0]  NES_CTRL_PAUSED      = 8'h80;      // R: the NES is stopped (paused at a boundary, or in reset)
+
+    // ---- Supervisor: system status ----
+    localparam logic [15:0] OSD_ADDR_SYS_STATUS  = 16'h4002;   // R: SYS_* bits, read clears them
+    localparam logic [7:0]  SYS_HOTKEY           = 8'h02;      // Start + Select were pressed together
 
     // ---- Supervisor: cartridge loader ($4030-$4037) ----
     // Write LD_SEL and LD_ADDR, then stream bytes through LD_DATA (address auto-increments)

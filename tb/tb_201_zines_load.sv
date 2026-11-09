@@ -3,6 +3,9 @@
 //   Start on the first folder -> file list; Start on the first file -> load + run.
 // Then checks that the game runs: SMB turns rendering on within some frames, and
 // neither CPU hits an undefined opcode.
+// Then the in-game menu: pressing Start + Select pauses the
+// NES at an instruction boundary (CPU SYNC) and shows the menu; it stays frozen
+// until A on RESUME, which hides the menu and lets the game run on.
 module tb_201_zines_load;
     import zines_pkg::*;
 
@@ -21,7 +24,8 @@ module tb_201_zines_load;
 
     zines_system #(
         .OSD_ROM_FILE("data/osd.tv"),
-        .FONT_FILE("data/font.hex")
+        .FONT_FILE("data/font.hex"),
+        .SD_SPI_HZ(25_000_000)              // fastest SPI clock: CLK_FREQ_HZ / 2
     ) u_sys (
         .clk(clk), .rst_n(rst_n), .sup_clk(clk), .pix_clk(clk), .pix_rst_n(rst_n),
         .pad1_buttons(pad), .pad2_buttons(8'h00),
@@ -63,7 +67,16 @@ module tb_201_zines_load;
         wait_read(OSD_ADDR_PAD1);           // release taken
     endtask
 
-    localparam logic [7:0] BTN_START = 8'h08;
+    localparam logic [7:0] BTN_A      = 8'h01;
+    localparam logic [7:0] BTN_SELECT = 8'h04;
+    localparam logic [7:0] BTN_START  = 8'h08;
+
+    function automatic logic osd_blank();
+        for (int i = 0; i < 64 * 30; i++)
+            if (u_sys.u_osd.text[i] != 8'h20 || u_sys.u_osd.attr[i] != 8'h00)
+                return 1'b0;
+        return 1'b1;
+    endfunction
 
     int frames = 0;
     logic rendering = 1'b0;
@@ -89,7 +102,7 @@ module tb_201_zines_load;
                 $fatal(1, "tb_201: OSD cell %0d not cleared when the NES started (%02h/%02h)",
                        i, u_sys.u_osd.text[i], u_sys.u_osd.attr[i]);
 
-        while (frames < 40) begin
+        while (frames < 40 && !rendering) begin
             @(posedge clk);
             if (u_sys.u_nes.u_ppu.ppu_mask[4:3] != 2'b00)
                 rendering = 1'b1;
@@ -97,6 +110,35 @@ module tb_201_zines_load;
         if (!rendering)
             $fatal(1, "tb_201: the game never turned rendering on");
         $display("tb_201: game running, rendering on, %0d frames", frames);
+
+        // ---- in-game menu
+        pad = BTN_START | BTN_SELECT;
+        wait (u_sys.paused);
+        $display("tb_201: paused at %0t, NES pc %04h", $time, u_sys.u_nes.cpu_addr);
+        if (!u_sys.nes_cpu_sync)
+            $fatal(1, "tb_201: paused outside an instruction boundary");
+        begin
+            automatic int        frames_at_pause = frames;
+            automatic logic [15:0] addr_at_pause = u_sys.u_nes.cpu_addr;
+            wait_read(OSD_ADDR_PAD1);           // the menu waits for the hotkey release
+            if (osd_blank())
+                $fatal(1, "tb_201: the menu is not shown while the hotkey is held");
+            pad = 8'h00;
+            repeat (50_000) begin
+                @(posedge clk);
+                if (u_sys.u_nes.cpu_addr != addr_at_pause || frames != frames_at_pause)
+                    $fatal(1, "tb_201: the NES moved while paused");
+            end
+        end
+        press(BTN_A);                           // RESUME
+        wait (nes_running);
+        if (!osd_blank())
+            $fatal(1, "tb_201: the menu is still shown after resume");
+        begin
+            automatic int frames_at_resume = frames;
+            wait (frames == frames_at_resume + 5);
+        end
+        $display("tb_201: resumed, %0d frames", frames);
         $finish;
     end
 
@@ -120,5 +162,6 @@ module tb_201_zines_load;
         #1_000_000_000;              // 100M clocks; loading takes ~20M
         $fatal(1, "tb_201: timed out (running %0b, frames %0d)", nes_running, frames);
     end
+
 
 endmodule

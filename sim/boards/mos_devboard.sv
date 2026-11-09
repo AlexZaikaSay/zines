@@ -26,7 +26,8 @@ module mos_devboard
         .rw(rw),
         .nmi_n,
         .irq_n,
-        .undef
+        .undef,
+        .sync()
     );
 
     // undef is probed hierarchically by the testbenches that care about it

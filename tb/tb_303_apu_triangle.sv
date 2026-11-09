@@ -118,9 +118,9 @@ module tb_303_apu_triangle;
     endtask
 
     initial begin
-        exp_period[0] = 'h07E; exp_ctrl[0] = 'h1F; exp_len[0] = 20;
-        exp_period[1] = 'h07E; exp_ctrl[1] = 'h7F; exp_len[1] = 20;
-        exp_period[2] = 'h02E; exp_ctrl[2] = 'h1F; exp_len[2] = 20;
+        exp_period[0] = 'h07E; exp_ctrl[0] = 'h03; exp_len[0] = 4;
+        exp_period[1] = 'h07E; exp_ctrl[1] = 'h7F; exp_len[1] = 4;
+        exp_period[2] = 'h02E; exp_ctrl[2] = 'h03; exp_len[2] = 4;
         cyc = 0;
         note = -1;
         note_start = 0;

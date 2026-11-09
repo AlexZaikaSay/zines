@@ -18,7 +18,8 @@ module cpu2A03 (
     output logic [3:0]  audio2,
     output logic [3:0]  audio3,
     output logic [3:0]  audio4,
-    output logic        undef
+    output logic        undef,
+    output logic        sync    // opcode fetch cycle and no DMA: an instruction boundary
 );
     localparam logic [2:0] DMA_IDLE  = 3'd0;
     localparam logic [2:0] DMA_HALT  = 3'd1;
@@ -37,6 +38,7 @@ module cpu2A03 (
     logic [7:0]  core_data_out;
     logic [7:0]  core_data_in;
     logic        core_rw;
+    logic        core_sync;
 
     logic [7:0]  apu_status;
     logic [7:0]  apu_data_in;
@@ -113,8 +115,12 @@ module cpu2A03 (
         .data_out(core_data_out),
         .addr(core_addr),
         .rw(core_rw),
-        .undef(undef)
+        .undef(undef),
+        .sync(core_sync)
     );
+
+    // While DMA owns the bus the core is frozen, possibly in Fetch: not a boundary
+    assign sync = core_sync && !dma_active;
 
     apu2A03 u_apu (
         .clk(clk),

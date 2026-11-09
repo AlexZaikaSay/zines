@@ -22,6 +22,17 @@ static uint8_t option_count = 0;
 static uint8_t option_selected = 0;
 static uint8_t game_running = 0;   /* a game was started: the menu is hidden */
 
+/* In-game menu, opened by pressing Start + Select */
+enum
+{
+    PAUSE_RESUME,
+    PAUSE_SAVE,
+    PAUSE_LOAD,
+    PAUSE_QUIT,
+    PAUSE_COUNT
+};
+static struct menu_item pause_items[PAUSE_COUNT];
+
 void fill_game_list(char *filename)
 {
     games[game_count].id = game_count;
@@ -138,7 +149,7 @@ static void option_select()
         print_status_arg("LOAD NES ERROR: ", res);
         return;
     }
-    game_running = 1;   /* TODO: hotkey to bring the menu back */
+    game_running = 1;
 }
 
 static void menu_up(void)
@@ -184,6 +195,94 @@ static void menu_deselect(void)
     menu_draw_items(games, game_count, game_selected);
 }
 
+static void set_item(struct menu_item *item, uint8_t id, const char *label)
+{
+    item->id = id;
+    strncpy(item->label, label, sizeof(item->label) - 1);
+    item->label[sizeof(item->label) - 1] = '\0';
+    item->name[0] = '\0';
+}
+
+/* Waits until no button is down, so a button still held from the menu
+ * does not reach the game (or the next menu). */
+static void wait_release(void)
+{
+    while (PAD1 != 0)
+    {
+    }
+}
+
+static void show_game_list(void)
+{
+    game_choosed = 0;
+    screen_clear();
+    menu_draw_frame();
+    menu_draw_items(games, game_count, game_selected);
+}
+
+/* Pauses the game and runs the in-game menu until the game is resumed or quit. */
+static void pause_menu(void)
+{
+    uint8_t selected = PAUSE_RESUME;
+    uint8_t buttons;
+
+    nes_pause();
+
+    set_item(&pause_items[PAUSE_RESUME], PAUSE_RESUME, "RESUME");
+    set_item(&pause_items[PAUSE_SAVE], PAUSE_SAVE, "SAVE STATE");
+    set_item(&pause_items[PAUSE_LOAD], PAUSE_LOAD, "LOAD STATE");
+    set_item(&pause_items[PAUSE_QUIT], PAUSE_QUIT, "QUIT");
+    menu_draw_frame();
+    menu_draw_items(pause_items, PAUSE_COUNT, selected);
+
+    wait_release();             /* Start + Select may still be held */
+
+    for (;;)
+    {
+        if (!PAD1_PRESSED)
+        {
+            continue;
+        }
+        buttons = PAD1;
+        if ((buttons & BTN_UP) && selected > 0)
+        {
+            --selected;
+            menu_draw_items(pause_items, PAUSE_COUNT, selected);
+        }
+        if ((buttons & BTN_DOWN) && selected < PAUSE_COUNT - 1)
+        {
+            ++selected;
+            menu_draw_items(pause_items, PAUSE_COUNT, selected);
+        }
+        if (buttons & BTN_B)
+        {
+            selected = PAUSE_RESUME;    /* B: back to the game */
+        }
+        else if ((buttons & (BTN_A | BTN_START)) == 0)
+        {
+            continue;
+        }
+
+        switch (selected)
+        {
+            case PAUSE_RESUME:
+                wait_release();
+                screen_clear();
+                nes_resume();       /* last: the simulation stops the supervisor clock here */
+                return;
+            case PAUSE_QUIT:
+                NES_CTRL = NES_RESET;
+                game_running = 0;
+                wait_release();
+                show_game_list();
+                return;
+            default:
+                print_status("NOT IMPLEMENTED");
+                break;
+        }
+    }
+}
+
 int main(void)
 {
     FRESULT res;
@@ -207,7 +306,14 @@ int main(void)
     menu_draw_items(games, game_count, game_selected);
 
     for (;;) {
-        if (!game_running && PAD1_PRESSED)
+        if (game_running)
+        {
+            if (SYS_STATUS & ST_HOTKEY)
+            {
+                pause_menu();
+            }
+        }
+        else if (PAD1_PRESSED)
         {
             uint8_t buttons = PAD1;
             if (buttons & BTN_UP)

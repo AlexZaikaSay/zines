@@ -7,6 +7,9 @@
 #include "memio.h"
 #include <string.h>
 
+/* ldstream.s */
+void __fastcall__ ld_stream(const uint8_t *src, uint16_t count);
+
 static uint8_t do_cmd(uint8_t cmd)
 {
     SD_CMD = cmd;
@@ -54,13 +57,18 @@ DRESULT disk_readp(BYTE *buff, DWORD sector, UINT offset, UINT count)
         buf_sector = sector;
     }
 
-    /* buff == NULL: data forwarding is not used, nothing to copy */
     /* cc65's memcpy is hand-written assembly, much faster than a C loop.
      * SD_BUF is plain RAM while the card is idle, so dropping volatile
-     * for the copy is safe. */
+     * for the copy is safe.
+     * buff == NULL (pf_read(0, ...)): forward the bytes to the cartridge
+     * loader data port, the NES memory selected by LD_SEL / LD_ADDR. */
     if (buff)
     {
         memcpy(buff, (const BYTE *)SD_BUF + offset, count);
+    }
+    else
+    {
+        ld_stream((const BYTE *)SD_BUF + offset, count);
     }
     return RES_OK;
 }

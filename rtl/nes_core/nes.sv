@@ -36,6 +36,9 @@ module nes (
     output logic [3:0] audio3,
     output logic [3:0] audio4,
 
+    // CPU at an instruction boundary (opcode fetch cycle, no DMA), see cpu2A03
+    output logic       cpu_sync,
+
     // Simulation status: CPU fetched an undefined opcode
     output logic       undef
 );
@@ -79,7 +82,8 @@ module nes (
         .audio2(audio2),
         .audio3(audio3),
         .audio4(audio4),
-        .undef(undef)
+        .undef(undef),
+        .sync(cpu_sync)
     );
 
     // Block RAM needs a registered read, so the RAM runs every ppu_clk. The CPU bus

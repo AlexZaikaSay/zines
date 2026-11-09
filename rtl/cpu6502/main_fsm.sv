@@ -32,7 +32,8 @@ module main_fsm
     output logic [7:0]  high_byte,
     output logic [7:0]  low_byte,
     output logic [7:0]  flags,
-    output logic        undef
+    output logic        undef,
+    output logic        sync          // this cycle fetches an opcode (6502 SYNC pin)
 );
   typedef enum logic [5:0] {
         Reset,          // Handle reset state
@@ -88,6 +89,10 @@ module main_fsm
     logic v_flag;
     logic n_flag;
     logic i_flag;
+
+    // Fetch is the first cycle of every instruction (and where interrupts are taken):
+    // the previous instruction is complete, like SYNC = 1 on a real 6502.
+    assign sync = (state == Fetch);
 
     logic [7:0] inst;
 

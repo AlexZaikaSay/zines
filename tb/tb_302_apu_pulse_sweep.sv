@@ -191,10 +191,10 @@ module tb_302_apu_pulse_sweep;
         exp_dir[2] =  1;
         exp_dir[3] = -1;
 
-        exp_len[0] = 20;
-        exp_len[1] = 20;
-        exp_len[2] = 20;
-        exp_len[3] = 20;
+        exp_len[0] = 8;
+        exp_len[1] = 8;
+        exp_len[2] = 8;
+        exp_len[3] = 8;
 
         cyc = 0;
         note = -1;

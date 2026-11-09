@@ -18,7 +18,7 @@
  */
 
 /* ---------------- Planned, not decoded by the hardware yet ----------------
- * SYS_ID, SYS_STATUS, OSD_CTRL/FG/BG, ST_*, FRAMES*:
+ * SYS_ID, ST_VBLANK, OSD_CTRL/FG/BG, ST_*, FRAMES*:
  * move each one into zines_pkg (@c-export section) when it is implemented.
  */
 
@@ -27,9 +27,9 @@
 #define NES_CTRL      REG8(OSD_ADDR_NES_CTRL)  // RW
 #define   NES_RESET     NES_CTRL_RESET       //   1 = hold NES in reset (set at power-on)
 #define   NES_PAUSE     NES_CTRL_PAUSE       //   1 = freeze CPU/PPU/APU clock enable
-#define SYS_STATUS    REG8(0x4002)  // R
-#define   ST_VBLANK     0x01        //   set at frame start, cleared on read
-#define   ST_HOTKEY     0x02        //   long press detected, cleared on read
+#define   NES_PAUSED    NES_CTRL_PAUSED      //   R: 1 = stopped at an instruction boundary (or in reset)
+#define SYS_STATUS    REG8(OSD_ADDR_SYS_STATUS)  // R: cleared on read
+#define   ST_HOTKEY     SYS_HOTKEY           //   Start + Select pressed together
 
 /* ---------------- Gamepad ---------------- */
 #define PAD1          REG8(OSD_ADDR_PAD1)          // R: current buttons

@@ -20,7 +20,7 @@ APU_FRAME_CTRL     = $4017
 
 NOTE_A4_PERIOD   = $007E      ; 1789773 / (32 * 127) = 440 Hz (triangle period is 32 * (t + 1))
 NOTE_D6_PERIOD   = $002E      ; 1789773 / (32 * 47)  = 1190 Hz, same pitches as the pulse tests
-LEN_8TH          = %00010000  ; length-table index 2 = 20 half-frames
+LEN_NOTE         = %00101000  ; length-table index 5 = 4 half-frames
 
 start:
         sei
@@ -33,13 +33,13 @@ start:
         lda #$04
         sta APU_STATUS          ; enable Triangle
 
-; 1. A4, linear counter 31 quarter-frames: the linear counter stops the
-;    sequencer before the length counter (20 half-frames) runs out.
-        lda #%00011111
-        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 31
+; 1. A4, linear counter 3 quarter-frames: the linear counter stops the
+;    sequencer before the length counter (4 half-frames) runs out.
+        lda #%00000011
+        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 3
         lda #<NOTE_A4_PERIOD
         sta APU_TRIANGLE_FREQ1
-        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_NOTE)
         sta APU_TRIANGLE_FREQ2
         jsr wait_note
 
@@ -48,16 +48,16 @@ start:
         sta APU_TRIANGLE_CTRL   ; control 0, linear reload 127
         lda #<NOTE_A4_PERIOD
         sta APU_TRIANGLE_FREQ1
-        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_NOTE)
         sta APU_TRIANGLE_FREQ2
         jsr wait_note
 
-; 3. D6, linear counter 31 quarter-frames.
-        lda #%00011111
-        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 31
+; 3. D6, linear counter 3 quarter-frames.
+        lda #%00000011
+        sta APU_TRIANGLE_CTRL   ; control 0, linear reload 3
         lda #<NOTE_D6_PERIOD
         sta APU_TRIANGLE_FREQ1
-        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_NOTE)
         sta APU_TRIANGLE_FREQ2
         jsr wait_note
 

@@ -2,6 +2,7 @@
 //
 //   $0000-$1FFF  work RAM 8 KiB             $4008/$4009  pad: buttons / changed
 //   $2000-$27FF  OSD text   (osd_overlay)   $4001        NES_CTRL: reset / pause
+//                                           $4002        SYS_STATUS: hotkey
 //   $2800-$2FFF  OSD attributes             $4020-$4027  SD disk registers
 //   $3000-$31FF  SD sector buffer           $4030-$4034  cartridge loader
 //   $8000-$FFFF  firmware ROM 32 KiB        $4038-$403B  cartridge configuration
@@ -14,11 +15,15 @@
 //
 // The NES is held in reset from power-on until the firmware clears NES_CTRL_RESET.
 // The loader turns LD_DATA writes into the cartridge init port (fill_w / init_*).
+// NES_CTRL_PAUSE only requests a pause: the NES stops at the next instruction
+// boundary and nes_paused (read back as NES_CTRL_PAUSED) tells when it has.
+// Pressing Start + Select together sets SYS_HOTKEY once per press.
 module supervisor
     import zines_pkg::*;
 #(
     parameter ROM_FILE = "",
-    parameter integer CLK_FREQ_HZ = 50_000_000
+    parameter integer CLK_FREQ_HZ = 50_000_000,
+    parameter integer SD_SPI_HZ = 10_000_000    // SD clock after init
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -27,7 +32,8 @@ module supervisor
 
     // NES control
     output logic        nes_reset,
-    output logic        nes_pause,
+    output logic        nes_pause,      // pause request
+    input  logic        nes_paused,     // the NES is stopped at an instruction boundary (or in reset)
 
     // cartridge init port
     output logic [2:0]  fill_w,
@@ -56,6 +62,7 @@ module supervisor
     logic [7:0]  cpu_wdata;
     logic [7:0]  cpu_rdata;
     logic        cpu_rw;
+    logic        cpu_sync;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
@@ -74,7 +81,8 @@ module supervisor
         .data_out(cpu_wdata),
         .addr(cpu_addr),
         .rw(cpu_rw),
-        .undef(undef)
+        .undef(undef),
+        .sync(cpu_sync)          // not needed by the OSD
     );
 
     // ------ decode
@@ -85,6 +93,7 @@ module supervisor
     wire pad_sel     = cpu_addr        == OSD_ADDR_PAD1;
     wire pad_chg_sel = cpu_addr        == OSD_ADDR_PAD1_PRESSED;
     wire nes_ctl_sel = cpu_addr        == OSD_ADDR_NES_CTRL;
+    wire status_sel  = cpu_addr        == OSD_ADDR_SYS_STATUS;
     wire sd_reg_sel  = cpu_addr[15:3]  == OSD_ADDR_SD_REGS[15:3];
     wire loader_sel  = cpu_addr[15:3]  == OSD_ADDR_LOADER[15:3];
     wire cart_sel    = cpu_addr[15:2]  == OSD_ADDR_CART[15:2];
@@ -140,7 +149,8 @@ module supervisor
     end
 
     disk #(
-        .CLK_FREQ_HZ(CLK_FREQ_HZ)
+        .CLK_FREQ_HZ(CLK_FREQ_HZ),
+        .RUN_SPI_HZ(SD_SPI_HZ)
     ) u_disk (
         .clk(clk),
         .rst_n(rst_n),
@@ -169,6 +179,25 @@ module supervisor
             pad_seen <= 8'h00;
         else if (pad_sel && rd)
             pad_seen <= pad_buttons;
+    end
+
+    // ------ hotkey: Start + Select pressed together, reported once per press
+    localparam logic [7:0] HOTKEY_BUTTONS = 8'h0C;   // Select (bit 2) + Start (bit 3)
+    wire  hotkey_held = (pad_buttons & HOTKEY_BUTTONS) == HOTKEY_BUTTONS;
+    logic hotkey_held_q;
+    logic hotkey_flag;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            hotkey_held_q <= 1'b0;
+            hotkey_flag   <= 1'b0;
+        end else begin
+            hotkey_held_q <= hotkey_held;
+            if (status_sel && rd)
+                hotkey_flag <= 1'b0;
+            if (hotkey_held && !hotkey_held_q)
+                hotkey_flag <= 1'b1;    // after the clear: a read in the same clk loses nothing
+        end
     end
 
     // ------ NES control, cartridge loader and configuration
@@ -243,7 +272,9 @@ module supervisor
         else if (pad_chg_sel)
             cpu_rdata = {7'd0, pad_seen != pad_buttons};
         else if (nes_ctl_sel)
-            cpu_rdata = nes_ctrl;
+            cpu_rdata = nes_ctrl | (nes_paused ? NES_CTRL_PAUSED : 8'h00);
+        else if (status_sel)
+            cpu_rdata = hotkey_flag ? SYS_HOTKEY : 8'h00;
         else if (loader_sel)
             case (cpu_addr[2:0])
                 LD_REG_SEL:   cpu_rdata = ld_sel;
@@ -258,6 +289,6 @@ module supervisor
             cpu_rdata = 8'h00;
     end
 
-    wire unused = &{1'b0, ld_addr[23:15]};
+    wire unused = &{1'b0, ld_addr[23:15], cpu_sync};
 
 endmodule

@@ -12,10 +12,13 @@
 // while the game runs (a stopped clock saves simulation time, ce = 0 does not). The board adds the output stage (video_out / HDMI).
 // The NES stays in reset until the firmware has loaded a game and cleared
 // NES_CTRL_RESET; NES_CTRL_PAUSE freezes it, the display keeps the last frame.
+// The pause starts at an instruction boundary (CPU SYNC: opcode fetch, no DMA),
+// so a paused NES has no half-done instruction: the state a save state needs.
 module zines_system #(
     parameter OSD_ROM_FILE = "",                // firmware image ($8000-$FFFF)
     parameter FONT_FILE = "font.hex",
-    parameter integer CLK_FREQ_HZ = 50_000_000  // clk, for the SD SPI timing
+    parameter integer CLK_FREQ_HZ = 50_000_000, // clk, for the SD SPI timing
+    parameter integer SD_SPI_HZ = 10_000_000    // SD clock after init (at most CLK_FREQ_HZ / 2)
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -56,7 +59,7 @@ module zines_system #(
     import zines_pkg::*;
 
     // ------ supervisor
-    logic        nes_reset, nes_pause;
+    logic        nes_reset, nes_pause, nes_paused;
     logic [2:0]  fill_w;
     logic [14:0] init_addr;
     logic [7:0]  init_data;
@@ -66,13 +69,15 @@ module zines_system #(
 
     supervisor #(
         .ROM_FILE(OSD_ROM_FILE),
-        .CLK_FREQ_HZ(CLK_FREQ_HZ)
+        .CLK_FREQ_HZ(CLK_FREQ_HZ),
+        .SD_SPI_HZ(SD_SPI_HZ)
     ) u_supervisor (
         .clk(sup_clk),
         .rst_n(rst_n),
         .pad_buttons(pad1_buttons),
         .nes_reset(nes_reset),
         .nes_pause(nes_pause),
+        .nes_paused(nes_paused),
         .fill_w(fill_w),
         .init_addr(init_addr),
         .init_data(init_data),
@@ -97,8 +102,25 @@ module zines_system #(
             nes_rst_n <= !nes_reset;
     end
 
-    wire run = !nes_pause;
+    // Pause: wait for the CPU to reach an opcode fetch (sync), then stop the clock
+    // enables before that fetch executes. sync is checked only between CPU cycles
+    // (!cpu_ce): the next cpu_ce is at least one clk later, when run is already 0.
+    // One or two PPU dots run after the boundary; all their state is in registers.
+    logic nes_cpu_sync;
+    logic paused;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            paused <= 1'b0;
+        else if (!nes_pause)
+            paused <= 1'b0;
+        else if (nes_cpu_sync && !cpu_ce)
+            paused <= 1'b1;
+    end
+
+    wire run = !paused;
     assign nes_running = nes_rst_n && run;
+    assign nes_paused  = paused || !nes_rst_n;
 
     clock_enable_gen u_clock_enable_gen (
         .clk(clk),
@@ -151,6 +173,7 @@ module zines_system #(
         .audio2(audio2),
         .audio3(audio3),
         .audio4(audio4),
+        .cpu_sync(nes_cpu_sync),
         .undef(nes_undef)
     );
 

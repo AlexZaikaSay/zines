@@ -22,13 +22,11 @@ APU_FRAME_CTRL   = $4017
 NOTE_A4_PERIOD   = $00FD    ; A4 (440 Hz)
 NOTE_D6_PERIOD   = $005D    ; ~1190 Hz
 
-; 1/8
-; Index $02 in 5 hi bits of $4003. 
-LEN_8TH        = %00010000 
+; Short note: length-table index 5 = 4 half-frames (~60k CPU cycles)
+LEN_SHORT      = %00101000
 
-; Whole note
-; Index $02 in 5 hi bits of $4003. 
-LEN_WHOLE      = %00100000 
+; Long note: length-table index 0 = 10 half-frames, room for the envelope to decay
+LEN_LONG       = %00000000
 
 start:  
 
@@ -56,7 +54,7 @@ start:
         lda #<NOTE_A4_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_A4_PERIOD) | LEN_8TH)
+        lda #((>NOTE_A4_PERIOD) | LEN_SHORT)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
         jsr wait
@@ -70,7 +68,7 @@ start:
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_D6_PERIOD) | LEN_8TH)
+        lda #((>NOTE_D6_PERIOD) | LEN_SHORT)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
         jsr wait
@@ -83,7 +81,7 @@ start:
         lda #<NOTE_A4_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_A4_PERIOD) | LEN_WHOLE)
+        lda #((>NOTE_A4_PERIOD) | LEN_LONG)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
         jsr wait
@@ -96,7 +94,7 @@ start:
         lda #<NOTE_D6_PERIOD
         sta APU_PULSE1_FREQ1 
 
-        lda #((>NOTE_D6_PERIOD) | LEN_WHOLE)
+        lda #((>NOTE_D6_PERIOD) | LEN_LONG)
         sta APU_PULSE1_FREQ2    ; Sound is ON, counter LEN counds down!
 
 

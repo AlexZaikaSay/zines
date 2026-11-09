@@ -1,6 +1,6 @@
 # Runs one testbench, prints a PASS/FAIL line and records the result.
 #
-# Inputs: TB_NAME, SIM_EXE, [SIM_ARG], WORK_DIR, RESULT_DIR
+# Inputs: TB_NAME, SIM_EXE, [SIM_ARG (space-separated plusargs)], WORK_DIR, RESULT_DIR
 
 string(ASCII 27 ESC)
 if(DEFINED ENV{NO_COLOR})
@@ -20,9 +20,12 @@ set(STATUS_FILE "${RESULT_DIR}/${TB_NAME}.status")
 set(LOG_FILE "${RESULT_DIR}/${TB_NAME}.log")
 file(REMOVE "${STATUS_FILE}")
 
+# SIM_ARG may hold several plusargs separated by spaces
+separate_arguments(SIM_ARGS UNIX_COMMAND "${SIM_ARG}")
+
 string(TIMESTAMP START "%s")
 execute_process(
-    COMMAND ${SIM_EXE} ${SIM_ARG}
+    COMMAND ${SIM_EXE} ${SIM_ARGS}
     WORKING_DIRECTORY "${WORK_DIR}"
     OUTPUT_VARIABLE OUT
     ERROR_VARIABLE ERR

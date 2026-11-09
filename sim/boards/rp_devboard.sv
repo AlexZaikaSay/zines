@@ -44,7 +44,8 @@ module rp_devboard
         .audio2(audio2),
         .audio3(audio3),
         .audio4(audio4),
-        .undef
+        .undef,
+        .sync()
     );
 
     // Controllers on $4016/$4017

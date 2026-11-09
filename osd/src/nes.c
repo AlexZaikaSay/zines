@@ -141,16 +141,10 @@ static uint8_t load_rom(const char* folder, const char* rom_file)
     
     for (sector_index = 0; sector_index < rom_secors_count; sector_index++)
     {
-        uint16_t i;
-        res = pf_read(data, sizeof(data), &br);
-        if (res != FR_OK)
+        res = pf_read(0, 512, &br);     /* forwarded to LD_DATA by disk_readp */
+        if (res != FR_OK || br != 512)
         {
             return 4;
-        }
-        //print_status_arg("ROM block ", data[0]);
-        for (i = 0; i < sizeof(data); ++i)
-        {
-            LD_DATA = data[i];
         }
     }
     print_status("Loading CHROM.. ");
@@ -162,15 +156,10 @@ static uint8_t load_rom(const char* folder, const char* rom_file)
     LD_ADDR2 = 0;
     for (sector_index = 0; sector_index < chrom_secors_count; sector_index++)
     {
-        uint16_t i;
-        res = pf_read(data, sizeof(data), &br);
-        if (res != FR_OK)
+        res = pf_read(0, 512, &br);     /* forwarded to LD_DATA by disk_readp */
+        if (res != FR_OK || br != 512)
         {
             return 4;
-        }
-        for (i = 0; i < sizeof(data); ++i)
-        {
-            LD_DATA = data[i];
         }
     }
 
@@ -197,4 +186,19 @@ uint8_t load_nes(const char* folder, const char* rom_file, const char* /*save_fi
         NES_CTRL = 0;
     }
     return res;
+}
+
+/* Requests the pause and waits until the NES has stopped at an instruction
+ * boundary (the CPU is between instructions, no OAM DMA running). */
+void nes_pause(void)
+{
+    NES_CTRL = NES_PAUSE;
+    while ((NES_CTRL & NES_PAUSED) == 0)
+    {
+    }
+}
+
+void nes_resume(void)
+{
+    NES_CTRL = 0;
 }

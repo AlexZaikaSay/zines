@@ -8,7 +8,8 @@ module mos6502 (
     output logic [7:0] data_out,
     output logic [15:0] addr,
     output logic rw,
-    output logic undef
+    output logic undef,
+    output logic sync           // opcode fetch cycle, as the 6502 SYNC pin
 );
     logic [7:0] pc_h;
     logic [7:0] pc_l;
@@ -153,7 +154,8 @@ module mos6502 (
         .high_byte(high_byte),
         .low_byte(low_byte),
         .flags(flags),
-        .undef(undef)
+        .undef(undef),
+        .sync(sync)
     );
 
     mux9_1 src_alu_a_mux9_1(

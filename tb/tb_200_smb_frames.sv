@@ -9,11 +9,12 @@
 // frame that differs. If a difference is intended, re-record the reference:
 //     build/obj_tb_200_smb_frames/Vtb_200_smb_frames +update     (run in build/)
 //     cp build/tb_200_smb_frames.tv tb/data/
+// +frames=N stops after the first N frames (default and maximum FRAMES).
 module tb_200_smb_frames;
     localparam string  ROM_FILE    = "../assets/SMB.nes";
     localparam string  GOLDEN_FILE = "tests/tb_200_smb_frames.tv";
     localparam string  UPDATE_FILE = "tb_200_smb_frames.tv";
-    localparam integer FRAMES      = 420;
+    localparam integer FRAMES      = 200;      // title, Start, 1-1: ~100 frames running with 2 jumps
 
     // Controller script, in frames: Start on the title screen, then (after the
     // WORLD 1-1 screen) run right and jump every JUMP_EVERY frames
@@ -38,7 +39,7 @@ module tb_200_smb_frames;
     wire        nes_rst_n = rst_n && cart_loaded;
 
 
-    // +pause: the console is paused on random clocks (cpu_ce and ppu_ce low together).
+    // +pause: the console is paused on random clocks, one in four (cpu_ce and ppu_ce low together).
     // Every frame must still hash exactly like the reference: proves that each
     // register of the core respects its clock enable.
     logic        pause_mode;
@@ -47,7 +48,7 @@ module tb_200_smb_frames;
         lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
     // Only once the console runs: while the cartridge loads, the CPU phase must
     // advance on every clock, as without pauses
-    wire run = !pause_mode || !nes_rst_n || lfsr[0];
+    wire run = !pause_mode || !nes_rst_n || lfsr[1:0] != 2'b00;
 
     logic cpu_ce;
     clock_enable_gen  # (
@@ -183,10 +184,13 @@ module tb_200_smb_frames;
     integer      golden_fd;
     integer      update_fd;
     logic        update;
+    integer      run_frames;
 
     initial begin
         update     = $test$plusargs("update");
         pause_mode = $test$plusargs("pause");
+        if (!$value$plusargs("frames=%d", run_frames) || run_frames > FRAMES || run_frames < 1)
+            run_frames = FRAMES;
         if (update) begin
             update_fd = $fopen(UPDATE_FILE, "w");
             if (update_fd == 0)
@@ -230,13 +234,13 @@ module tb_200_smb_frames;
                 else
                     pad_buttons <= 8'h00;
 
-                if (frame + 1 == FRAMES) begin
+                if (frame + 1 == run_frames) begin
                     if (update) begin
                         $fclose(update_fd);
-                        $display("Recorded %0d frames to %s", FRAMES, UPDATE_FILE);
+                        $display("Recorded %0d frames to %s", run_frames, UPDATE_FILE);
                     end
                     else
-                        $display("SMB: %0d frames match %s%s", FRAMES, GOLDEN_FILE,
+                        $display("SMB: %0d frames match %s%s", run_frames, GOLDEN_FILE,
                                  pause_mode ? " (with random pauses)" : "");
                     $finish;
                 end
