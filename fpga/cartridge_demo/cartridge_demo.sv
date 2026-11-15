@@ -64,6 +64,7 @@ module cartridge_demo (
         .ciram_ce_n(),
         .sv_sel(sv_sel),
         .sv_data_in(sv_data),
+        .sv_data_out(),
         .sv_addr(sv_addr)
     );
 

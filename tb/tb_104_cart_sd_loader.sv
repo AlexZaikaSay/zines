@@ -78,6 +78,7 @@ module tb_104_cart_sd_loader;
         .ciram_ce_n(ciram_ce_n),
         .sv_sel(sv_sel),
         .sv_data_in(sv_data),
+        .sv_data_out(),
         .sv_addr(sv_addr)
     );
 

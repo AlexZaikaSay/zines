@@ -1,7 +1,8 @@
 /* verilator lint_off STMTDLY */
 
-// loads cartridge using manual loading commands writing image at LBA 0.
-// Checks every PRG and CHR byte and the nametable mirroring against the file.
+// cartridge supervisor port: writes PRG and CHR through SV_*_WRITE, then reads every
+// byte back through the CPU/PPU ports and through SV_*_READ (latency 2, held until
+// the next read). A loader CHR read must win over a PPU read held low (paused NES).
 module tb_106_cartridge_read_write;
     import zines_pkg::*;
 
@@ -9,12 +10,12 @@ module tb_106_cartridge_read_write;
     localparam integer CHR_BYTES   = 8192;
 
     logic clk = 1'b0;
-    logic rst_n = 1'b0;
     always #5 clk = ~clk;
 
     logic [3:0]  sv_sel;
     logic [14:0] sv_addr;
-    logic [7:0]  sv_data;
+    logic [7:0]  sv_data_in;
+    logic [7:0]  sv_data_out;
 
     logic [15:0] cpu_addr = 16'h0000;
     logic        cpu_ce_n = 1'b1;
@@ -24,6 +25,7 @@ module tb_106_cartridge_read_write;
     logic [7:0]  ppu_data_out;
     logic        ciram_a10, ciram_ce_n;
 
+    logic [7:0]  rdata;
 
     cartridge u_cartridge (
         .clk(clk),
@@ -39,81 +41,129 @@ module tb_106_cartridge_read_write;
         .ciram_a10(ciram_a10),
         .ciram_ce_n(ciram_ce_n),
         .sv_sel(sv_sel),
-        .sv_data_in(sv_data),
-        .sv_addr(sv_addr)
+        .sv_data_in(sv_data_in),
+        .sv_addr(sv_addr),
+        .sv_data_out(sv_data_out)
     );
 
     logic [7:0] prg [0:PRG_BYTES-1];
     logic [7:0] chr [0:CHR_BYTES-1];
 
-    task automatic write_byte(input logic [2:0] sel, input logic [14:0] addr, input logic [7:0] data);
+    // One-clk command pulse on the supervisor port
+    task automatic sv_cmd(input logic [3:0] sel, input logic [14:0] addr, input logic [7:0] data);
         @(posedge clk);
-        sv_sel      <= sel;
-        sv_addr     <= addr;
-        sv_data     <= data;
+        sv_sel     <= sel;
+        sv_addr    <= addr;
+        sv_data_in <= data;
         @(posedge clk);
-        sv_sel      <= SV_NONE;
+        sv_sel     <= SV_NONE;
     endtask
 
-    task automatic write_prog(); 
-        write_byte(SV_PRG_BANKS, 0, 2);
+    task automatic write_byte(input logic [3:0] sel, input logic [14:0] addr, input logic [7:0] data);
+        sv_cmd(sel, addr, data);
+    endtask
+
+    // Read pulse, then sv_data_out is valid 2 clks after the clk the cartridge saw it
+    task automatic read_byte(input logic [3:0] sel, input logic [14:0] addr, output logic [7:0] data);
+        sv_cmd(sel, addr, 8'h00);
+        @(posedge clk);
+        #1;
+        data = sv_data_out;
+    endtask
+
+    task automatic write_prog();
+        write_byte(SV_PRG_BANKS, 15'd0, 8'd2);
         for (int i = 0; i < PRG_BYTES; i++)
-            write_byte(SV_PRG_WRITE, i, prg[i]);
+            write_byte(SV_PRG_WRITE, 15'(i), prg[i]);
     endtask
 
     task automatic write_chr();
-        write_byte(SV_CHR_BANKS, 0, 1);
+        write_byte(SV_CHR_BANKS, 15'd0, 8'd1);
         for (int i = 0; i < CHR_BYTES; i++)
-            write_byte(SV_CHR_WRITE, i, chr[i]);
+            write_byte(SV_CHR_WRITE, 15'(i), chr[i]);
     endtask
 
-    task automatic check_prg_byte(input logic [15:0] a, input integer file_offset);
-        cpu_addr = a;
+    // ---- normal NES access ----
+    task automatic check_prg_cpu(input integer i);
+        cpu_addr = 16'h8000 + 16'(i);
         cpu_ce_n = 1'b0;
         repeat (2) @(posedge clk);
         #1;
-        if (cpu_data_out !== prg[file_offset])
-            $fatal(1, "PRG[%04h] expected %02h, got %02h", a, prg[file_offset], cpu_data_out);
+        if (cpu_data_out !== prg[i])
+            $fatal(1, "CPU PRG[%04h] expected %02h, got %02h", i, prg[i], cpu_data_out);
         cpu_ce_n = 1'b1;
     endtask
 
-    task automatic check_chr_byte(input logic [13:0] a, input integer i);
-        ppu_addr = a;
+    task automatic check_chr_ppu(input integer i);
+        ppu_addr = 14'(i);
         ppu_rd_n = 1'b0;
         repeat (2) @(posedge clk);
         #1;
         if (ppu_data_out !== chr[i])
-            $fatal(1, "CHR[%04h] expected %02h, got %02h", a, chr[i], ppu_data_out);
+            $fatal(1, "PPU CHR[%04h] expected %02h, got %02h", i, chr[i], ppu_data_out);
         ppu_rd_n = 1'b1;
     endtask
 
-    task automatic check_prog();
-        for (int i = 0; i < PRG_BYTES; i++)
-            check_prg_byte(16'h8000 + i, i);
+    // ---- supervisor readback ----
+    task automatic check_prg_loader(input integer i);
+        read_byte(SV_PRG_READ, 15'(i), rdata);
+        if (rdata !== prg[i])
+            $fatal(1, "Loader PRG[%04h] expected %02h, got %02h", i, prg[i], rdata);
     endtask
 
-    task automatic check_chr();
-        for (int i = 0; i < CHR_BYTES; i++)
-            check_chr_byte(i, i);
+    task automatic check_chr_loader(input integer i);
+        read_byte(SV_CHR_READ, 15'(i), rdata);
+        if (rdata !== chr[i])
+            $fatal(1, "Loader CHR[%04h] expected %02h, got %02h", i, chr[i], rdata);
+    endtask
+
+    // sv_data_out keeps the byte while nothing else is read
+    task automatic check_held(input logic [7:0] expected);
+        repeat (5) @(posedge clk);
+        #1;
+        if (sv_data_out !== expected)
+            $fatal(1, "sv_data_out not held: expected %02h, got %02h", expected, sv_data_out);
     endtask
 
     initial begin
-        sv_sel = SV_NONE;
+        sv_sel     = SV_NONE;
+        sv_addr    = '0;
+        sv_data_in = '0;
         for (int i = 0; i < PRG_BYTES; i++)
-            prg[i] = i ^ (i >> 8) ^ 8'hA5;
+            prg[i] = 8'(i ^ (i >> 8)) ^ 8'hA5;
         for (int i = 0; i < CHR_BYTES; i++)
-            chr[i] = i ^ (i >> 8) ^ 8'h5A;
+            chr[i] = 8'(i ^ (i >> 8)) ^ 8'h5A;
+
         write_prog();
         write_chr();
-        check_prog();
-        check_chr();
-        $display("cartridge_read_write test passed: %0d PRG + %0d CHR bytes",
-                PRG_BYTES, CHR_BYTES);
+
+        for (int i = 0; i < PRG_BYTES; i++)
+            check_prg_cpu(i);
+        for (int i = 0; i < CHR_BYTES; i++)
+            check_chr_ppu(i);
+
+        for (int i = 0; i < PRG_BYTES; i++)
+            check_prg_loader(i);
+        check_held(prg[PRG_BYTES-1]);
+        for (int i = 0; i < CHR_BYTES; i++)
+            check_chr_loader(i);
+        check_held(chr[CHR_BYTES-1]);
+
+        // Paused NES: the PPU keeps rd_n low on another address during loader reads
+        ppu_addr = 14'h0123;
+        ppu_rd_n = 1'b0;
+        for (int i = 0; i < 256; i++)
+            check_chr_loader(i * 31);
+        check_held(chr[255 * 31]);
+        ppu_rd_n = 1'b1;
+
+        $display("tb_106_cartridge_read_write passed: %0d PRG + %0d CHR bytes, CPU/PPU and loader reads",
+                 PRG_BYTES, CHR_BYTES);
         $finish;
     end
 
     initial begin
-        repeat (300_000) @(posedge clk);
+        repeat (1_000_000) @(posedge clk);
         $fatal(1, "Timed out");
     end
 endmodule

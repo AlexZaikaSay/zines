@@ -24,7 +24,8 @@ module tb_102_cartridge;
     // Loader -> cartridge sv port
     logic [3:0]  sv_sel;
     logic [14:0] sv_addr;
-    logic [7:0]  sv_data;
+    logic [7:0]  sv_data_in;
+    logic [7:0]  sv_data_out;
     logic        done;
     logic [7:0]  error_code;
 
@@ -42,7 +43,7 @@ module tb_102_cartridge;
         .rst_n(reset_n),
         .sv_sel(sv_sel),
         .sv_addr(sv_addr),
-        .sv_data(sv_data),
+        .sv_data(sv_data_in),
         .done(done),
         .error_code(error_code)
     );
@@ -61,7 +62,8 @@ module tb_102_cartridge;
         .ciram_a10(ciram_a10),
         .ciram_ce_n(ciram_ce_n),
         .sv_sel(sv_sel),
-        .sv_data_in(sv_data),
+        .sv_data_in(sv_data_in),
+        .sv_data_out(sv_data_out),
         .sv_addr(sv_addr)
     );
 

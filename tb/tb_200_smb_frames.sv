@@ -137,6 +137,7 @@ module tb_200_smb_frames;
         .ciram_ce_n(cart_ciram_ce_n),
         .sv_sel(cart_sv_sel),
         .sv_data_in(cart_sv_data),
+        .sv_data_out(),
         .sv_addr(cart_sv_addr)
     );
 

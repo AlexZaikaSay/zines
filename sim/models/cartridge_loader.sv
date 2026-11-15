@@ -95,12 +95,12 @@ module cartridge_loader #(
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state      <= LOAD_VERTICAL;
-            byte_index <= 0;
-            done       <= 0;
-            sv_sel     <= SV_NONE;
-            sv_addr    <= 0;
-            sv_data       <= 0;
+            state       <= LOAD_VERTICAL;
+            byte_index  <= 0;
+            done        <= 0;
+            sv_sel      <= SV_NONE;
+            sv_addr     <= 0;
+            sv_data <= 0;
         end
         else begin
             sv_sel <= SV_NONE;
@@ -108,29 +108,29 @@ module cartridge_loader #(
                 LOAD_VERTICAL: begin
                     // Nothing is written for a bad file; done stays low
                     if (error_code == 0) begin
-                        sv_sel <= SV_VERTICAL;
-                        sv_data[0] <= image[6][0];
-                        state <= LOAD_PRG_BANKS;
+                        sv_sel          <= SV_VERTICAL;
+                        sv_data[0]      <= image[6][0];
+                        state           <= LOAD_PRG_BANKS;
                     end
                     else
                         state <= LOAD_DONE;
                 end
                 LOAD_PRG_BANKS: begin
-                    sv_sel <= SV_PRG_BANKS;
-                    sv_data <= image[4];
-                    state <= LOAD_CHR_BANKS;
+                    sv_sel      <= SV_PRG_BANKS;
+                    sv_data     <= image[4];
+                    state       <= LOAD_CHR_BANKS;
                 end
                 LOAD_CHR_BANKS: begin
-                    sv_sel <= SV_CHR_BANKS;
-                    sv_data <= image[5];
-                    state <= LOAD_PRG;
+                    sv_sel      <= SV_CHR_BANKS;
+                    sv_data     <= image[5];
+                    state       <= LOAD_PRG;
                 end
                 LOAD_PRG: begin
                     sv_sel <= SV_PRG_WRITE;
                     if (byte_index < prg_size) begin
-                        sv_addr  <= 15'(byte_index);
-                        sv_data  <= image[prg_start + byte_index];
-                        byte_index <= byte_index + 1;
+                        sv_addr     <= 15'(byte_index);
+                        sv_data     <= image[prg_start + byte_index];
+                        byte_index  <= byte_index + 1;
                     end
                     else begin
                         byte_index <= 0;
@@ -140,9 +140,9 @@ module cartridge_loader #(
                 LOAD_CHR: begin
                     sv_sel <= SV_CHR_WRITE;
                     if (byte_index < chr_size) begin
-                        sv_addr  <= 15'(byte_index);
-                        sv_data  <= image[prg_start + prg_size + byte_index];
-                        byte_index <= byte_index + 1;
+                        sv_addr     <= 15'(byte_index);
+                        sv_data     <= image[prg_start + prg_size + byte_index];
+                        byte_index  <= byte_index + 1;
                     end
                     else
                         state <= LOAD_DONE;
