@@ -1,0 +1,146 @@
+; Supervisor loader readback (tb_107): writes patterns into the cartridge through
+; LD_DATA, reads them back through LD_DATA (prefetch + auto-increment) and stores
+; the result at RESULT: $01 = pass, $80 + step = fail (RESULT+1 = low address byte,
+; RESULT+2 = byte read). LD_DATA is read only with lda absolute.
+
+LD_SEL    = $4030
+LD_ADDR0  = $4031
+LD_ADDR1  = $4032
+LD_ADDR2  = $4033
+LD_DATA   = $4034
+CART_PRG  = $403A               ; CART_REG_PRG_16K
+CART_CHR  = $403B               ; CART_REG_CHR_8K
+
+SEL_PRG   = $00
+SEL_CHR   = $01
+
+RESULT    = $0200
+FAIL_ADDR = $0201
+FAIL_DATA = $0202
+
+        .CODE
+start:  ldx #$FF
+        txs
+        lda #$00
+        sta RESULT
+
+        lda #2                  ; 32K PRG, 8K CHR-ROM
+        sta CART_PRG
+        lda #1
+        sta CART_CHR
+
+; ---- step 1: PRG, 256 bytes i ^ $A5 from address 0
+        lda #SEL_PRG
+        sta LD_SEL
+        jsr addr_zero
+        ldx #0
+@wprg:  txa
+        eor #$A5
+        sta LD_DATA
+        inx
+        bne @wprg
+
+        jsr addr_zero           ; sta LD_ADDR0 right before the first lda LD_DATA
+        ldx #0
+@rprg:  lda LD_DATA
+        sta FAIL_DATA
+        txa
+        eor #$A5
+        cmp FAIL_DATA
+        bne fail1
+        inx
+        bne @rprg
+
+; ---- step 2: CHR, 256 bytes i ^ $5A from address 0
+        lda #SEL_CHR
+        sta LD_SEL
+        jsr addr_zero
+        ldx #0
+@wchr:  txa
+        eor #$5A
+        sta LD_DATA
+        inx
+        bne @wchr
+
+        jsr addr_zero
+        ldx #0
+@rchr:  lda LD_DATA
+        sta FAIL_DATA
+        txa
+        eor #$5A
+        cmp FAIL_DATA
+        bne fail2
+        inx
+        bne @rchr
+
+; ---- step 3: PRG across a page: write $1FE..$201, read back from $1FE
+        lda #SEL_PRG
+        sta LD_SEL
+        jsr addr_1fe
+        ldx #0
+@wpg:   lda page_pat,x
+        sta LD_DATA
+        inx
+        cpx #4
+        bne @wpg
+
+        jsr addr_1fe
+        ldx #0
+@rpg:   lda LD_DATA
+        sta FAIL_DATA
+        cmp page_pat,x
+        bne fail3
+        inx
+        cpx #4
+        bne @rpg
+
+; ---- step 4: back-to-back reads, no work in between (fastest lda loop)
+        jsr addr_zero
+        lda LD_DATA             ; $00 ^ $A5
+        ldy LD_DATA             ; $01 ^ $A5
+        ldx LD_DATA             ; $02 ^ $A5
+        cmp #$A5
+        bne fail4
+        cpy #$A4
+        bne fail4
+        cpx #$A7
+        bne fail4
+
+        lda #$01
+        sta RESULT
+done:   jmp done
+
+fail1:  lda #$81
+        bne fail
+fail2:  lda #$82
+        bne fail
+fail3:  lda #$83
+        bne fail
+fail4:  lda #$84
+fail:   stx FAIL_ADDR
+        sta RESULT
+        jmp done
+
+addr_zero:
+        lda #0
+        sta LD_ADDR2
+        sta LD_ADDR1
+        sta LD_ADDR0
+        rts
+
+addr_1fe:
+        lda #0
+        sta LD_ADDR2
+        lda #$01
+        sta LD_ADDR1
+        lda #$FE
+        sta LD_ADDR0
+        rts
+
+page_pat:
+        .byte $11, $22, $33, $44
+
+        .segment "VECTORS"
+        .word   start
+        .word   start
+        .word   start

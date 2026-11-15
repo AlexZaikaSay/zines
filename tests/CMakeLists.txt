@@ -7,7 +7,12 @@ file(GLOB ASM_SOURCES CONFIGURE_DEPENDS
 
 foreach(SRC ${ASM_SOURCES})
     get_filename_component(NAME ${SRC} NAME_WE)
-    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502.cfg)
+    # 1xx: supervisor (OSD CPU) programs, 32K ROM image at $8000; others: 64K RAM image
+    if(NAME MATCHES "^1[0-9][0-9]_")
+        set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/osd_rom.cfg)
+    else()
+        set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/asm/6502.cfg)
+    endif()
 
     set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
     set(LST ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.lst)

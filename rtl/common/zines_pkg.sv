@@ -77,7 +77,7 @@ package zines_pkg;
     localparam logic [2:0]  LD_REG_ADDR0         = 3'd1;       // RW: 24-bit byte address, little-endian
     localparam logic [2:0]  LD_REG_ADDR1         = 3'd2;
     localparam logic [2:0]  LD_REG_ADDR2         = 3'd3;
-    localparam logic [2:0]  LD_REG_DATA          = 3'd4;       // W: byte to the target memory
+    localparam logic [2:0]  LD_REG_DATA          = 3'd4;       // RW: write stores, read returns the byte at LD_ADDR; both increment LD_ADDR
     localparam logic [7:0]  LD_SEL_PRG_ROM       = 8'h00;
     localparam logic [7:0]  LD_SEL_CHR           = 8'h01;
     localparam logic [7:0]  LD_SEL_PRG_RAM       = 8'h02;      // battery RAM (not implemented yet)

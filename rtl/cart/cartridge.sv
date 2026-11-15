@@ -56,10 +56,17 @@ module cartridge (
     wire        chr_is_ram  = (chr_banks == 8'd0);
     wire        cpu_read    = !cpu_ce_n && cpu_rw && cpu_addr[15];
     wire        ppu_read    = !ppu_rd_n && chr_sel;
+    wire        ppu_wr      = chr_sel && !ppu_wr_n && chr_is_ram;
+    
     wire        sv_prg_rd   = (sv_sel == SV_PRG_READ);
     wire        sv_chr_rd   = (sv_sel == SV_CHR_READ);
+    wire        sv_chr_wr   = (sv_sel == SV_CHR_WRITE) && chr_is_ram;
     wire [14:0] prg_rd_addr = sv_prg_rd ? sv_addr : prg_addr;
     wire [12:0] chr_rd_addr = sv_chr_rd ? sv_addr[12:0] : chr_addr;
+
+    wire        ch_ram_wr   = sv_chr_wr || ppu_wr;
+    wire [12:0] ch_ram_addr = sv_chr_wr ? sv_addr[12:0] : ppu_addr[12:0];
+    wire [7:0]  ch_ram_data = sv_chr_wr ? sv_data_in    : ppu_data_in;
 
     logic [7:0] chr_rom_q;
     logic [7:0] chr_ram_q;
@@ -92,8 +99,8 @@ module cartridge (
     end
 
     always_ff @(posedge clk) begin
-        if (chr_sel && !ppu_wr_n && chr_is_ram)
-            chr_ram[ppu_addr[12:0]] <= ppu_data_in;
+        if (ch_ram_wr)
+            chr_ram[ch_ram_addr] <= ch_ram_data;
         if (ppu_read || sv_chr_rd)
             chr_ram_q <= chr_ram[chr_rd_addr];
     end

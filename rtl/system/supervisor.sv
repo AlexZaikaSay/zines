@@ -15,6 +15,8 @@
 //
 // The NES is held in reset from power-on until the firmware clears NES_CTRL_RESET.
 // The loader turns LD_DATA writes into the cartridge supervisor port (sv_sel / sv_*).
+// Read LD_DATA only with lda/ldx/ldy absolute; an instruction that reads twice
+// in a row will skip a byte.
 // NES_CTRL_PAUSE only requests a pause: the NES stops at the next instruction
 // boundary and nes_paused (read back as NES_CTRL_PAUSED) tells when it has.
 // Pressing Start + Select together sets SYS_HOTKEY once per press.
@@ -205,6 +207,12 @@ module supervisor
     logic [7:0]  nes_ctrl;
     logic [7:0]  ld_sel;
     logic [23:0] ld_addr;
+    
+    // sv_data_out must be refreshed for ld_addr
+    // E0 CPU access, E1 SV_*_READ, E3 sv_data_out valid; 
+    // the next lda LD_DATA is >= 6 clks later
+    logic        ld_fetch;
+
     logic [7:0]  cart_reg [0:3];
 
     assign nes_reset = nes_ctrl[0];
@@ -212,37 +220,54 @@ module supervisor
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            nes_ctrl  <= NES_CTRL_RESET;
-            ld_sel    <= LD_SEL_PRG_ROM;
-            ld_addr   <= 24'd0;
-            cart_reg  <= '{default: 8'h00};
-            sv_sel    <= SV_NONE;
-            sv_addr <= 15'd0;
-            sv_data_in <= 8'h00;
+            nes_ctrl    <= NES_CTRL_RESET;
+            ld_sel      <= LD_SEL_PRG_ROM;
+            ld_addr     <= 24'd0;
+            ld_fetch    <= 0;
+            cart_reg    <= '{default: 8'h00};
+            sv_sel      <= SV_NONE;
+            sv_addr     <= 15'd0;
+            sv_data_in  <= 8'h00;
         end else begin
             sv_sel <= SV_NONE;
+
+            if (ld_fetch && !wr) begin
+                case (ld_sel)
+                    LD_SEL_PRG_ROM: sv_sel <= SV_PRG_READ;
+                    LD_SEL_CHR:     sv_sel <= SV_CHR_READ;
+                    default:        ;       // PRG RAM: not implemented yet
+                endcase
+                sv_addr  <= ld_addr[14:0];
+                ld_fetch <= 0;
+            end
 
             if (wr && nes_ctl_sel)
                 nes_ctrl <= cpu_wdata & (NES_CTRL_RESET | NES_CTRL_PAUSE);
 
             if (wr && loader_sel) begin
+                ld_fetch <= 1'b1;
                 case (cpu_addr[2:0])
-                    LD_REG_SEL:   ld_sel        <= cpu_wdata;
-                    LD_REG_ADDR0: ld_addr[7:0]  <= cpu_wdata;
-                    LD_REG_ADDR1: ld_addr[15:8] <= cpu_wdata;
-                    LD_REG_ADDR2: ld_addr[23:16] <= cpu_wdata;
+                    LD_REG_SEL:   ld_sel            <= cpu_wdata;
+                    LD_REG_ADDR0: ld_addr[7:0]      <= cpu_wdata;
+                    LD_REG_ADDR1: ld_addr[15:8]     <= cpu_wdata;
+                    LD_REG_ADDR2: ld_addr[23:16]    <= cpu_wdata;
                     LD_REG_DATA: begin
                         case (ld_sel)
                             LD_SEL_PRG_ROM: sv_sel <= SV_PRG_WRITE;
                             LD_SEL_CHR:     sv_sel <= SV_CHR_WRITE;
                             default:        ;       // PRG RAM: not implemented yet
                         endcase
-                        sv_addr <= ld_addr[14:0];
-                        sv_data_in <= cpu_wdata;
-                        ld_addr   <= ld_addr + 24'd1;
+                        sv_addr     <= ld_addr[14:0];
+                        sv_data_in  <= cpu_wdata;
+                        ld_addr     <= ld_addr + 24'd1;
                     end
                     default: ;
                 endcase
+            end
+
+            if (rd && loader_sel && cpu_addr[2:0] == LD_REG_DATA) begin
+                ld_addr     <= ld_addr + 24'd1;
+                ld_fetch    <= 1'b1;
             end
 
             if (wr && cart_sel) begin
@@ -255,6 +280,7 @@ module supervisor
                     default:          ;
                 endcase
             end
+
         end
     end
 
@@ -282,6 +308,7 @@ module supervisor
                 LD_REG_ADDR0: cpu_rdata = ld_addr[7:0];
                 LD_REG_ADDR1: cpu_rdata = ld_addr[15:8];
                 LD_REG_ADDR2: cpu_rdata = ld_addr[23:16];
+                LD_REG_DATA:  cpu_rdata = sv_data_out;
                 default:      cpu_rdata = 8'h00;
             endcase
         else if (cart_sel)
@@ -290,6 +317,6 @@ module supervisor
             cpu_rdata = 8'h00;
     end
 
-    wire unused = &{1'b0, ld_addr[23:15], cpu_sync, sv_data_out};   // sv_data_out: TODO LD_DATA readback
+    wire unused = &{1'b0, ld_addr[23:15], cpu_sync};
 
 endmodule
