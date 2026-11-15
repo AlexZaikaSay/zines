@@ -14,7 +14,7 @@
 // each CPU access acts exactly once.
 //
 // The NES is held in reset from power-on until the firmware clears NES_CTRL_RESET.
-// The loader turns LD_DATA writes into the cartridge init port (fill_w / init_*).
+// The loader turns LD_DATA writes into the cartridge supervisor port (sv_sel / sv_*).
 // NES_CTRL_PAUSE only requests a pause: the NES stops at the next instruction
 // boundary and nes_paused (read back as NES_CTRL_PAUSED) tells when it has.
 // Pressing Start + Select together sets SYS_HOTKEY once per press.
@@ -35,10 +35,11 @@ module supervisor
     output logic        nes_pause,      // pause request
     input  logic        nes_paused,     // the NES is stopped at an instruction boundary (or in reset)
 
-    // cartridge init port
-    output logic [2:0]  fill_w,
-    output logic [14:0] init_addr,
-    output logic [7:0]  init_data,
+    // cartridge sv port
+    output logic [3:0]  sv_sel,
+    output logic [14:0] sv_addr,
+    output logic [7:0]  sv_data_in,
+    input  logic [7:0]  sv_data_out,
 
     // OSD text / attribute write port (osd_overlay)
     output logic        osd_text_we,
@@ -215,11 +216,11 @@ module supervisor
             ld_sel    <= LD_SEL_PRG_ROM;
             ld_addr   <= 24'd0;
             cart_reg  <= '{default: 8'h00};
-            fill_w    <= FILL_NONE;
-            init_addr <= 15'd0;
-            init_data <= 8'h00;
+            sv_sel    <= SV_NONE;
+            sv_addr <= 15'd0;
+            sv_data_in <= 8'h00;
         end else begin
-            fill_w <= FILL_NONE;
+            sv_sel <= SV_NONE;
 
             if (wr && nes_ctl_sel)
                 nes_ctrl <= cpu_wdata & (NES_CTRL_RESET | NES_CTRL_PAUSE);
@@ -232,12 +233,12 @@ module supervisor
                     LD_REG_ADDR2: ld_addr[23:16] <= cpu_wdata;
                     LD_REG_DATA: begin
                         case (ld_sel)
-                            LD_SEL_PRG_ROM: fill_w <= FILL_PRG_DATA;
-                            LD_SEL_CHR:     fill_w <= FILL_CHR_DATA;
+                            LD_SEL_PRG_ROM: sv_sel <= SV_PRG_WRITE;
+                            LD_SEL_CHR:     sv_sel <= SV_CHR_WRITE;
                             default:        ;       // PRG RAM: not implemented yet
                         endcase
-                        init_addr <= ld_addr[14:0];
-                        init_data <= cpu_wdata;
+                        sv_addr <= ld_addr[14:0];
+                        sv_data_in <= cpu_wdata;
                         ld_addr   <= ld_addr + 24'd1;
                     end
                     default: ;
@@ -246,11 +247,11 @@ module supervisor
 
             if (wr && cart_sel) begin
                 cart_reg[cpu_addr[1:0]] <= cpu_wdata;
-                init_data <= cpu_wdata;
+                sv_data_in <= cpu_wdata;
                 case (cpu_addr[1:0])
-                    CART_REG_FLAGS:   fill_w <= FILL_VERTICAL;
-                    CART_REG_PRG_16K: fill_w <= FILL_PRG_BANKS;
-                    CART_REG_CHR_8K:  fill_w <= FILL_CHR_BANKS;
+                    CART_REG_FLAGS:   sv_sel <= SV_VERTICAL;
+                    CART_REG_PRG_16K: sv_sel <= SV_PRG_BANKS;
+                    CART_REG_CHR_8K:  sv_sel <= SV_CHR_BANKS;
                     default:          ;
                 endcase
             end
@@ -289,6 +290,6 @@ module supervisor
             cpu_rdata = 8'h00;
     end
 
-    wire unused = &{1'b0, ld_addr[23:15], cpu_sync};
+    wire unused = &{1'b0, ld_addr[23:15], cpu_sync, sv_data_out};   // sv_data_out: TODO LD_DATA readback
 
 endmodule

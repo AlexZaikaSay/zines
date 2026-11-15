@@ -1,8 +1,8 @@
 // Boot loader for the cartridge: reads a raw .nes image from SD sectors starting at
-// START_LBA, checks the iNES header and streams it into the cartridge init port.
-// Synthesizable counterpart of sim/models/cartridge_loader.sv, same fill_w sequence:
-//   FILL_VERTICAL, FILL_PRG_BANKS, FILL_CHR_BANKS once the 16-byte header is checked,
-//   then one FILL_PRG_DATA / FILL_CHR_DATA write per byte as it arrives from the card.
+// START_LBA, checks the iNES header and streams it into the cartridge supervisor port.
+// Synthesizable counterpart of sim/models/cartridge_loader.sv, same sv_sel sequence:
+//   SV_VERTICAL, SV_PRG_BANKS, SV_CHR_BANKS once the 16-byte header is checked,
+//   then one SV_PRG_WRITE / SV_CHR_WRITE write per byte as it arrives from the card.
 // A trainer is skipped. Only what cartridge supports is accepted: mapper 0,
 // 16/32 KiB PRG, 0/8 KiB CHR, no four-screen.
 //
@@ -26,10 +26,10 @@ module cart_sd_loader #(
     output logic        sd_cs_n,
     input  logic        sd_cd_n,        // card detect, active low
 
-    // cartridge init port
-    output logic [2:0]  fill_w,
-    output logic [14:0] addr,
-    output logic [7:0]  data,
+    // cartridge supervisor port
+    output logic [3:0]  sv_sel,
+    output logic [14:0] sv_addr,
+    output logic [7:0]  sv_data,
 
     // Status
     output logic        loaded,
@@ -140,14 +140,14 @@ module cart_sd_loader #(
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            fill_w      <= FILL_NONE;
-            addr        <= 15'd0;
-            data        <= 8'd0;
+            sv_sel      <= SV_NONE;
+            sv_addr     <= 15'd0;
+            sv_data     <= 8'd0;
             hdr_step    <= 2'd0;
             hdr_started <= 1'b0;
         end
         else begin
-            fill_w <= FILL_NONE;
+            sv_sel <= SV_NONE;
 
             if (hdr_ok && !hdr_started) begin
                 hdr_started <= 1'b1;
@@ -155,19 +155,19 @@ module cart_sd_loader #(
             end
 
             case (hdr_step)
-                2'd1: begin fill_w <= FILL_VERTICAL;  data <= {7'd0, flags6[0]}; hdr_step <= 2'd2; end
-                2'd2: begin fill_w <= FILL_PRG_BANKS; data <= prg_banks;         hdr_step <= 2'd3; end
-                2'd3: begin fill_w <= FILL_CHR_BANKS; data <= chr_banks;         hdr_step <= 2'd0; end
+                2'd1: begin sv_sel <= SV_VERTICAL;  sv_data <= {7'd0, flags6[0]}; hdr_step <= 2'd2; end
+                2'd2: begin sv_sel <= SV_PRG_BANKS; sv_data <= prg_banks;         hdr_step <= 2'd3; end
+                2'd3: begin sv_sel <= SV_CHR_BANKS; sv_data <= chr_banks;         hdr_step <= 2'd0; end
                 default: begin
                     if (byte_valid && hdr_ok && in_prg) begin
-                        fill_w <= FILL_PRG_DATA;
-                        addr   <= data_off[14:0];
-                        data   <= byte_data;
+                        sv_sel      <= SV_PRG_WRITE;
+                        sv_addr     <= data_off[14:0];
+                        sv_data     <= byte_data;
                     end
                     else if (byte_valid && hdr_ok && in_chr) begin
-                        fill_w <= FILL_CHR_DATA;
-                        addr   <= {2'b00, chr_off[12:0]};
-                        data   <= byte_data;
+                        sv_sel      <= SV_CHR_WRITE;
+                        sv_addr     <= {2'b00, chr_off[12:0]};
+                        sv_data     <= byte_data;
                     end
                 end
             endcase

@@ -21,10 +21,10 @@ module tb_102_cartridge;
     logic        ciram_a10;
     logic        ciram_ce_n;
 
-    // Loader -> cartridge init port
-    logic [2:0]  fill_w;
-    logic [14:0] init_addr;
-    logic [7:0]  init_data;
+    // Loader -> cartridge sv port
+    logic [3:0]  sv_sel;
+    logic [14:0] sv_addr;
+    logic [7:0]  sv_data;
     logic        done;
     logic [7:0]  error_code;
 
@@ -38,11 +38,13 @@ module tb_102_cartridge;
     cartridge_loader #(
         .ROM_FILE(ASSET_FILE)
     ) loader (
-        .clk, .rst_n(reset_n),
-        .fill_w,
-        .addr(init_addr),
-        .data(init_data),
-        .done, .error_code
+        .clk(clk),
+        .rst_n(reset_n),
+        .sv_sel(sv_sel),
+        .sv_addr(sv_addr),
+        .sv_data(sv_data),
+        .done(done),
+        .error_code(error_code)
     );
 
     cartridge dut (
@@ -58,9 +60,9 @@ module tb_102_cartridge;
         .ppu_data_out(ppu_data_out),
         .ciram_a10(ciram_a10),
         .ciram_ce_n(ciram_ce_n),
-        .fill_w(fill_w),
-        .init_data_in(init_data),
-        .init_addr(init_addr)
+        .sv_sel(sv_sel),
+        .sv_data_in(sv_data),
+        .sv_addr(sv_addr)
     );
 
     task automatic check_prg(input logic [15:0] addr, input integer file_offset);

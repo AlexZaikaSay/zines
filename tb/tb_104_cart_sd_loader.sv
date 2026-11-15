@@ -21,9 +21,9 @@ module tb_104_cart_sd_loader;
 
     logic sd_clk, sd_mosi, sd_miso, sd_cs_n;
 
-    logic [2:0]  fill_w;
-    logic [14:0] init_addr;
-    logic [7:0]  init_data;
+    logic [3:0]  sv_sel;
+    logic [14:0] sv_addr;
+    logic [7:0]  sv_data;
     logic        loaded, error;
     logic [7:0]  error_code;
 
@@ -41,18 +41,26 @@ module tb_104_cart_sd_loader;
         .RUN_SPI_HZ(2_000_000),
         .MAX_FILE_BYTES(SECTORS * 512)
     ) dut (
-        .clk, .rst_n,
-        .sd_clk, .sd_cmd(sd_mosi), .sd_dat0(sd_miso), .sd_cs_n,
+        .clk(clk),
+        .rst_n(rst_n),
+        .sd_clk(sd_clk),
+        .sd_cmd(sd_mosi),
+        .sd_dat0(sd_miso),
+        .sd_cs_n(sd_cs_n),
         .sd_cd_n(1'b0),
-        .fill_w, .addr(init_addr), .data(init_data),
-        .loaded, .error, .error_code
+        .sv_sel(sv_sel),
+        .sv_addr(sv_addr),
+        .sv_data(sv_data),
+        .loaded(loaded),
+        .error(error),
+        .error_code(error_code)
     );
 
     sim_sd_card #(
         .SD_FILE(SD_FILE)
     ) card (
-        .clk, .rst_n,
-        .sd_clk, .sd_cmd(sd_mosi), .sd_cs_n, .sd_dat0(sd_miso)
+        .clk(clk), .rst_n(rst_n),
+        .sd_clk(sd_clk), .sd_cmd(sd_mosi), .sd_cs_n(sd_cs_n), .sd_dat0(sd_miso)
     );
 
     cartridge u_cartridge (
@@ -68,9 +76,9 @@ module tb_104_cart_sd_loader;
         .ppu_data_out(ppu_data_out),
         .ciram_a10(ciram_a10),
         .ciram_ce_n(ciram_ce_n),
-        .fill_w(fill_w),
-        .init_data_in(init_data),
-        .init_addr(init_addr)
+        .sv_sel(sv_sel),
+        .sv_data_in(sv_data),
+        .sv_addr(sv_addr)
     );
 
     logic [7:0] image [0:SECTORS*512-1];

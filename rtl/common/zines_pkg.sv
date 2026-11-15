@@ -99,13 +99,15 @@ package zines_pkg;
     localparam logic [1:0]  SD_OP_READ           = 2'd1;
     localparam logic [1:0]  SD_OP_WRITE          = 2'd2;
 
-    // ---- Cartridge init port (cartridge.fill_w) ----
-    localparam logic [2:0]  FILL_NONE            = 3'd0;
-    localparam logic [2:0]  FILL_VERTICAL        = 3'd1;       // init_data_in[0] = vertical mirroring
-    localparam logic [2:0]  FILL_PRG_BANKS       = 3'd2;       // init_data_in = PRG size in 16 KiB
-    localparam logic [2:0]  FILL_CHR_BANKS       = 3'd3;       // init_data_in = CHR size in 8 KiB (0 = CHR-RAM)
-    localparam logic [2:0]  FILL_PRG_DATA        = 3'd4;       // PRG byte at init_addr
-    localparam logic [2:0]  FILL_CHR_DATA        = 3'd5;       // CHR byte at init_addr
+    // ---- Cartridge supervisor port (cartridge.sv_sel) ----
+    localparam logic [3:0]  SV_NONE             = 4'd0;
+    localparam logic [3:0]  SV_VERTICAL         = 4'd1;       // sv_data_in[0] = vertical mirroring
+    localparam logic [3:0]  SV_PRG_BANKS        = 4'd2;       // sv_data_in = PRG size in 16 KiB
+    localparam logic [3:0]  SV_CHR_BANKS        = 4'd3;       // sv_data_in = CHR size in 8 KiB (0 = CHR-RAM)
+    localparam logic [3:0]  SV_PRG_WRITE        = 4'd4;       // PRG byte in sv_data_in at sv_addr
+    localparam logic [3:0]  SV_CHR_WRITE        = 4'd5;       // CHR byte in sv_data_in at sv_addr
+    localparam logic [3:0]  SV_PRG_READ         = 4'd7;       // PRG byte in sv_data_out at sv_addr
+    localparam logic [3:0]  SV_CHR_READ         = 4'd8;       // CHR byte in sv_data_out at sv_addr
 
     // ---- iNES image load errors (cart_sd_loader, cartridge_loader) ----
     // Above the SD_ERR_* range, so one error_code byte can carry either kind

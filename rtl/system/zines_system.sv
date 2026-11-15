@@ -60,9 +60,10 @@ module zines_system #(
 
     // ------ supervisor
     logic        nes_reset, nes_pause, nes_paused;
-    logic [2:0]  fill_w;
-    logic [14:0] init_addr;
-    logic [7:0]  init_data;
+    logic [3:0]  sv_sel;
+    logic [14:0] sv_addr;
+    logic [7:0]  sv_data_in;
+    logic [7:0]  sv_data_out;
     logic        osd_text_we, osd_attr_we;
     logic [10:0] osd_waddr;
     logic [7:0]  osd_wdata;
@@ -78,9 +79,10 @@ module zines_system #(
         .nes_reset(nes_reset),
         .nes_pause(nes_pause),
         .nes_paused(nes_paused),
-        .fill_w(fill_w),
-        .init_addr(init_addr),
-        .init_data(init_data),
+        .sv_sel(sv_sel),
+        .sv_addr(sv_addr),
+        .sv_data_in(sv_data_in),
+        .sv_data_out(sv_data_out),
         .osd_text_we(osd_text_we),
         .osd_attr_we(osd_attr_we),
         .osd_waddr(osd_waddr),
@@ -209,9 +211,10 @@ module zines_system #(
         .ppu_data_out(cart_ppu_rdata),
         .ciram_a10(cart_ciram_a10),
         .ciram_ce_n(cart_ciram_ce_n),
-        .fill_w(fill_w),
-        .init_data_in(init_data),
-        .init_addr(init_addr)
+        .sv_sel(sv_sel),
+        .sv_data_in(sv_data_in),
+        .sv_addr(sv_addr),
+        .sv_data_out(sv_data_out)
     );
 
     // ------ display

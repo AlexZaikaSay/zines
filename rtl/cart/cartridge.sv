@@ -16,17 +16,20 @@ module cartridge (
     output logic        ciram_a10,
     output logic        ciram_ce_n,     // active low: PPU access to nametable RAM
 
-    // Init side
-    input  logic [2:0]  fill_w,         // zines_pkg::FILL_* code, FILL_NONE when idle
-    input  logic [7:0]  init_data_in,   // Value or byte written for the fill_w code
-    input  logic [14:0] init_addr       // Byte address for prg_data / chr_data
+    // Supervisor side
+    input  logic [3:0]  sv_sel,         // zines_pkg::SV_* code, SV_NONE when idle
+    input  logic [7:0]  sv_data_in,     // Value or byte written for the sv_sel code
+    input  logic [14:0] sv_addr,        // Byte address for prg_data / chr_data
+    output logic [7:0]  sv_data_out     // valid a fixed number of clks after supervisor write
 );
 
     import zines_pkg::*;
 
+    // TODO: temp
+    assign sv_data_out = '0;
     // ----------------------------------------------------------------
     // Memories (inferred block RAM, all on clk)
-    // PRG-ROM and CHR-ROM: written by the loader through fill_w, read by the CPU/PPU.
+    // PRG-ROM and CHR-ROM: written by the loader through sv_sel, read by the CPU/PPU.
     // CHR-RAM (images without CHR data) is a separate RAM written by the PPU.
     // ----------------------------------------------------------------
     logic [7:0] prg_mem [0:32767];
@@ -39,12 +42,12 @@ module cartridge (
 
     // Loader write ports
     always_ff @(posedge clk) begin
-        case (fill_w) 
-            FILL_VERTICAL:  vertical  <= init_data_in[0];
-            FILL_PRG_BANKS: prg_banks <= init_data_in;
-            FILL_CHR_BANKS: chr_banks <= init_data_in;
-            FILL_PRG_DATA:  prg_mem[init_addr[14:0]] <= init_data_in;
-            FILL_CHR_DATA:  chr_rom[init_addr[12:0]] <= init_data_in;
+        case (sv_sel) 
+            SV_VERTICAL:  vertical  <= sv_data_in[0];
+            SV_PRG_BANKS: prg_banks <= sv_data_in;
+            SV_CHR_BANKS: chr_banks <= sv_data_in;
+            SV_PRG_WRITE: prg_mem[sv_addr[14:0]] <= sv_data_in;
+            SV_CHR_WRITE: chr_rom[sv_addr[12:0]] <= sv_data_in;
             default: ;
         endcase 
     end

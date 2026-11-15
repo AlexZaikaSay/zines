@@ -1,6 +1,6 @@
 // Simulation-only loader for cartridge: reads an iNES file at time 0 and,
-// after reset, streams it into the cartridge init port one write per clock:
-//   fill_w vertical, prg_banks, chr_banks, then PRG bytes (prg_data),
+// after reset, streams it into the cartridge supervisor port one write per clock:
+//   sv_sel vertical, prg_banks, chr_banks, then PRG bytes (prg_data),
 //   then CHR bytes (chr_data). done goes high when everything is written,
 //   or right away with a nonzero error_code if the file is rejected.
 //
@@ -13,10 +13,10 @@ module cartridge_loader #(
     input  logic        clk,
     input  logic        rst_n,
 
-    // cartridge init port
-    output logic [2:0]  fill_w,
-    output logic [14:0] addr,
-    output logic [7:0]  data,
+    // cartridge supervisor port
+    output logic [3:0]  sv_sel,
+    output logic [14:0] sv_addr,
+    output logic [7:0]  sv_data,
 
     // Status
     output logic        done,
@@ -98,38 +98,38 @@ module cartridge_loader #(
             state      <= LOAD_VERTICAL;
             byte_index <= 0;
             done       <= 0;
-            fill_w     <= FILL_NONE;
-            addr       <= 0;
-            data       <= 0;
+            sv_sel     <= SV_NONE;
+            sv_addr    <= 0;
+            sv_data       <= 0;
         end
         else begin
-            fill_w <= FILL_NONE;
+            sv_sel <= SV_NONE;
             case (state)
                 LOAD_VERTICAL: begin
                     // Nothing is written for a bad file; done stays low
                     if (error_code == 0) begin
-                        fill_w <= FILL_VERTICAL;
-                        data[0] <= image[6][0];
+                        sv_sel <= SV_VERTICAL;
+                        sv_data[0] <= image[6][0];
                         state <= LOAD_PRG_BANKS;
                     end
                     else
                         state <= LOAD_DONE;
                 end
                 LOAD_PRG_BANKS: begin
-                    fill_w <= FILL_PRG_BANKS;
-                    data <= image[4];
+                    sv_sel <= SV_PRG_BANKS;
+                    sv_data <= image[4];
                     state <= LOAD_CHR_BANKS;
                 end
                 LOAD_CHR_BANKS: begin
-                    fill_w <= FILL_CHR_BANKS;
-                    data <= image[5];
+                    sv_sel <= SV_CHR_BANKS;
+                    sv_data <= image[5];
                     state <= LOAD_PRG;
                 end
                 LOAD_PRG: begin
-                    fill_w <= FILL_PRG_DATA;
+                    sv_sel <= SV_PRG_WRITE;
                     if (byte_index < prg_size) begin
-                        addr  <= 15'(byte_index);
-                        data  <= image[prg_start + byte_index];
+                        sv_addr  <= 15'(byte_index);
+                        sv_data  <= image[prg_start + byte_index];
                         byte_index <= byte_index + 1;
                     end
                     else begin
@@ -138,10 +138,10 @@ module cartridge_loader #(
                     end
                 end
                 LOAD_CHR: begin
-                    fill_w <= FILL_CHR_DATA;
+                    sv_sel <= SV_CHR_WRITE;
                     if (byte_index < chr_size) begin
-                        addr  <= 15'(byte_index);
-                        data  <= image[prg_start + prg_size + byte_index];
+                        sv_addr  <= 15'(byte_index);
+                        sv_data  <= image[prg_start + prg_size + byte_index];
                         byte_index <= byte_index + 1;
                     end
                     else

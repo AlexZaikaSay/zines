@@ -82,9 +82,9 @@ module video (
 
     // Cartridge: cartridge_loader streams the iNES file into
     // cartridge after reset
-    logic [2:0]  cart_fill_w;
-    logic [14:0] cart_init_addr;
-    logic [7:0]  cart_init_data;
+    logic [3:0]  cart_sv_sel;
+    logic [14:0] cart_sv_addr;
+    logic [7:0]  cart_sv_data;
     logic [7:0]  cart_error_code;
 
     cartridge_loader #(
@@ -92,9 +92,9 @@ module video (
     ) u_cart_loader (
         .clk(clk),
         .rst_n(rst_n),
-        .fill_w(cart_fill_w),
-        .addr(cart_init_addr),
-        .data(cart_init_data),
+        .sv_sel(cart_sv_sel),
+        .sv_addr(cart_sv_addr),
+        .sv_data(cart_sv_data),
         .done(cart_loaded),
         .error_code(cart_error_code)
     );
@@ -112,9 +112,9 @@ module video (
         .ppu_data_out(cart_ppu_data_in),
         .ciram_a10(cart_ciram_a10),
         .ciram_ce_n(cart_ciram_ce_n),
-        .fill_w(cart_fill_w),
-        .init_data_in(cart_init_data),
-        .init_addr(cart_init_addr)
+        .sv_sel(cart_sv_sel),
+        .sv_data_in(cart_sv_data),
+        .sv_addr(cart_sv_addr)
     );
 
     always @(posedge clk)

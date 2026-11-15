@@ -250,11 +250,11 @@ module nes_top (
     );
 
     // Cartridge: cart_sd_loader streams the .nes image from SD (raw, LBA 0) into the
-    // cartridge init port. Both run on ppu_clk, so the fill port needs no clock crossing;
+    // cartridge supervisor port. Both run on ppu_clk, so the fill port needs no clock crossing;
     // SPI is about 0.9 MHz there, the 40 KiB SMB image loads in under half a second.
-    logic [2:0]  cart_fill_w;
-    logic [14:0] cart_init_addr;
-    logic [7:0]  cart_init_data;
+    logic [3:0]  cart_sv_sel;
+    logic [14:0] cart_sv_addr;
+    logic [7:0]  cart_sv_data;
 
     cart_sd_loader #(
         .CLK_FREQ_HZ(PPU_CLK_HZ),
@@ -267,9 +267,9 @@ module nes_top (
         .sd_dat0(SD_DAT0),
         .sd_cs_n(SD_CS_N),
         .sd_cd_n(SD_CD),
-        .fill_w(cart_fill_w),
-        .addr(cart_init_addr),
-        .data(cart_init_data),
+        .sv_sel(cart_sv_sel),
+        .sv_addr(cart_sv_addr),
+        .sv_data(cart_sv_data),
         .loaded(cart_loaded),
         .error(cart_error),
         .error_code()
@@ -288,9 +288,9 @@ module nes_top (
         .ppu_data_out(cart_ppu_data_in),
         .ciram_a10(cart_ciram_a10),
         .ciram_ce_n(cart_ciram_ce_n),
-        .fill_w(cart_fill_w),
-        .init_data_in(cart_init_data),
-        .init_addr(cart_init_addr)
+        .sv_sel(cart_sv_sel),
+        .sv_data_in(cart_sv_data),
+        .sv_addr(cart_sv_addr)
     );
 
     // ----------------------------------------------------------------

@@ -155,7 +155,7 @@ module tb_201_zines_load;
         clocks <= clocks + 1;
         if (clocks % 10_000_000 == 0)
             $display("tb_201: %0dM clocks, sup pc area %04h, nes_reset %0b, fill %0d",
-                     clocks / 1_000_000, sup_addr, u_sys.nes_reset, u_sys.fill_w);
+                     clocks / 1_000_000, sup_addr, u_sys.nes_reset, u_sys.sv_sel);
     end
 
     initial begin

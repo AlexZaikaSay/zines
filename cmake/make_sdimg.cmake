@@ -29,11 +29,11 @@ endif()
 run(${MFORMAT} -i ${IMG} -F -v SDCARD ::)
 run(${MMD} -i ${IMG} ::/SMB ::/test2 ::/test3)
 
-# 10-byte zero-filled save slots
+# 48-sectors zero-filled save slots
 set(SAVES)
 foreach(i 0 1 2 3)
-    run(${DD} if=/dev/zero of=${WORK}/save${i}.sav bs=10 count=1)
-    list(APPEND SAVES ${WORK}/save${i}.sav)
+    run(${DD} if=/dev/zero of=${WORK}/slot${i}.sst bs=512 count=48)
+    list(APPEND SAVES ${WORK}/slot${i}.sst)
 endforeach()
 
 run(${MCOPY} -i ${IMG} ${ROM} ${SAVES} ::/SMB/)
